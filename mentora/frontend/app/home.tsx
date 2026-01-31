@@ -1,38 +1,59 @@
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
+import AuthGuard from "@/components/auth-guard";
 
 export default function HomeScreen() {
   const router = useRouter();
 
   const handleLogout = () => {
-    // Clear any stored tokens here in production
+    // Clear token
+    if (typeof localStorage !== "undefined") {
+      localStorage.removeItem("token");
+    }
     router.replace("/login");
   };
 
   return (
-    <View style={styles.container}>
-      <LinearGradient colors={["#4facfe", "#00f2fe"]} style={styles.gradient}>
-        <View style={styles.content}>
-          <View style={styles.header}>
-            <Text style={styles.emoji}>👋</Text>
-            <Text style={styles.title}>Welcome to Mentora!</Text>
-            <Text style={styles.subtitle}>You're successfully logged in</Text>
+    <AuthGuard>
+      <View style={styles.container}>
+        <LinearGradient colors={["#4facfe", "#00f2fe"]} style={styles.gradient}>
+          <View style={styles.topBar}>
+            <Text style={styles.title}>Mentora</Text>
+            <TouchableOpacity
+              style={styles.profileButton}
+              onPress={() => router.push("/profile")}
+            >
+              <Text style={styles.profileButtonText}>👤 Profile</Text>
+            </TouchableOpacity>
           </View>
 
-          <View style={styles.card}>
-            <Text style={styles.cardText}>
-              Your personalized learning journey starts here.
-            </Text>
-            <Text style={styles.cardSubtext}>More features coming soon...</Text>
-          </View>
+          <View style={styles.content}>
+            <View style={styles.header}>
+              <Text style={styles.emoji}>👋</Text>
+              <Text style={styles.welcomeTitle}>Welcome to Mentora!</Text>
+              <Text style={styles.subtitle}>You're successfully logged in</Text>
+            </View>
 
-          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <Text style={styles.logoutButtonText}>Logout</Text>
-          </TouchableOpacity>
-        </View>
-      </LinearGradient>
-    </View>
+            <View style={styles.card}>
+              <Text style={styles.cardText}>
+                Your personalized learning journey starts here.
+              </Text>
+              <Text style={styles.cardSubtext}>
+                More features coming soon...
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.logoutButton}
+              onPress={handleLogout}
+            >
+              <Text style={styles.logoutButtonText}>Logout</Text>
+            </TouchableOpacity>
+          </View>
+        </LinearGradient>
+      </View>
+    </AuthGuard>
   );
 }
 
@@ -42,6 +63,30 @@ const styles = StyleSheet.create({
   },
   gradient: {
     flex: 1,
+  },
+  topBar: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "#fff",
+  },
+  profileButton: {
+    backgroundColor: "rgba(255, 255, 255, 0.3)",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  profileButtonText: {
+    color: "#fff",
+    fontWeight: "600",
+    fontSize: 14,
   },
   content: {
     flex: 1,
@@ -57,7 +102,7 @@ const styles = StyleSheet.create({
     fontSize: 80,
     marginBottom: 20,
   },
-  title: {
+  welcomeTitle: {
     fontSize: 32,
     fontWeight: "bold",
     color: "#fff",

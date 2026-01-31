@@ -1,6 +1,10 @@
 import { Redirect } from "expo-router";
 
 export default function Index() {
-  // İlk açılışta login ekranına yönlendir
-  return <Redirect href="/login" />;
+  // Check if user is authenticated
+  const token =
+    typeof localStorage !== "undefined" ? localStorage.getItem("token") : null;
+
+  // If authenticated, go to home; otherwise go to login
+  return <Redirect href={token ? "/home" : "/login"} />;
 }

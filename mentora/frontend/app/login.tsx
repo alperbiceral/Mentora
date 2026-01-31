@@ -33,13 +33,21 @@ export default function LoginScreen() {
 
     if (!email || !password) {
       console.log("❌ Fields empty");
-      Alert.alert("⚠️ Error", "Please fill in all fields");
+      if (Platform.OS === "web") {
+        alert("⚠️ Please fill in all fields");
+      } else {
+        Alert.alert("⚠️ Error", "Please fill in all fields");
+      }
       return;
     }
 
     if (!isValidEmail(email)) {
       console.log("❌ Invalid email format");
-      Alert.alert("⚠️ Invalid Email", "Please enter a valid email address");
+      if (Platform.OS === "web") {
+        alert("⚠️ Please enter a valid email address");
+      } else {
+        Alert.alert("⚠️ Invalid Email", "Please enter a valid email address");
+      }
       return;
     }
 
@@ -66,21 +74,31 @@ export default function LoginScreen() {
       if (!response.ok) {
         console.log("❌ Response not ok");
         setLoading(false);
-        Alert.alert(
-          "❌ Login Failed",
-          data.detail || "Invalid email or password",
-        );
+        const errorMsg = data.detail || "Invalid email or password";
+        if (Platform.OS === "web") {
+          alert(`❌ Login Failed\n${errorMsg}`);
+        } else {
+          Alert.alert("❌ Login Failed", errorMsg);
+        }
         return;
       }
 
       console.log("✅ Login successful:", data.user);
       setLoading(false);
+      // Save token
+      if (Platform.OS === "web") {
+        localStorage.setItem("token", data.access_token);
+      }
       console.log("🚀 Navigating to /home");
       router.replace("/home");
     } catch (error) {
       console.error("❌ Catch error:", error);
       setLoading(false);
-      Alert.alert("❌ Error", "Failed to connect to server");
+      if (Platform.OS === "web") {
+        alert("❌ Failed to connect to server");
+      } else {
+        Alert.alert("❌ Error", "Failed to connect to server");
+      }
     }
   };
 

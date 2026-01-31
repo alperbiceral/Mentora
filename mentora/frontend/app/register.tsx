@@ -33,36 +33,56 @@ export default function RegisterScreen() {
   const handleRegister = async () => {
     // Validation
     if (!email || !username || !password || !confirmPassword) {
-      Alert.alert("⚠️ Error", "Please fill in all required fields");
+      if (Platform.OS === "web") {
+        alert("⚠️ Please fill in all required fields");
+      } else {
+        Alert.alert("⚠️ Error", "Please fill in all required fields");
+      }
       return;
     }
 
     if (!isValidEmail(email)) {
-      Alert.alert("⚠️ Invalid Email", "Please enter a valid email address");
+      if (Platform.OS === "web") {
+        alert("⚠️ Please enter a valid email address");
+      } else {
+        Alert.alert("⚠️ Invalid Email", "Please enter a valid email address");
+      }
       return;
     }
 
     if (username.length < 3) {
-      Alert.alert(
-        "⚠️ Username Too Short",
-        "Username must be at least 3 characters",
-      );
+      if (Platform.OS === "web") {
+        alert("⚠️ Username must be at least 3 characters");
+      } else {
+        Alert.alert(
+          "⚠️ Username Too Short",
+          "Username must be at least 3 characters",
+        );
+      }
       return;
     }
 
     if (password.length < 6) {
-      Alert.alert(
-        "⚠️ Password Too Short",
-        "Password must be at least 6 characters",
-      );
+      if (Platform.OS === "web") {
+        alert("⚠️ Password must be at least 6 characters");
+      } else {
+        Alert.alert(
+          "⚠️ Password Too Short",
+          "Password must be at least 6 characters",
+        );
+      }
       return;
     }
 
     if (password !== confirmPassword) {
-      Alert.alert(
-        "⚠️ Passwords Don't Match",
-        "Please make sure both passwords are the same",
-      );
+      if (Platform.OS === "web") {
+        alert("⚠️ Passwords don't match");
+      } else {
+        Alert.alert(
+          "⚠️ Passwords Don't Match",
+          "Please make sure both passwords are the same",
+        );
+      }
       return;
     }
 
@@ -84,19 +104,35 @@ export default function RegisterScreen() {
 
       if (!response.ok) {
         const errorMsg = data.detail || "Registration failed. Please try again";
-        Alert.alert("❌ Registration Failed", errorMsg);
+        setLoading(false);
+        if (Platform.OS === "web") {
+          alert(`❌ Registration Failed\n${errorMsg}`);
+        } else {
+          Alert.alert("❌ Registration Failed", errorMsg);
+        }
         return;
       }
 
       console.log("Registration successful:", data.user);
-      Alert.alert("✅ Success", "Account created! Logging in...", [
-        { text: "OK", onPress: () => router.replace("/home") },
-      ]);
-    } catch (error) {
-      Alert.alert("❌ Error", "Failed to connect to server");
-      console.error(error);
-    } finally {
       setLoading(false);
+      // Save token
+      if (Platform.OS === "web") {
+        localStorage.setItem("token", data.access_token);
+        alert("✅ Account created! Logging in...");
+        router.replace("/home");
+      } else {
+        Alert.alert("✅ Success", "Account created! Logging in...", [
+          { text: "OK", onPress: () => router.replace("/home") },
+        ]);
+      }
+    } catch (error) {
+      console.error(error);
+      setLoading(false);
+      if (Platform.OS === "web") {
+        alert("❌ Failed to connect to server");
+      } else {
+        Alert.alert("❌ Error", "Failed to connect to server");
+      }
     }
   };
 

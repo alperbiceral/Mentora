@@ -11,7 +11,7 @@ from jose import JWTError, jwt
 from dotenv import load_dotenv
 
 from database import SessionLocal, engine
-from models import User
+from models import User, Profile
 import models
 
 # Load environment variables
@@ -48,6 +48,34 @@ class UserRegister(BaseModel):
 class UserLogin(BaseModel):
     email: str
     password: str
+
+class ProfileCreate(BaseModel):
+    full_name: str
+    school: str
+    description: str
+    age: int
+    department: str
+
+class ProfileUpdate(BaseModel):
+    full_name: str | None = None
+    school: str | None = None
+    description: str | None = None
+    age: int | None = None
+    department: str | None = None
+
+class ProfileResponse(BaseModel):
+    id: int
+    user_id: int
+    full_name: str | None
+    school: str | None
+    description: str | None
+    age: int | None
+    department: str | None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
 
 class Token(BaseModel):
     access_token: str
@@ -204,3 +232,59 @@ async def get_current_user_info(current_user: User = Depends(get_current_user)):
 @app.post("/auth/logout")
 async def logout():
     return {"message": "Logged out successfully"}
+
+# Profile Routes
+@app.options("/profile")
+async def options_profile():
+    return {}
+
+@app.get("/profile", response_model=ProfileResponse)
+async def get_profile(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    profile = db.query(Profile).filter(Profile.user_id == current_user.id).first()
+    if not profile:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
+    return profile
+
+
+@app.post("/profile", response_model=ProfileResponse)
+async def create_profile(profile_data: ProfileCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # Check if profile already exists
+    existing_profile = db.query(Profile).filter(Profile.user_id == current_user.id).first()
+    if existing_profile:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Profile already exists")
+    
+    new_profile = Profile(
+        user_id=current_user.id,
+        full_name=profile_data.full_name,
+        school=profile_data.school,
+        description=profile_data.description,
+        age=profile_data.age,
+        department=profile_data.department,
+    )
+    
+    db.add(new_profile)
+    db.commit()
+    db.refresh(new_profile)
+    return new_profile
+
+
+@app.put("/profile", response_model=ProfileResponse)
+async def update_profile(profile_data: ProfileUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    profile = db.query(Profile).filter(Profile.user_id == current_user.id).first()
+    if not profile:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
+    
+    if profile_data.full_name is not None:
+        profile.full_name = profile_data.full_name
+    if profile_data.school is not None:
+        profile.school = profile_data.school
+    if profile_data.description is not None:
+        profile.description = profile_data.description
+    if profile_data.age is not None:
+        profile.age = profile_data.age
+    if profile_data.department is not None:
+        profile.department = profile_data.department
+    
+    db.commit()
+    db.refresh(profile)
+    return profile
