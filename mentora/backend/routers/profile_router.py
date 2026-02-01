@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from deps import get_current_user, get_db
-from models import Profile, User
+from models import User
 from schemas import ProfileCreate, ProfileResponse, ProfileUpdate
 
 router = APIRouter(prefix="/profile", tags=["profile"])
@@ -18,13 +18,13 @@ async def get_profile(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    profile = db.query(Profile).filter(Profile.user_id == current_user.id).first()
-    if not profile:
+    user = db.query(User).filter(User.user_id == current_user.user_id).first()
+    if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Profile not found",
+            detail="User not found",
         )
-    return profile
+    return user
 
 
 @router.post("", response_model=ProfileResponse)
@@ -33,28 +33,22 @@ async def create_profile(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    existing_profile = (
-        db.query(Profile).filter(Profile.user_id == current_user.id).first()
-    )
-    if existing_profile:
+    user = db.query(User).filter(User.user_id == current_user.user_id).first()
+    if not user:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Profile already exists",
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
         )
 
-    new_profile = Profile(
-        user_id=current_user.id,
-        full_name=profile_data.full_name,
-        school=profile_data.school,
-        description=profile_data.description,
-        age=profile_data.age,
-        department=profile_data.department,
-    )
+    user.full_name = profile_data.full_name
+    user.school = profile_data.school
+    user.description = profile_data.description
+    user.age = profile_data.age
+    user.department = profile_data.department
 
-    db.add(new_profile)
     db.commit()
-    db.refresh(new_profile)
-    return new_profile
+    db.refresh(user)
+    return user
 
 
 @router.put("", response_model=ProfileResponse)
@@ -63,24 +57,24 @@ async def update_profile(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    profile = db.query(Profile).filter(Profile.user_id == current_user.id).first()
-    if not profile:
+    user = db.query(User).filter(User.user_id == current_user.user_id).first()
+    if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Profile not found",
+            detail="User not found",
         )
 
     if profile_data.full_name is not None:
-        profile.full_name = profile_data.full_name
+        user.full_name = profile_data.full_name
     if profile_data.school is not None:
-        profile.school = profile_data.school
+        user.school = profile_data.school
     if profile_data.description is not None:
-        profile.description = profile_data.description
+        user.description = profile_data.description
     if profile_data.age is not None:
-        profile.age = profile_data.age
+        user.age = profile_data.age
     if profile_data.department is not None:
-        profile.department = profile_data.department
+        user.department = profile_data.department
 
     db.commit()
-    db.refresh(profile)
-    return profile
+    db.refresh(user)
+    return user
