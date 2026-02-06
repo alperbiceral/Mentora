@@ -17,7 +17,7 @@ export default function ChatScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#EAF1FF",
+    backgroundColor: "#0B1220",
   },
   container: {
     flex: 1,
@@ -28,12 +28,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: "700",
-    color: "#1B2340",
+    color: "#EAF0FF",
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 14,
-    color: "#5E6A8A",
+    color: "#9CA3AF",
     textAlign: "center",
   },
 });

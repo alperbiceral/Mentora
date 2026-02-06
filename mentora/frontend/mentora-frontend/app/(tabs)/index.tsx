@@ -1,13 +1,16 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
-    Pressable,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View,
+  Alert,
+  Pressable,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
+import { SettingsLanguage, SettingsModal } from "../../components/SettingsModal";
 
 const COLORS = {
   // Dark navy theme to match the login screen
@@ -38,6 +41,11 @@ type Range = "today" | "week";
 
 export default function HomeScreen() {
   const [selectedRange, setSelectedRange] = useState<Range>("today");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
+  const [vibration, setVibration] = useState(true);
+  const [notifications, setNotifications] = useState(true);
+  const [language, setLanguage] = useState<SettingsLanguage>("English");
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -51,7 +59,7 @@ export default function HomeScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          <HeaderCard />
+          <HeaderCard onOpenSettings={() => setSettingsOpen(true)} />
 
           <GreetingCard />
 
@@ -66,13 +74,40 @@ export default function HomeScreen() {
           <CarouselSection />
         </ScrollView>
       </View>
+
+      <SettingsModal
+        visible={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        darkMode={darkMode}
+        setDarkMode={setDarkMode}
+        vibration={vibration}
+        setVibration={setVibration}
+        notifications={notifications}
+        setNotifications={setNotifications}
+        language={language}
+        setLanguage={setLanguage}
+        onLogout={() => {
+          Alert.alert("Logged out");
+          setSettingsOpen(false);
+        }}
+      />
     </SafeAreaView>
   );
 }
 
-const HeaderCard = () => {
+const HeaderCard: React.FC<{ onOpenSettings: () => void }> = ({
+  onOpenSettings,
+}) => {
+  const router = useRouter();
+
   return (
-    <View style={styles.card}>
+    <Pressable
+      style={({ pressed }) => [
+        styles.card,
+        pressed && { opacity: 0.9, transform: [{ scale: 0.995 }] },
+      ]}
+      onPress={() => router.push("/profile")}
+    >
       <View style={styles.headerRow}>
         <View style={styles.headerLeftRow}>
           <View style={styles.avatar}>
@@ -100,7 +135,7 @@ const HeaderCard = () => {
             hitSlop={12}
             style={styles.settingsButton}
             onPress={() => {
-              console.log("Settings");
+              onOpenSettings();
             }}
           >
             <Ionicons
@@ -111,7 +146,7 @@ const HeaderCard = () => {
           </Pressable>
         </View>
       </View>
-    </View>
+    </Pressable>
   );
 };
 
@@ -235,7 +270,14 @@ const ScheduleCard: React.FC<ScheduleCardProps> = ({ range }) => {
 };
 
 const QuickActions = () => {
+  const router = useRouter();
+
   const handlePress = (action: string) => {
+    if (action === "Pomodoro") {
+      router.push("/(tabs)/pomodoro");
+      return;
+    }
+
     console.log(action);
   };
 
@@ -296,6 +338,8 @@ const QuickActions = () => {
 };
 
 const RecommendationCard = () => {
+  const router = useRouter();
+
   return (
     <View style={styles.recommendationCard}>
       <View style={styles.recommendationLeft}>
@@ -318,7 +362,7 @@ const RecommendationCard = () => {
 
       <Pressable
         style={styles.recommendationButton}
-        onPress={() => console.log("Start pomodoro")}
+        onPress={() => router.push("/(tabs)/pomodoro")}
       >
         <Text style={styles.recommendationButtonText}>Start pomodoro</Text>
       </Pressable>
