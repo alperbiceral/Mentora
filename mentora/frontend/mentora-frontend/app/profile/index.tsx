@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React from "react";
+import { useFocusEffect } from "@react-navigation/native";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   SafeAreaView,
   ScrollView,
@@ -8,8 +9,9 @@ import {
   Text,
   View,
   Pressable,
+  Image,
 } from "react-native";
-import { mockUser } from "../../mock/user";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const COLORS = {
   // Match Home dark theme
@@ -31,8 +33,82 @@ const SPACING = {
   xl: 24,
 };
 
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
+
+type Profile = {
+  profile_id: number;
+  username: string;
+  full_name: string;
+  email: string;
+  phone_number?: string | null;
+  university?: string | null;
+  department?: string | null;
+  streak_count: number;
+  study_hours: number;
+  personality?: string | null;
+  profile_photo?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export default function ProfileScreen() {
   const router = useRouter();
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const avatarSource = useMemo(() => {
+    if (!profile?.profile_photo) {
+      return null;
+    }
+    return { uri: `data:image/jpeg;base64,${profile.profile_photo}` };
+  }, [profile]);
+
+  const loadProfile = useCallback(() => {
+    let active = true;
+    const run = async () => {
+      setLoading(true);
+      try {
+        const username = await AsyncStorage.getItem("mentora.username");
+        if (!username) {
+          if (active) {
+            setProfile(null);
+          }
+          return;
+        }
+
+        const response = await fetch(`${API_BASE_URL}/profile/${username}`);
+        if (!response.ok) {
+          if (response.status === 404) {
+            if (active) {
+              setProfile(null);
+            }
+            return;
+          }
+          throw new Error("Profile fetch failed");
+        }
+
+        const data = (await response.json()) as Profile;
+        if (active) {
+          setProfile(data);
+        }
+      } catch (error) {
+        if (active) {
+          setProfile(null);
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    };
+
+    run();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useFocusEffect(loadProfile);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -64,7 +140,9 @@ export default function ProfileScreen() {
               color={COLORS.accentSoft}
               style={{ marginRight: 4 }}
             />
-            <Text style={styles.streakText}>{mockUser.streakDays} day</Text>
+            <Text style={styles.streakText}>
+              {profile?.streak_count ?? 0} day
+            </Text>
           </View>
         </View>
 
@@ -72,19 +150,21 @@ export default function ProfileScreen() {
         <View style={styles.profileHeaderCard}>
           <View style={styles.profileHeaderRow}>
             <View style={styles.avatar}>
-              <Ionicons
-                name="person"
-                size={30}
-                color={COLORS.textMuted}
-              />
+              {avatarSource ? (
+                <Image source={avatarSource} style={styles.avatarImage} />
+              ) : (
+                <Ionicons name="person" size={30} color={COLORS.textMuted} />
+              )}
             </View>
 
             <View style={styles.profileHeaderText}>
               <Text style={styles.profileName}>
-                {mockUser.firstName} {mockUser.lastName}
+                {loading
+                  ? "Loading..."
+                  : (profile?.full_name ?? "Create your profile")}
               </Text>
               <Text style={styles.profileSubtitle}>
-                {mockUser.university}
+                {profile?.university ?? "Tap to set up your profile"}
               </Text>
             </View>
           </View>
@@ -99,7 +179,9 @@ export default function ProfileScreen() {
               color="#FFFFFF"
               style={{ marginRight: 6 }}
             />
-            <Text style={styles.editProfileButtonText}>Edit Profile</Text>
+            <Text style={styles.editProfileButtonText}>
+              {profile ? "Edit Profile" : "Create Profile"}
+            </Text>
           </Pressable>
         </View>
 
@@ -109,14 +191,11 @@ export default function ProfileScreen() {
 
           <View style={styles.divider} />
 
-          <ProfileRow
-            label="NAME"
-            value={`${mockUser.firstName} ${mockUser.lastName}`}
-          />
-          <ProfileRow label="USERNAME" value={mockUser.username} />
-          <ProfileRow label="E-MAIL" value={mockUser.email} />
-          <ProfileRow label="UNIVERSITY" value={mockUser.university} />
-          <ProfileRow label="PERSONALITY" value={mockUser.personality} />
+          <ProfileRow label="NAME" value={profile?.full_name ?? "-"} />
+          <ProfileRow label="USERNAME" value={profile?.username ?? "-"} />
+          <ProfileRow label="E-MAIL" value={profile?.email ?? "-"} />
+          <ProfileRow label="UNIVERSITY" value={profile?.university ?? "-"} />
+          <ProfileRow label="PERSONALITY" value={profile?.personality ?? "-"} />
         </View>
 
         {/* Study Insights card */}
@@ -126,18 +205,13 @@ export default function ProfileScreen() {
 
           <InsightRow
             icon="speedometer-outline"
-            label="Focus Level"
-            value={mockUser.focusLevel}
-          />
-          <InsightRow
-            icon="time-outline"
-            label="Most Productive Time"
-            value={mockUser.mostProductiveTime}
+            label="Study Hours"
+            value={`${profile?.study_hours ?? 0} hrs`}
           />
           <InsightRow
             icon="repeat-outline"
-            label="Consistency"
-            value={mockUser.consistency}
+            label="Streak"
+            value={`${profile?.streak_count ?? 0} days`}
           />
         </View>
 
@@ -284,6 +358,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginRight: SPACING.md,
+  },
+  avatarImage: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
   },
   profileHeaderText: {
     flex: 1,
@@ -450,4 +529,3 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
 });
-

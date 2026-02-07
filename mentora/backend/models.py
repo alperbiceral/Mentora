@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from typing import List, Optional
 
 from sqlalchemy import (
@@ -6,6 +6,7 @@ from sqlalchemy import (
     Integer,
     Float,
     Date,
+    DateTime,
     ForeignKey,
     Text,
 )
@@ -48,6 +49,33 @@ class User(Base):
     emotions = relationship("Emotion", back_populates="user")
     academic_info = relationship("AcademicInfo", back_populates="user", uselist=False)
     posts = relationship("Post", back_populates="owner")
+
+
+class Profile(Base):
+    __tablename__ = "profiles"
+
+    profile_id: Mapped[int] = mapped_column(primary_key=True)
+    username: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
+    full_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    email: Mapped[str] = mapped_column(String(120), nullable=False)
+    phone_number: Mapped[Optional[str]] = mapped_column(String(30))
+    university: Mapped[Optional[str]] = mapped_column(String(120))
+    department: Mapped[Optional[str]] = mapped_column(String(120))
+    streak_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    study_hours: Mapped[float] = mapped_column(Float, nullable=False, default=0)
+    personality: Mapped[Optional[str]] = mapped_column(String(120))
+    profile_photo: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
 
 
 class UserFeedback(Base):

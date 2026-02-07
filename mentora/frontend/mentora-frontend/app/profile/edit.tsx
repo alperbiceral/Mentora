@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   SafeAreaView,
@@ -10,8 +10,10 @@ import {
   TextInput,
   View,
   Pressable,
+  Image,
 } from "react-native";
-import { mockUser } from "../../mock/user";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as ImagePicker from "expo-image-picker";
 
 const COLORS = {
   // Match Home dark theme
@@ -34,19 +36,146 @@ const SPACING = {
   xl: 24,
 };
 
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
+
+type Profile = {
+  profile_id: number;
+  username: string;
+  full_name: string;
+  email: string;
+  phone_number?: string | null;
+  university?: string | null;
+  department?: string | null;
+  streak_count: number;
+  study_hours: number;
+  personality?: string | null;
+  profile_photo?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export default function EditProfileScreen() {
   const router = useRouter();
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [username, setUsername] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [university, setUniversity] = useState("");
+  const [department, setDepartment] = useState("");
+  const [profilePhoto, setProfilePhoto] = useState("");
+  const [loading, setLoading] = useState(true);
 
-  const [firstName, setFirstName] = useState(mockUser.firstName);
-  const [lastName, setLastName] = useState(mockUser.lastName);
-  const [username, setUsername] = useState(mockUser.username);
-  const [email, setEmail] = useState(mockUser.email);
-  const [phone, setPhone] = useState(mockUser.phone);
-  const [university, setUniversity] = useState(mockUser.university);
+  const canSave = useMemo(
+    () => username.trim().length > 0 && fullName.trim().length > 0,
+    [username, fullName],
+  );
 
-  const handleSave = () => {
-    Alert.alert("Saved", "Profile updated (mock).");
-    router.back();
+  useEffect(() => {
+    let active = true;
+    const loadProfile = async () => {
+      setLoading(true);
+      try {
+        const storedUsername = await AsyncStorage.getItem("mentora.username");
+        const storedEmail = await AsyncStorage.getItem("mentora.email");
+        if (active) {
+          setUsername(storedUsername ?? "");
+          setEmail(storedEmail ?? "");
+        }
+        if (!storedUsername) {
+          return;
+        }
+
+        const response = await fetch(
+          `${API_BASE_URL}/profile/${storedUsername}`,
+        );
+        if (!response.ok) {
+          if (response.status === 404) {
+            return;
+          }
+          throw new Error("Profile fetch failed");
+        }
+
+        const data = (await response.json()) as Profile;
+        if (!active) {
+          return;
+        }
+        setProfile(data);
+        setUsername(data.username);
+        setFullName(data.full_name);
+        setEmail(data.email);
+        setPhone(data.phone_number ?? "");
+        setUniversity(data.university ?? "");
+        setDepartment(data.department ?? "");
+        setProfilePhoto(data.profile_photo ?? "");
+      } catch (error) {
+        if (active) {
+          setProfile(null);
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadProfile();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const handleSave = async () => {
+    if (!canSave) {
+      Alert.alert("Missing info", "Username and full name are required.");
+      return;
+    }
+
+    const payload = {
+      username,
+      full_name: fullName,
+      email,
+      phone_number: phone || null,
+      university: university || null,
+      department: department || null,
+      profile_photo: profilePhoto || null,
+    };
+
+    try {
+      const url = profile
+        ? `${API_BASE_URL}/profile/${username}`
+        : `${API_BASE_URL}/profile`;
+      const body = profile
+        ? {
+            full_name: payload.full_name,
+            email: payload.email,
+            phone_number: payload.phone_number,
+            university: payload.university,
+            department: payload.department,
+            profile_photo: payload.profile_photo,
+          }
+        : payload;
+      const response = await fetch(url, {
+        method: profile ? "PUT" : "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        const message = await response.json().catch(() => null);
+        throw new Error(message?.detail ?? "Save failed");
+      }
+
+      const data = (await response.json()) as Profile;
+      setProfile(data);
+      Alert.alert("Saved", "Profile updated.");
+      router.back();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Save failed";
+      Alert.alert("Error", message);
+    }
   };
 
   return (
@@ -78,22 +207,17 @@ export default function EditProfileScreen() {
         {/* Form card */}
         <View style={styles.formCard}>
           <Field
-            label="First Name"
-            value={firstName}
-            onChangeText={setFirstName}
-          />
-
-          <Field
-            label="Last Name"
-            value={lastName}
-            onChangeText={setLastName}
-          />
-
-          <Field
             label="Username"
             value={username}
             onChangeText={setUsername}
             autoCapitalize="none"
+            editable={false}
+          />
+
+          <Field
+            label="Full Name"
+            value={fullName}
+            onChangeText={setFullName}
           />
 
           <Field
@@ -111,70 +235,74 @@ export default function EditProfileScreen() {
             keyboardType="phone-pad"
           />
 
-          {/* University dropdown-like field */}
-          <View style={styles.fieldContainer}>
-            <Text style={styles.fieldLabel}>University</Text>
+          <Field
+            label="University"
+            value={university}
+            onChangeText={setUniversity}
+          />
+
+          <Field
+            label="Department"
+            value={department}
+            onChangeText={setDepartment}
+          />
+
+          <View style={styles.photoRow}>
+            <View style={styles.photoPreview}>
+              {profilePhoto ? (
+                <Image
+                  source={{ uri: `data:image/jpeg;base64,${profilePhoto}` }}
+                  style={styles.photoImage}
+                />
+              ) : (
+                <Ionicons name="person" size={24} color={COLORS.textMuted} />
+              )}
+            </View>
             <Pressable
-              style={styles.dropdownInput}
-              onPress={() => {
-                console.log("Open university picker (mock)");
+              style={styles.photoButton}
+              onPress={async () => {
+                const permission =
+                  await ImagePicker.requestMediaLibraryPermissionsAsync();
+                if (!permission.granted) {
+                  Alert.alert(
+                    "Permission required",
+                    "Please allow photo library access.",
+                  );
+                  return;
+                }
+
+                const result = await ImagePicker.launchImageLibraryAsync({
+                  mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                  base64: true,
+                  quality: 0.7,
+                });
+
+                if (!result.canceled && result.assets?.[0]?.base64) {
+                  setProfilePhoto(result.assets[0].base64);
+                }
               }}
             >
-              <Text style={styles.dropdownText}>{university}</Text>
               <Ionicons
-                name="chevron-down"
+                name="image-outline"
                 size={18}
-                color={COLORS.textMuted}
+                color={COLORS.textPrimary}
+                style={{ marginRight: 8 }}
               />
+              <Text style={styles.photoButtonText}>Upload Photo</Text>
             </Pressable>
           </View>
-
-          {/* Change password */}
-          <Pressable
-            style={styles.changePasswordButton}
-            onPress={() => {
-              console.log("Change password (mock)");
-            }}
-          >
-            <Ionicons
-              name="lock-closed-outline"
-              size={18}
-              color="#FFFFFF"
-              style={{ marginRight: 8 }}
-            />
-            <Text style={styles.changePasswordText}>Change Password</Text>
-          </Pressable>
-
-          {/* Retake personality test */}
-          <Pressable
-            style={styles.personalityButton}
-            onPress={() => {
-              console.log("Retake personality test (mock)");
-            }}
-          >
-            <Ionicons
-              name="sparkles-outline"
-              size={18}
-              color={COLORS.accentSoft}
-              style={{ marginRight: 8 }}
-            />
-            <Text style={styles.personalityButtonText}>
-              Retake Personality Test
-            </Text>
-          </Pressable>
         </View>
 
         {/* Bottom buttons */}
         <View style={styles.bottomButtonsRow}>
-          <Pressable
-            style={styles.cancelButton}
-            onPress={() => router.back()}
-          >
+          <Pressable style={styles.cancelButton} onPress={() => router.back()}>
             <Text style={styles.cancelButtonText}>Cancel</Text>
           </Pressable>
 
           <Pressable style={styles.saveButton} onPress={handleSave}>
-            <Text style={styles.saveButtonText}>Save</Text>
+            <Text style={styles.saveButtonText}>
+              {loading ? "Loading..." : "Save"}
+            </Text>
           </Pressable>
         </View>
       </ScrollView>
@@ -193,6 +321,8 @@ type FieldProps = {
     | "numeric"
     | "phone-pad"
     | "number-pad";
+  editable?: boolean;
+  multiline?: boolean;
 };
 
 const Field: React.FC<FieldProps> = ({
@@ -201,6 +331,8 @@ const Field: React.FC<FieldProps> = ({
   onChangeText,
   autoCapitalize = "sentences",
   keyboardType = "default",
+  editable = true,
+  multiline = false,
 }) => (
   <View style={styles.fieldContainer}>
     <Text style={styles.fieldLabel}>{label}</Text>
@@ -211,6 +343,8 @@ const Field: React.FC<FieldProps> = ({
       placeholderTextColor={COLORS.textMuted}
       autoCapitalize={autoCapitalize}
       keyboardType={keyboardType}
+      editable={editable}
+      multiline={multiline}
     />
   </View>
 );
@@ -270,7 +404,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   textInput: {
-    height: 44,
+    minHeight: 44,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: COLORS.borderSubtle,
@@ -278,51 +412,44 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.textPrimary,
     backgroundColor: "#020617",
+    textAlignVertical: "top",
   },
-  dropdownInput: {
-    height: 44,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
-    paddingHorizontal: SPACING.md,
-    backgroundColor: "#020617",
+  photoRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    gap: SPACING.md,
+    marginBottom: SPACING.md,
   },
-  dropdownText: {
-    fontSize: 14,
-    color: COLORS.textPrimary,
+  photoPreview: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: "#111827",
+    borderWidth: 1,
+    borderColor: COLORS.borderSubtle,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  changePasswordButton: {
-    marginTop: SPACING.lg,
+  photoImage: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+  },
+  photoButton: {
+    flex: 1,
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.borderSubtle,
+    backgroundColor: "#020617",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    height: 46,
-    borderRadius: 14,
-    backgroundColor: COLORS.accent,
   },
-  changePasswordText: {
+  photoButtonText: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#FFFFFF",
-  },
-  personalityButton: {
-    marginTop: SPACING.sm,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    height: 44,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
-    backgroundColor: "rgba(15,23,42,0.85)",
-  },
-  personalityButtonText: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: COLORS.accentSoft,
+    color: COLORS.textPrimary,
   },
   bottomButtonsRow: {
     flexDirection: "row",
@@ -360,4 +487,3 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
   },
 });
-

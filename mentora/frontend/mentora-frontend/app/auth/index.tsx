@@ -9,6 +9,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const COLORS = {
   background: "#0B1220",
@@ -80,7 +81,13 @@ export default function AuthScreen() {
         throw new Error(message?.detail ?? "Request failed");
       }
 
-      await response.json();
+      const data = await response.json();
+      if (data?.user?.username) {
+        await AsyncStorage.setItem("mentora.username", data.user.username);
+      }
+      if (data?.user?.email) {
+        await AsyncStorage.setItem("mentora.email", data.user.email);
+      }
       Alert.alert(isRegister ? "Registered" : "Logged in");
       router.replace("/(tabs)");
     } catch (err) {

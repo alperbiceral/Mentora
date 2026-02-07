@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel
 
@@ -13,29 +14,51 @@ class UserLogin(BaseModel):
     password: str
 
 
+class ChangePasswordRequest(BaseModel):
+    username: str
+    old_password: str
+    new_password: str
+
+
 class ProfileCreate(BaseModel):
+    username: str
     full_name: str
-    school: str
-    description: str
-    age: int
-    department: str
+    email: str
+    phone_number: Optional[str] = None
+    university: Optional[str] = None
+    department: Optional[str] = None
+    streak_count: int = 0
+    study_hours: float = 0
+    personality: Optional[str] = None
+    profile_photo: Optional[str] = None
 
 
 class ProfileUpdate(BaseModel):
     full_name: Optional[str] = None
-    school: Optional[str] = None
-    description: Optional[str] = None
-    age: Optional[int] = None
+    email: Optional[str] = None
+    phone_number: Optional[str] = None
+    university: Optional[str] = None
     department: Optional[str] = None
+    streak_count: Optional[int] = None
+    study_hours: Optional[float] = None
+    personality: Optional[str] = None
+    profile_photo: Optional[str] = None
 
 
 class ProfileResponse(BaseModel):
-    user_id: int
-    full_name: Optional[str]
-    school: Optional[str]
-    description: Optional[str]
-    age: Optional[int]
+    profile_id: int
+    username: str
+    full_name: str
+    email: str
+    phone_number: Optional[str]
+    university: Optional[str]
     department: Optional[str]
+    streak_count: int
+    study_hours: float
+    personality: Optional[str]
+    profile_photo: Optional[str]
+    created_at: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True

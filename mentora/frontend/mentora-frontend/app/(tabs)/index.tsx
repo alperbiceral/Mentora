@@ -1,8 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import { useFocusEffect } from "@react-navigation/native";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   Alert,
+  Image,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -10,6 +12,7 @@ import {
   Text,
   View,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   SettingsLanguage,
   SettingsModal,
@@ -42,6 +45,22 @@ const SPACING = {
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
 
+type Profile = {
+  profile_id: number;
+  username: string;
+  full_name: string;
+  email: string;
+  phone_number?: string | null;
+  university?: string | null;
+  department?: string | null;
+  streak_count: number;
+  study_hours: number;
+  personality?: string | null;
+  profile_photo?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 type Range = "today" | "week";
 
 export default function HomeScreen() {
@@ -52,6 +71,71 @@ export default function HomeScreen() {
   const [vibration, setVibration] = useState(true);
   const [notifications, setNotifications] = useState(true);
   const [language, setLanguage] = useState<SettingsLanguage>("English");
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
+
+  const headerTitle = useMemo(() => {
+    if (!profile) {
+      return "Create your profile";
+    }
+    return profile.full_name || profile.username;
+  }, [profile]);
+
+  const headerSubtitle = useMemo(() => {
+    if (!profile) {
+      return "Tap to set up your profile";
+    }
+    return profile.university || `@${profile.username}`;
+  }, [profile]);
+
+  const loadProfile = useCallback(() => {
+    let active = true;
+    const run = async () => {
+      setProfileLoading(true);
+      try {
+        const storedUsername = await AsyncStorage.getItem("mentora.username");
+        if (!storedUsername) {
+          if (active) {
+            setProfile(null);
+          }
+          return;
+        }
+
+        const response = await fetch(
+          `${API_BASE_URL}/profile/${storedUsername}`,
+        );
+        if (!response.ok) {
+          if (response.status === 404) {
+            if (active) {
+              setProfile(null);
+            }
+            return;
+          }
+          throw new Error("Profile fetch failed");
+        }
+
+        const data = (await response.json()) as Profile;
+        if (active) {
+          setProfile(data);
+        }
+      } catch (error) {
+        if (active) {
+          setProfile(null);
+        }
+      } finally {
+        if (active) {
+          setProfileLoading(false);
+        }
+      }
+    };
+
+    run();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useFocusEffect(loadProfile);
 
   const handleLogout = async () => {
     try {
@@ -61,6 +145,7 @@ export default function HomeScreen() {
           "Content-Type": "application/json",
         },
       });
+      await AsyncStorage.multiRemove(["mentora.username", "mentora.email"]);
     } catch (error) {
       Alert.alert("Logout failed", "Please try again.");
       return;
@@ -69,6 +154,33 @@ export default function HomeScreen() {
     }
 
     router.replace("/auth");
+  };
+
+  const handleChangePassword = async (
+    oldPassword: string,
+    newPassword: string,
+  ) => {
+    const username = await AsyncStorage.getItem("mentora.username");
+    if (!username) {
+      throw new Error("Missing username");
+    }
+
+    const response = await fetch(`${API_BASE_URL}/auth/change-password`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        username,
+        old_password: oldPassword,
+        new_password: newPassword,
+      }),
+    });
+
+    if (!response.ok) {
+      const message = await response.json().catch(() => null);
+      throw new Error(message?.detail ?? "Change password failed");
+    }
   };
 
   return (
@@ -83,9 +195,16 @@ export default function HomeScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          <HeaderCard onOpenSettings={() => setSettingsOpen(true)} />
+          <HeaderCard
+            title={headerTitle}
+            subtitle={headerSubtitle}
+            streakCount={profile?.streak_count ?? 0}
+            profilePhoto={profile?.profile_photo ?? null}
+            onOpenSettings={() => setSettingsOpen(true)}
+            loading={profileLoading}
+          />
 
-          <GreetingCard />
+          <GreetingCard name={profile?.full_name ?? profile?.username} />
 
           <ToggleTabs selected={selectedRange} onSelect={setSelectedRange} />
 
@@ -111,13 +230,26 @@ export default function HomeScreen() {
         language={language}
         setLanguage={setLanguage}
         onLogout={handleLogout}
+        onChangePassword={handleChangePassword}
       />
     </SafeAreaView>
   );
 }
 
-const HeaderCard: React.FC<{ onOpenSettings: () => void }> = ({
+const HeaderCard: React.FC<{
+  onOpenSettings: () => void;
+  title: string;
+  subtitle: string;
+  streakCount: number;
+  profilePhoto: string | null;
+  loading: boolean;
+}> = ({
   onOpenSettings,
+  title,
+  subtitle,
+  streakCount,
+  profilePhoto,
+  loading,
 }) => {
   const router = useRouter();
 
@@ -132,12 +264,21 @@ const HeaderCard: React.FC<{ onOpenSettings: () => void }> = ({
       <View style={styles.headerRow}>
         <View style={styles.headerLeftRow}>
           <View style={styles.avatar}>
-            <Ionicons name="person" size={26} color={COLORS.textMuted} />
+            {profilePhoto ? (
+              <Image
+                source={{ uri: `data:image/jpeg;base64,${profilePhoto}` }}
+                style={styles.avatarImage}
+              />
+            ) : (
+              <Ionicons name="person" size={26} color={COLORS.textMuted} />
+            )}
           </View>
 
           <View>
-            <Text style={styles.nameText}>Gülferiz Bayar</Text>
-            <Text style={styles.subtitleText}>Bilkent</Text>
+            <Text style={styles.nameText}>
+              {loading ? "Loading..." : title}
+            </Text>
+            <Text style={styles.subtitleText}>{subtitle}</Text>
           </View>
         </View>
 
@@ -149,7 +290,7 @@ const HeaderCard: React.FC<{ onOpenSettings: () => void }> = ({
               color={COLORS.accent}
               style={{ marginRight: 4 }}
             />
-            <Text style={styles.streakText}>12 day</Text>
+            <Text style={styles.streakText}>{streakCount} day</Text>
           </View>
 
           <Pressable
@@ -171,10 +312,10 @@ const HeaderCard: React.FC<{ onOpenSettings: () => void }> = ({
   );
 };
 
-const GreetingCard = () => {
+const GreetingCard = ({ name }: { name?: string }) => {
   return (
     <View style={styles.card}>
-      <Text style={styles.greetingTitle}>Hi Gülferiz !</Text>
+      <Text style={styles.greetingTitle}>Hi {name ?? "there"} !</Text>
       <Text style={styles.greetingSubtitle}>
         Ready to get some studying done? How can I assist you today?
       </Text>
@@ -503,6 +644,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginRight: SPACING.sm,
+  },
+  avatarImage: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
   },
   nameText: {
     fontSize: 16,

@@ -1,11 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useMemo, useState } from "react";
 import {
+  Alert,
   Modal,
   Pressable,
   StyleSheet,
   Switch,
   Text,
+  TextInput,
   View,
 } from "react-native";
 
@@ -23,6 +25,7 @@ type Props = {
   language: SettingsLanguage;
   setLanguage: (v: SettingsLanguage) => void;
   onLogout: () => void;
+  onChangePassword: (oldPassword: string, newPassword: string) => Promise<void>;
 };
 
 export function SettingsModal({
@@ -37,8 +40,15 @@ export function SettingsModal({
   language,
   setLanguage,
   onLogout,
+  onChangePassword,
 }: Props) {
   const [languageOpen, setLanguageOpen] = useState(false);
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  const [oldPassword, setOldPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordLoading, setPasswordLoading] = useState(false);
 
   const languageOptions = useMemo<SettingsLanguage[]>(
     () => ["English", "Turkish"],
@@ -133,6 +143,85 @@ export function SettingsModal({
                 </View>
               </View>
             </View>
+
+            <Pressable
+              style={styles.changePasswordButton}
+              onPress={() => setPasswordOpen((v) => !v)}
+            >
+              <Text style={styles.changePasswordText}>
+                {passwordOpen ? "Back" : "Change Password"}
+              </Text>
+            </Pressable>
+
+            {passwordOpen ? (
+              <View style={styles.passwordCard}>
+                <TextInput
+                  value={oldPassword}
+                  onChangeText={setOldPassword}
+                  style={styles.passwordInput}
+                  placeholder="Old password"
+                  placeholderTextColor="#6B7280"
+                  secureTextEntry
+                />
+                <TextInput
+                  value={newPassword}
+                  onChangeText={setNewPassword}
+                  style={styles.passwordInput}
+                  placeholder="New password"
+                  placeholderTextColor="#6B7280"
+                  secureTextEntry
+                />
+                <TextInput
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  style={styles.passwordInput}
+                  placeholder="Confirm new password"
+                  placeholderTextColor="#6B7280"
+                  secureTextEntry
+                />
+                {passwordError ? (
+                  <Text style={styles.passwordErrorText}>{passwordError}</Text>
+                ) : null}
+                <Pressable
+                  style={styles.passwordSubmitButton}
+                  onPress={async () => {
+                    if (passwordLoading) {
+                      return;
+                    }
+                    if (!oldPassword || !newPassword) {
+                      setPasswordError("Please fill all fields.");
+                      return;
+                    }
+                    if (newPassword !== confirmPassword) {
+                      setPasswordError("Passwords do not match.");
+                      return;
+                    }
+                    setPasswordError(null);
+                    setPasswordLoading(true);
+                    try {
+                      await onChangePassword(oldPassword, newPassword);
+                      Alert.alert("Password updated");
+                      setOldPassword("");
+                      setNewPassword("");
+                      setConfirmPassword("");
+                      setPasswordOpen(false);
+                    } catch (error) {
+                      const message =
+                        error instanceof Error
+                          ? error.message
+                          : "Change password failed";
+                      setPasswordError(message);
+                    } finally {
+                      setPasswordLoading(false);
+                    }
+                  }}
+                >
+                  <Text style={styles.passwordSubmitText}>
+                    {passwordLoading ? "Updating..." : "Update Password"}
+                  </Text>
+                </Pressable>
+              </View>
+            ) : null}
 
             <Pressable style={styles.logoutButton} onPress={onLogout}>
               <Text style={styles.logoutText}>Log Out</Text>
@@ -259,7 +348,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.10,
+    shadowOpacity: 0.1,
     shadowRadius: 12,
     elevation: 5,
   },
@@ -288,7 +377,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#E8EEFF",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.10,
+    shadowOpacity: 0.1,
     shadowRadius: 12,
     elevation: 3,
   },
@@ -297,5 +386,51 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: BORDER,
   },
+  changePasswordButton: {
+    marginTop: 10,
+    alignSelf: "center",
+    paddingHorizontal: 22,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: "#E8EEFF",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  changePasswordText: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: BORDER,
+  },
+  passwordCard: {
+    marginTop: 10,
+    gap: 8,
+  },
+  passwordInput: {
+    height: 42,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: "rgba(17,24,39,0.15)",
+    backgroundColor: "#F9FAFB",
+    color: "#111827",
+  },
+  passwordErrorText: {
+    color: "#DC2626",
+    fontSize: 12,
+  },
+  passwordSubmitButton: {
+    marginTop: 4,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: "#E8EEFF",
+    alignItems: "center",
+  },
+  passwordSubmitText: {
+    fontSize: 14,
+    color: BORDER,
+    fontWeight: "800",
+  },
 });
-

@@ -12,7 +12,7 @@ from deps import (
     verify_password,
 )
 from models import User
-from schemas import Token, UserLogin, UserRegister, UserResponse
+from schemas import ChangePasswordRequest, Token, UserLogin, UserRegister, UserResponse
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -100,3 +100,20 @@ async def get_current_user_info(current_user: User = Depends(get_current_user)):
 @router.post("/logout")
 async def logout():
     return {"message": "Logged out successfully"}
+
+
+@router.post("/change-password")
+async def change_password(
+    payload: ChangePasswordRequest,
+    db: Session = Depends(get_db),
+):
+    user = db.query(User).filter(User.username == payload.username).first()
+    if not user or not verify_password(payload.old_password, user.pass_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials",
+        )
+
+    user.pass_hash = get_password_hash(payload.new_password)
+    db.commit()
+    return {"message": "Password updated"}
