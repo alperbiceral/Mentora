@@ -9,6 +9,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Text,
+    Boolean,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import (
@@ -103,6 +104,68 @@ class Friend(Base):
         nullable=False,
         default=datetime.utcnow,
     )
+
+
+class ChatThread(Base):
+    __tablename__ = "chat_threads"
+
+    thread_id: Mapped[int] = mapped_column(primary_key=True)
+    user_a: Mapped[str] = mapped_column(String(50), nullable=False)
+    user_b: Mapped[str] = mapped_column(String(50), nullable=False)
+    is_group: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    title: Mapped[Optional[str]] = mapped_column(String(120))
+    owner_username: Mapped[Optional[str]] = mapped_column(String(50))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+    messages = relationship("ChatMessage", back_populates="thread")
+    participants = relationship("ChatParticipant", back_populates="thread")
+
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+
+    message_id: Mapped[int] = mapped_column(primary_key=True)
+    thread_id: Mapped[int] = mapped_column(
+        ForeignKey("chat_threads.thread_id"),
+        nullable=False,
+    )
+    sender: Mapped[str] = mapped_column(String(50), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+    )
+
+    thread = relationship("ChatThread", back_populates="messages")
+
+
+class ChatParticipant(Base):
+    __tablename__ = "chat_participants"
+
+    participant_id: Mapped[int] = mapped_column(primary_key=True)
+    thread_id: Mapped[int] = mapped_column(
+        ForeignKey("chat_threads.thread_id"),
+        nullable=False,
+    )
+    username: Mapped[str] = mapped_column(String(50), nullable=False)
+    added_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+    )
+
+    thread = relationship("ChatThread", back_populates="participants")
 
 
 class UserFeedback(Base):

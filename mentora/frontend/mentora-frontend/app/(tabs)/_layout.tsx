@@ -2,7 +2,7 @@ import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { DeviceEventEmitter, StyleSheet, Text, View } from "react-native";
 
 const ACTIVE_COLOR = "#6D5EF7";
@@ -38,12 +38,19 @@ function TabIcon(props: {
 }
 
 export default function TabsLayout() {
-  const [badgeCount, setBadgeCount] = useState(0);
+  const [friendBadgeCount, setFriendBadgeCount] = useState(0);
+  const [chatBadgeCount, setChatBadgeCount] = useState(0);
+  const [currentUsername, setCurrentUsername] = useState<string | null>(null);
+  const [isChatActive, setIsChatActive] = useState(false);
+  const wsRef = useRef<WebSocket | null>(null);
 
-  const loadBadge = useCallback(() => {
+  const loadBadges = useCallback(() => {
     let active = true;
     const run = async () => {
       const username = await AsyncStorage.getItem("mentora.username");
+      if (active) {
+        setCurrentUsername(username);
+      }
       if (username) {
         try {
           const response = await fetch(
@@ -57,9 +64,8 @@ export default function TabsLayout() {
               String(count),
             );
             if (active) {
-              setBadgeCount(Number(count ?? 0));
+              setFriendBadgeCount(Number(count ?? 0));
             }
-            return;
           }
         } catch (error) {
           // Fall back to stored count.
@@ -67,8 +73,10 @@ export default function TabsLayout() {
       }
 
       const stored = await AsyncStorage.getItem("mentora.friendRequestsCount");
+      const storedChats = await AsyncStorage.getItem("mentora.chatUnreadCount");
       if (active) {
-        setBadgeCount(Number(stored ?? "0"));
+        setFriendBadgeCount(Number(stored ?? "0"));
+        setChatBadgeCount(Number(storedChats ?? "0"));
       }
     };
     run();
@@ -77,19 +85,82 @@ export default function TabsLayout() {
     };
   }, []);
 
-  useFocusEffect(loadBadge);
+  useFocusEffect(loadBadges);
 
   useEffect(() => {
-    const sub = DeviceEventEmitter.addListener(
+    const friendSub = DeviceEventEmitter.addListener(
       "friendRequestsCount",
       (count: number) => {
-        setBadgeCount(Number(count ?? 0));
+        setFriendBadgeCount(Number(count ?? 0));
+      },
+    );
+    const chatSub = DeviceEventEmitter.addListener(
+      "chatUnreadCount",
+      (count: number) => {
+        setChatBadgeCount(Number(count ?? 0));
+      },
+    );
+    const chatFocusSub = DeviceEventEmitter.addListener(
+      "chatFocus",
+      (isActive: boolean) => {
+        setIsChatActive(Boolean(isActive));
       },
     );
     return () => {
-      sub.remove();
+      friendSub.remove();
+      chatSub.remove();
+      chatFocusSub.remove();
     };
   }, []);
+
+  useEffect(() => {
+    if (!currentUsername) {
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+      return;
+    }
+
+    const wsUrl = API_BASE_URL.replace(/^http/, "ws").concat(
+      `/chat/ws/${currentUsername}`,
+    );
+    const ws = new WebSocket(wsUrl);
+    wsRef.current = ws;
+
+    const incrementUnread = async () => {
+      const stored = await AsyncStorage.getItem("mentora.chatUnreadCount");
+      const nextCount = Number(stored ?? "0") + 1;
+      await AsyncStorage.setItem("mentora.chatUnreadCount", String(nextCount));
+      DeviceEventEmitter.emit("chatUnreadCount", nextCount);
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload.type === "message") {
+          const message = payload.message as { sender?: string };
+          if (message.sender && message.sender === currentUsername) {
+            return;
+          }
+          if (!isChatActive) {
+            incrementUnread();
+          }
+        }
+      } catch (error) {
+        // ignore
+      }
+    };
+
+    ws.onerror = () => {
+      // ignore
+    };
+
+    return () => {
+      ws.close();
+      wsRef.current = null;
+    };
+  }, [currentUsername, isChatActive]);
 
   return (
     <Tabs
@@ -120,6 +191,7 @@ export default function TabsLayout() {
               size={size}
               activeName="chatbubble-ellipses"
               inactiveName="chatbubble-ellipses-outline"
+              badgeCount={chatBadgeCount}
             />
           ),
         }}
@@ -184,7 +256,7 @@ export default function TabsLayout() {
               size={size}
               activeName="people"
               inactiveName="people-outline"
-              badgeCount={badgeCount}
+              badgeCount={friendBadgeCount}
             />
           ),
         }}

@@ -118,3 +118,57 @@ class FriendListResponse(BaseModel):
 
 class FriendSearchResponse(BaseModel):
     results: list[FriendProfile]
+
+
+class ChatThreadCreate(BaseModel):
+    username: str
+    friend_username: str
+
+
+class ChatGroupCreate(BaseModel):
+    username: str
+    title: str
+    member_usernames: list[str]
+
+
+class ChatGroupUpdate(BaseModel):
+    username: str
+    title: Optional[str] = None
+    add_members: Optional[list[str]] = None
+    remove_members: Optional[list[str]] = None
+
+
+class ChatThreadAction(BaseModel):
+    username: str
+
+
+class ChatMessageCreate(BaseModel):
+    thread_id: int
+    sender: str
+    content: str
+
+
+class ChatMessageResponse(BaseModel):
+    message_id: int
+    thread_id: int
+    sender: str
+    content: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ChatThreadItem(BaseModel):
+    thread_id: int
+    is_group: bool
+    friend_username: Optional[str] = None
+    title: Optional[str] = None
+    owner_username: Optional[str] = None
+    members_count: int = 0
+    last_message: Optional[str]
+    last_message_at: Optional[datetime]
+
+
+class ChatThreadsResponse(BaseModel):
+    threads: list[ChatThreadItem]

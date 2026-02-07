@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { useCallback, useEffect, useState } from "react";
@@ -164,6 +165,7 @@ const mockGroupLeaderboard = [
 ];
 
 export default function SocialScreen() {
+  const router = useRouter();
   const [leaderboardType, setLeaderboardType] =
     useState<LeaderboardType>("global");
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -401,7 +403,12 @@ export default function SocialScreen() {
                     </View>
                     <Pressable
                       style={styles.messageButton}
-                      onPress={() => console.log("Message", friend.username)}
+                      onPress={() =>
+                        router.push({
+                          pathname: "/(tabs)/chat",
+                          params: { friend: friend.username },
+                        })
+                      }
                     >
                       <Ionicons
                         name="chatbubble-ellipses-outline"
@@ -901,26 +908,27 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: "55%",
-    backgroundColor: COLORS.background,
+    height: "100%",
+    backgroundColor: "#0B1220",
   },
   backgroundBottom: {
     position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
-    height: "50%",
-    backgroundColor: COLORS.backgroundAlt,
+    height: "100%",
+    backgroundColor: "#0F1A2B",
+    opacity: 0.45,
   },
   glow: {
     position: "absolute",
-    top: -80,
-    left: -40,
-    right: -40,
-    height: 220,
-    borderRadius: 220,
-    backgroundColor: "rgba(124,58,237,0.32)",
-    opacity: 0.35,
+    top: -120,
+    left: -60,
+    right: -60,
+    height: 260,
+    borderRadius: 260,
+    backgroundColor: "rgba(109,94,247,0.18)",
+    opacity: 0.25,
   },
   wrapper: {
     flex: 1,

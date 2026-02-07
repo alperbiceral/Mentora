@@ -46,9 +46,7 @@ export default function PomodoroScreen() {
         >
           <View style={styles.header}>
             <Text style={styles.headerText}>
-              Stay{" "}
-              <Text style={styles.headerAccent}>Focused</Text>
-              !
+              Stay <Text style={styles.headerAccent}>Focused</Text>!
             </Text>
             <Text style={styles.headerSubtitle}>
               One intense block. No distractions.
@@ -113,10 +111,7 @@ export default function PomodoroScreen() {
         </ScrollView>
       </View>
 
-      <BreakModal
-        visible={breakOpen}
-        onClose={() => setBreakOpen(false)}
-      />
+      <BreakModal visible={breakOpen} onClose={() => setBreakOpen(false)} />
     </SafeAreaView>
   );
 }
@@ -131,26 +126,27 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: "55%",
-    backgroundColor: COLORS.background,
+    height: "100%",
+    backgroundColor: "#0B1220",
   },
   backgroundBottom: {
     position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
-    height: "50%",
-    backgroundColor: COLORS.backgroundAlt,
+    height: "100%",
+    backgroundColor: "#0F1A2B",
+    opacity: 0.45,
   },
   glow: {
     position: "absolute",
-    top: -60,
-    left: -40,
-    right: -40,
-    height: 220,
-    borderRadius: 220,
-    backgroundColor: "rgba(109,94,247,0.32)",
-    opacity: 0.35,
+    top: -120,
+    left: -60,
+    right: -60,
+    height: 260,
+    borderRadius: 260,
+    backgroundColor: "rgba(109,94,247,0.18)",
+    opacity: 0.25,
   },
   wrapper: {
     flex: 1,
@@ -348,4 +344,3 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 });
-

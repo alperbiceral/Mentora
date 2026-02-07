@@ -178,7 +178,11 @@ export default function ScheduleScreen() {
             <View style={styles.section}>
               <WeekControls
                 weekLabel={weekLabel}
-                onPrev={() => setWeekIndex((i) => (i + WEEK_RANGES.length - 1) % WEEK_RANGES.length)}
+                onPrev={() =>
+                  setWeekIndex(
+                    (i) => (i + WEEK_RANGES.length - 1) % WEEK_RANGES.length,
+                  )
+                }
                 onNext={() => setWeekIndex((i) => (i + 1) % WEEK_RANGES.length)}
               />
 
@@ -262,11 +266,7 @@ const CourseCard: React.FC<CourseCardProps> = ({ course, onPress }) => (
         </Text>
         <Text style={styles.courseInstructor}>{course.instructor}</Text>
       </View>
-      <Ionicons
-        name="chevron-forward"
-        size={18}
-        color={COLORS.textSecondary}
-      />
+      <Ionicons name="chevron-forward" size={18} color={COLORS.textSecondary} />
     </View>
 
     <View style={styles.courseFooterRow}>
@@ -346,18 +346,10 @@ const WeekdaySelector: React.FC<WeekdaySelectorProps> = ({
       return (
         <Pressable
           key={d}
-          style={[
-            styles.dayPill,
-            active && styles.dayPillActive,
-          ]}
+          style={[styles.dayPill, active && styles.dayPillActive]}
           onPress={() => onSelect(d)}
         >
-          <Text
-            style={[
-              styles.dayLabel,
-              active && styles.dayLabelActive,
-            ]}
-          >
+          <Text style={[styles.dayLabel, active && styles.dayLabelActive]}>
             {d}
           </Text>
         </Pressable>
@@ -473,26 +465,27 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: "55%",
-    backgroundColor: COLORS.background,
+    height: "100%",
+    backgroundColor: "#0B1220",
   },
   backgroundBottom: {
     position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
-    height: "50%",
-    backgroundColor: COLORS.backgroundAlt,
+    height: "100%",
+    backgroundColor: "#0F1A2B",
+    opacity: 0.45,
   },
   glow: {
     position: "absolute",
-    top: -60,
-    left: -40,
-    right: -40,
-    height: 220,
-    borderRadius: 220,
-    backgroundColor: "rgba(109,94,247,0.32)",
-    opacity: 0.35,
+    top: -120,
+    left: -60,
+    right: -60,
+    height: 260,
+    borderRadius: 260,
+    backgroundColor: "rgba(109,94,247,0.18)",
+    opacity: 0.25,
   },
   wrapper: {
     flex: 1,
@@ -695,4 +688,3 @@ const styles = StyleSheet.create({
     color: "#020617",
   },
 });
-
