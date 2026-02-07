@@ -159,6 +159,7 @@ async def list_threads(username: str, db: Session = Depends(get_db)):
                 ),
                 title=thread.title,
                 owner_username=thread.owner_username,
+                group_photo=thread.group_photo,
                 members_count=members_count,
                 last_message=last_message.content if last_message else None,
                 last_message_at=last_message.created_at if last_message else None,
@@ -225,6 +226,7 @@ async def create_thread(payload: ChatThreadCreate, db: Session = Depends(get_db)
             friend_username=_thread_friend(existing, payload.username),
             title=existing.title,
             owner_username=existing.owner_username,
+            group_photo=existing.group_photo,
             members_count=members_count,
             last_message=None,
             last_message_at=None,
@@ -256,6 +258,7 @@ async def create_thread(payload: ChatThreadCreate, db: Session = Depends(get_db)
         friend_username=_thread_friend(thread, payload.username),
         title=None,
         owner_username=None,
+        group_photo=None,
         members_count=2,
         last_message=None,
         last_message_at=None,
@@ -304,6 +307,7 @@ async def create_group(payload: ChatGroupCreate, db: Session = Depends(get_db)):
         is_group=True,
         title=title,
         owner_username=payload.username,
+        group_photo=payload.group_photo,
     )
     db.add(thread)
     db.commit()
@@ -320,6 +324,7 @@ async def create_group(payload: ChatGroupCreate, db: Session = Depends(get_db)):
         is_group=True,
         title=thread.title,
         owner_username=thread.owner_username,
+        group_photo=thread.group_photo,
         members_count=len(participants),
         last_message=None,
         last_message_at=None,
@@ -427,6 +432,9 @@ async def update_group(
             )
         thread.title = title
 
+    if payload.group_photo is not None:
+        thread.group_photo = payload.group_photo
+
     participants = set(_participants_for_thread(db, thread_id))
     add_members = set(payload.add_members or [])
     remove_members = set(payload.remove_members or [])
@@ -481,6 +489,7 @@ async def update_group(
         is_group=True,
         title=thread.title,
         owner_username=thread.owner_username,
+        group_photo=thread.group_photo,
         members_count=len(next_participants),
         last_message=last_message.content if last_message else None,
         last_message_at=last_message.created_at if last_message else None,

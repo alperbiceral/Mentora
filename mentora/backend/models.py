@@ -115,6 +115,7 @@ class ChatThread(Base):
     is_group: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     title: Mapped[Optional[str]] = mapped_column(String(120))
     owner_username: Mapped[Optional[str]] = mapped_column(String(50))
+    group_photo: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         nullable=False,

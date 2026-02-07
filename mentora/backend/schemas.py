@@ -129,11 +129,13 @@ class ChatGroupCreate(BaseModel):
     username: str
     title: str
     member_usernames: list[str]
+    group_photo: Optional[str] = None
 
 
 class ChatGroupUpdate(BaseModel):
     username: str
     title: Optional[str] = None
+    group_photo: Optional[str] = None
     add_members: Optional[list[str]] = None
     remove_members: Optional[list[str]] = None
 
@@ -165,6 +167,7 @@ class ChatThreadItem(BaseModel):
     friend_username: Optional[str] = None
     title: Optional[str] = None
     owner_username: Optional[str] = None
+    group_photo: Optional[str] = None
     members_count: int = 0
     last_message: Optional[str]
     last_message_at: Optional[datetime]

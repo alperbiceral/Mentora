@@ -22,6 +22,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import * as ImagePicker from "expo-image-picker";
 
 const COLORS = {
   background: "#0B1220",
@@ -63,6 +64,7 @@ type ChatThreadItem = {
   friend_username?: string | null;
   title?: string | null;
   owner_username?: string | null;
+  group_photo?: string | null;
   members_count?: number;
   last_message?: string | null;
   last_message_at?: string | null;
@@ -101,6 +103,7 @@ export default function ChatScreen() {
   const [groupSelected, setGroupSelected] = useState<string[]>([]);
   const [groupSettingsOpen, setGroupSettingsOpen] = useState(false);
   const [groupTitleDraft, setGroupTitleDraft] = useState("");
+  const [groupPhotoDraft, setGroupPhotoDraft] = useState("");
   const [groupAddSelected, setGroupAddSelected] = useState<string[]>([]);
   const [groupRemoveSelected, setGroupRemoveSelected] = useState<string[]>([]);
   const [groupParticipants, setGroupParticipants] = useState<
@@ -403,6 +406,7 @@ export default function ChatScreen() {
           username,
           title,
           member_usernames: groupSelected,
+          group_photo: groupPhotoDraft || undefined,
         }),
       });
       if (!response.ok) {
@@ -414,6 +418,7 @@ export default function ChatScreen() {
       setActiveThreadId(thread.thread_id);
       setGroupCreateOpen(false);
       setGroupTitle("");
+      setGroupPhotoDraft("");
       setGroupSelected([]);
     } catch (error) {
       const message =
@@ -435,6 +440,7 @@ export default function ChatScreen() {
           body: JSON.stringify({
             username,
             title: groupTitleDraft.trim() || undefined,
+            group_photo: groupPhotoDraft || undefined,
             add_members: groupAddSelected,
             remove_members: groupRemoveSelected,
           }),
@@ -454,6 +460,7 @@ export default function ChatScreen() {
       );
       await fetchGroupParticipants(activeThreadId);
       setGroupSettingsOpen(false);
+      setGroupPhotoDraft("");
       setGroupAddSelected([]);
       setGroupRemoveSelected([]);
     } catch (error) {
@@ -472,6 +479,24 @@ export default function ChatScreen() {
         ? prev.filter((item) => item !== value)
         : [...prev, value],
     );
+  };
+
+  const pickGroupPhoto = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert("Permission required", "Please allow photo library access.");
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      base64: true,
+      quality: 0.7,
+    });
+
+    if (!result.canceled && result.assets?.[0]?.base64) {
+      setGroupPhotoDraft(result.assets[0].base64);
+    }
   };
 
   const handleSend = async () => {
@@ -577,11 +602,20 @@ export default function ChatScreen() {
                 {isGroupThread ? (
                   <View style={styles.groupTitleRow}>
                     <View style={styles.chatHeaderAvatar}>
-                      <Ionicons
-                        name="people"
-                        size={18}
-                        color={COLORS.textMuted}
-                      />
+                      {activeThread?.group_photo ? (
+                        <Image
+                          source={{
+                            uri: `data:image/jpeg;base64,${activeThread.group_photo}`,
+                          }}
+                          style={styles.chatHeaderAvatarImage}
+                        />
+                      ) : (
+                        <Ionicons
+                          name="people"
+                          size={18}
+                          color={COLORS.textMuted}
+                        />
+                      )}
                     </View>
                     <Text style={styles.chatTitle}>
                       {activeThread?.title || "Group chat"}
@@ -592,6 +626,7 @@ export default function ChatScreen() {
                         style={styles.groupSettingsButton}
                         onPress={() => {
                           setGroupTitleDraft(activeThread?.title ?? "");
+                          setGroupPhotoDraft(activeThread?.group_photo ?? "");
                           setGroupAddSelected([]);
                           setGroupRemoveSelected([]);
                           setGroupSettingsOpen(true);
@@ -891,11 +926,20 @@ export default function ChatScreen() {
                     onPress={() => setActiveThreadId(thread.thread_id)}
                   >
                     <View style={styles.threadAvatar}>
-                      <Ionicons
-                        name="people"
-                        size={18}
-                        color={COLORS.textMuted}
-                      />
+                      {thread.group_photo ? (
+                        <Image
+                          source={{
+                            uri: `data:image/jpeg;base64,${thread.group_photo}`,
+                          }}
+                          style={styles.threadAvatarImage}
+                        />
+                      ) : (
+                        <Ionicons
+                          name="people"
+                          size={18}
+                          color={COLORS.textMuted}
+                        />
+                      )}
                     </View>
                     <View style={styles.threadInfo}>
                       <Text style={styles.threadTitle}>
@@ -998,6 +1042,31 @@ export default function ChatScreen() {
                 <Ionicons name="close" size={18} color={COLORS.textPrimary} />
               </Pressable>
             </View>
+            <View style={styles.groupPhotoRow}>
+              <View style={styles.groupPhotoPreview}>
+                {groupPhotoDraft ? (
+                  <Image
+                    source={{
+                      uri: `data:image/jpeg;base64,${groupPhotoDraft}`,
+                    }}
+                    style={styles.groupPhotoImage}
+                  />
+                ) : (
+                  <Ionicons name="people" size={20} color={COLORS.textMuted} />
+                )}
+              </View>
+              <Pressable
+                style={styles.groupPhotoButton}
+                onPress={pickGroupPhoto}
+              >
+                <Ionicons
+                  name="image-outline"
+                  size={18}
+                  color={COLORS.textPrimary}
+                />
+                <Text style={styles.groupPhotoButtonText}>Upload photo</Text>
+              </Pressable>
+            </View>
             <TextInput
               value={groupTitle}
               onChangeText={setGroupTitle}
@@ -1074,6 +1143,31 @@ export default function ChatScreen() {
                 onPress={() => setGroupSettingsOpen(false)}
               >
                 <Ionicons name="close" size={18} color={COLORS.textPrimary} />
+              </Pressable>
+            </View>
+            <View style={styles.groupPhotoRow}>
+              <View style={styles.groupPhotoPreview}>
+                {groupPhotoDraft ? (
+                  <Image
+                    source={{
+                      uri: `data:image/jpeg;base64,${groupPhotoDraft}`,
+                    }}
+                    style={styles.groupPhotoImage}
+                  />
+                ) : (
+                  <Ionicons name="people" size={20} color={COLORS.textMuted} />
+                )}
+              </View>
+              <Pressable
+                style={styles.groupPhotoButton}
+                onPress={pickGroupPhoto}
+              >
+                <Ionicons
+                  name="image-outline"
+                  size={18}
+                  color={COLORS.textPrimary}
+                />
+                <Text style={styles.groupPhotoButtonText}>Update photo</Text>
               </Pressable>
             </View>
             <TextInput
@@ -1561,6 +1655,44 @@ const styles = StyleSheet.create({
   modalList: {
     gap: SPACING.sm,
     paddingBottom: SPACING.md,
+  },
+  groupPhotoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.sm,
+    marginBottom: SPACING.sm,
+  },
+  groupPhotoPreview: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(15,23,42,0.8)",
+    borderWidth: 1,
+    borderColor: COLORS.borderSoft,
+  },
+  groupPhotoImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+  },
+  groupPhotoButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.borderSubtle,
+    backgroundColor: "#020617",
+  },
+  groupPhotoButtonText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: COLORS.textPrimary,
   },
   modalSectionLabel: {
     fontSize: 12,
