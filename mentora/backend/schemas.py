@@ -1,4 +1,3 @@
-from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel
 
@@ -31,15 +30,12 @@ class ProfileUpdate(BaseModel):
 
 
 class ProfileResponse(BaseModel):
-    id: int
     user_id: int
     full_name: Optional[str]
     school: Optional[str]
     description: Optional[str]
     age: Optional[int]
     department: Optional[str]
-    created_at: datetime
-    updated_at: datetime
 
     class Config:
         from_attributes = True
@@ -52,10 +48,9 @@ class Token(BaseModel):
 
 
 class UserResponse(BaseModel):
-    id: int
+    user_id: int
     email: str
     username: str
-    is_active: bool
 
     class Config:
         from_attributes = True

@@ -10,7 +10,10 @@ import {
   Text,
   View,
 } from "react-native";
-import { SettingsLanguage, SettingsModal } from "../../components/SettingsModal";
+import {
+  SettingsLanguage,
+  SettingsModal,
+} from "../../components/SettingsModal";
 
 const COLORS = {
   // Dark navy theme to match the login screen
@@ -37,15 +40,36 @@ const SPACING = {
   xl: 24,
 };
 
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
+
 type Range = "today" | "week";
 
 export default function HomeScreen() {
+  const router = useRouter();
   const [selectedRange, setSelectedRange] = useState<Range>("today");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const [vibration, setVibration] = useState(true);
   const [notifications, setNotifications] = useState(true);
   const [language, setLanguage] = useState<SettingsLanguage>("English");
+
+  const handleLogout = async () => {
+    try {
+      await fetch(`${API_BASE_URL}/auth/logout`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+    } catch (error) {
+      Alert.alert("Logout failed", "Please try again.");
+      return;
+    } finally {
+      setSettingsOpen(false);
+    }
+
+    router.replace("/auth");
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -86,10 +110,7 @@ export default function HomeScreen() {
         setNotifications={setNotifications}
         language={language}
         setLanguage={setLanguage}
-        onLogout={() => {
-          Alert.alert("Logged out");
-          setSettingsOpen(false);
-        }}
+        onLogout={handleLogout}
       />
     </SafeAreaView>
   );
@@ -179,9 +200,7 @@ const ToggleTabs: React.FC<ToggleTabsProps> = ({ selected, onSelect }) => {
         <Ionicons
           name="calendar-outline"
           size={16}
-          color={
-            selected === "today" ? COLORS.accent : COLORS.textSecondary
-          }
+          color={selected === "today" ? COLORS.accent : COLORS.textSecondary}
           style={{ marginRight: 6 }}
         />
         <Text
@@ -285,10 +304,7 @@ const QuickActions = () => {
     <View style={styles.section}>
       <View style={styles.sectionHeaderRow}>
         <Text style={styles.sectionTitle}>Quick Actions</Text>
-        <Pressable
-          hitSlop={8}
-          onPress={() => console.log("See history")}
-        >
+        <Pressable hitSlop={8} onPress={() => console.log("See history")}>
           <Text style={styles.linkText}>See history &gt;</Text>
         </Pressable>
       </View>
@@ -351,9 +367,7 @@ const RecommendationCard = () => {
           />
         </View>
         <View>
-          <Text style={styles.recommendationTitle}>
-            You have a busy day.
-          </Text>
+          <Text style={styles.recommendationTitle}>You have a busy day.</Text>
           <Text style={styles.recommendationSubtitle}>
             Want a 25-min study session?
           </Text>
@@ -759,4 +773,3 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
 });
-

@@ -27,12 +27,16 @@ class User(Base):
 
     user_id: Mapped[int] = mapped_column(primary_key=True)
     username: Mapped[str] = mapped_column(String(50), nullable=False)
-    email: Mapped[str] = mapped_column(String(50), nullable=False)
+    email: Mapped[str] = mapped_column(String(120), nullable=False)
     school: Mapped[Optional[str]] = mapped_column(String(50))
-    pass_hash: Mapped[str] = mapped_column(String(50), nullable=False)
-    badges: Mapped[str] = mapped_column(Text, nullable=False)
-    last_login_date: Mapped[date] = mapped_column(Date, nullable=False)
-    streak: Mapped[int] = mapped_column(Integer, nullable=False)
+    pass_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    badges: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    last_login_date: Mapped[date] = mapped_column(
+        Date,
+        nullable=False,
+        default=date.today,
+    )
+    streak: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     full_name: Mapped[Optional[str]] = mapped_column(String(100))
     description: Mapped[Optional[str]] = mapped_column(Text)
     age: Mapped[Optional[int]] = mapped_column(Integer)

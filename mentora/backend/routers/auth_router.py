@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -29,11 +29,14 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
             detail="Email or username already registered",
         )
 
-    hashed_password = get_password_hash(user_data.password)
+    pass_hash = get_password_hash(user_data.password)
     new_user = User(
         email=user_data.email,
         username=user_data.username,
-        hashed_password=hashed_password,
+        pass_hash=pass_hash,
+        badges="",
+        last_login_date=date.today(),
+        streak=0,
     )
 
     db.add(new_user)
@@ -50,7 +53,7 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
         "access_token": access_token,
         "token_type": "bearer",
         "user": {
-            "id": new_user.id,
+            "id": new_user.user_id,
             "email": new_user.email,
             "username": new_user.username,
         },
@@ -66,7 +69,7 @@ async def options_login():
 async def login(user_data: UserLogin, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == user_data.email).first()
 
-    if not user or not verify_password(user_data.password, user.hashed_password):
+    if not user or not verify_password(user_data.password, user.pass_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
@@ -82,7 +85,7 @@ async def login(user_data: UserLogin, db: Session = Depends(get_db)):
         "access_token": access_token,
         "token_type": "bearer",
         "user": {
-            "id": user.id,
+            "id": user.user_id,
             "email": user.email,
             "username": user.username,
         },
