@@ -169,6 +169,78 @@ class ChatParticipant(Base):
     thread = relationship("ChatThread", back_populates="participants")
 
 
+class Group(Base):
+    __tablename__ = "groups"
+
+    group_id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    group_photo: Mapped[Optional[str]] = mapped_column(Text)
+    is_public: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    owner_username: Mapped[str] = mapped_column(String(50), nullable=False)
+    chat_thread_id: Mapped[int] = mapped_column(
+        ForeignKey("chat_threads.thread_id"),
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+    )
+
+
+class GroupMember(Base):
+    __tablename__ = "group_members"
+
+    member_id: Mapped[int] = mapped_column(primary_key=True)
+    group_id: Mapped[int] = mapped_column(
+        ForeignKey("groups.group_id"),
+        nullable=False,
+    )
+    username: Mapped[str] = mapped_column(String(50), nullable=False)
+    role: Mapped[str] = mapped_column(String(20), nullable=False, default="member")
+    added_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+    )
+
+
+class GroupInvite(Base):
+    __tablename__ = "group_invites"
+
+    invite_id: Mapped[int] = mapped_column(primary_key=True)
+    group_id: Mapped[int] = mapped_column(
+        ForeignKey("groups.group_id"),
+        nullable=False,
+    )
+    from_username: Mapped[str] = mapped_column(String(50), nullable=False)
+    to_username: Mapped[str] = mapped_column(String(50), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+    )
+
+
+class GroupJoinRequest(Base):
+    __tablename__ = "group_join_requests"
+
+    request_id: Mapped[int] = mapped_column(primary_key=True)
+    group_id: Mapped[int] = mapped_column(
+        ForeignKey("groups.group_id"),
+        nullable=False,
+    )
+    username: Mapped[str] = mapped_column(String(50), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+    )
+
+
 class UserFeedback(Base):
     __tablename__ = "user_feedback"
 

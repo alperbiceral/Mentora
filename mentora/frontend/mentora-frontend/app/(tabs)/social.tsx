@@ -16,6 +16,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import * as ImagePicker from "expo-image-picker";
 
 const COLORS = {
   // Dark navy theme to match the login screen
@@ -80,32 +81,46 @@ type FriendRequest = {
   created_at: string;
 };
 
-const mockGroups = [
-  {
-    id: "1",
-    name: "CS-476 Study Group",
-    members: 15,
-    description: "Advanced Database Systems",
-    activity: "3 new posts today",
-    color: "#3B82F6",
-  },
-  {
-    id: "2",
-    name: "Math Olympiad Prep",
-    members: 8,
-    description: "Competition math practice",
-    activity: "Study session starting in 15 min",
-    color: "#10B981",
-  },
-  {
-    id: "3",
-    name: "Language Exchange",
-    members: 23,
-    description: "Practice speaking different languages",
-    activity: "5 new members joined",
-    color: "#F59E0B",
-  },
-];
+type GroupListItem = {
+  group_id: number;
+  name: string;
+  description?: string | null;
+  group_photo?: string | null;
+  is_public: boolean;
+  owner_username: string;
+  members_count: number;
+  chat_thread_id: number;
+  is_member: boolean;
+  is_owner: boolean;
+};
+
+type GroupInviteItem = {
+  invite_id: number;
+  group_id: number;
+  group_name: string;
+  group_photo?: string | null;
+  from_username: string;
+  to_username: string;
+  status: string;
+  created_at: string;
+};
+
+type GroupJoinRequestItem = {
+  request_id: number;
+  group_id: number;
+  group_name: string;
+  group_photo?: string | null;
+  username: string;
+  status: string;
+  created_at: string;
+};
+
+type GroupRequestsList = {
+  incoming_invites: GroupInviteItem[];
+  outgoing_invites: GroupInviteItem[];
+  incoming_join_requests: GroupJoinRequestItem[];
+  outgoing_join_requests: GroupJoinRequestItem[];
+};
 
 const mockActivityFeed = [
   {
@@ -172,12 +187,26 @@ export default function SocialScreen() {
   const [friends, setFriends] = useState<FriendProfile[]>([]);
   const [incomingRequests, setIncomingRequests] = useState<FriendRequest[]>([]);
   const [outgoingRequests, setOutgoingRequests] = useState<FriendRequest[]>([]);
+  const [groups, setGroups] = useState<GroupListItem[]>([]);
+  const [groupRequests, setGroupRequests] = useState<GroupRequestsList>({
+    incoming_invites: [],
+    outgoing_invites: [],
+    incoming_join_requests: [],
+    outgoing_join_requests: [],
+  });
   const [addFriendOpen, setAddFriendOpen] = useState(false);
   const [requestsOpen, setRequestsOpen] = useState(false);
+  const [groupCreateOpen, setGroupCreateOpen] = useState(false);
+  const [groupRequestsOpen, setGroupRequestsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<FriendProfile[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [currentUsername, setCurrentUsername] = useState<string | null>(null);
+  const [groupName, setGroupName] = useState("");
+  const [groupDescription, setGroupDescription] = useState("");
+  const [groupPhoto, setGroupPhoto] = useState("");
+  const [groupIsPublic, setGroupIsPublic] = useState(false);
+  const [groupInvitees, setGroupInvitees] = useState<string[]>([]);
 
   const loadSocialData = useCallback(() => {
     let active = true;
@@ -191,11 +220,18 @@ export default function SocialScreen() {
           setCurrentUsername(username);
         }
 
-        const [profileRes, friendsRes, requestsRes] = await Promise.all([
-          fetch(`${API_BASE_URL}/profile/${username}`),
-          fetch(`${API_BASE_URL}/friends/list/${username}`),
-          fetch(`${API_BASE_URL}/friends/requests/${username}`),
-        ]);
+        const [profileRes, friendsRes, requestsRes, groupsRes, groupReqsRes] =
+          await Promise.all([
+            fetch(`${API_BASE_URL}/profile/${username}`),
+            fetch(`${API_BASE_URL}/friends/list/${username}`),
+            fetch(`${API_BASE_URL}/friends/requests/${username}`),
+            fetch(
+              `${API_BASE_URL}/groups?username=${encodeURIComponent(username)}`,
+            ),
+            fetch(
+              `${API_BASE_URL}/groups/requests/${encodeURIComponent(username)}`,
+            ),
+          ]);
 
         if (profileRes.ok) {
           const data = (await profileRes.json()) as Profile;
@@ -224,11 +260,37 @@ export default function SocialScreen() {
             DeviceEventEmitter.emit("friendRequestsCount", count);
           }
         }
+
+        if (groupsRes.ok) {
+          const data = await groupsRes.json();
+          if (active) {
+            setGroups(data.groups ?? []);
+          }
+        }
+
+        if (groupReqsRes.ok) {
+          const data = await groupReqsRes.json();
+          if (active) {
+            setGroupRequests({
+              incoming_invites: data.incoming_invites ?? [],
+              outgoing_invites: data.outgoing_invites ?? [],
+              incoming_join_requests: data.incoming_join_requests ?? [],
+              outgoing_join_requests: data.outgoing_join_requests ?? [],
+            });
+          }
+        }
       } catch (error) {
         if (active) {
           setFriends([]);
           setIncomingRequests([]);
           setOutgoingRequests([]);
+          setGroups([]);
+          setGroupRequests({
+            incoming_invites: [],
+            outgoing_invites: [],
+            incoming_join_requests: [],
+            outgoing_join_requests: [],
+          });
           await AsyncStorage.setItem("mentora.friendRequestsCount", "0");
           DeviceEventEmitter.emit("friendRequestsCount", 0);
         }
@@ -284,9 +346,126 @@ export default function SocialScreen() {
   const outgoingPending = new Set(
     outgoingRequests.map((request) => request.to_username),
   );
+  const incomingGroupInvites = groupRequests.incoming_invites;
+  const outgoingGroupInvites = groupRequests.outgoing_invites;
+  const incomingJoinRequests = groupRequests.incoming_join_requests;
+  const outgoingJoinRequests = groupRequests.outgoing_join_requests;
+  const incomingInviteGroupIds = new Set(
+    incomingGroupInvites.map((invite) => invite.group_id),
+  );
+  const outgoingJoinGroupIds = new Set(
+    outgoingJoinRequests.map((request) => request.group_id),
+  );
   const filteredSearchResults = searchResults.filter(
     (result) => !friendUsernames.has(result.username),
   );
+
+  const resetGroupForm = () => {
+    setGroupName("");
+    setGroupDescription("");
+    setGroupPhoto("");
+    setGroupIsPublic(false);
+    setGroupInvitees([]);
+  };
+
+  const closeGroupCreate = () => {
+    setGroupCreateOpen(false);
+    resetGroupForm();
+  };
+
+  const handlePickGroupPhoto = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      base64: true,
+      quality: 0.6,
+    });
+
+    if (result.canceled || !result.assets?.length) {
+      return;
+    }
+    const [asset] = result.assets;
+    if (!asset.base64) {
+      Alert.alert("Photo error", "Could not read the image.");
+      return;
+    }
+    setGroupPhoto(asset.base64);
+  };
+
+  const handleCreateGroup = async () => {
+    if (!currentUsername) {
+      Alert.alert("Missing user", "Please login again.");
+      return;
+    }
+    const trimmedName = groupName.trim();
+    if (!trimmedName) {
+      Alert.alert("Missing info", "Group name is required.");
+      return;
+    }
+    try {
+      const response = await fetch(`${API_BASE_URL}/groups`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: currentUsername,
+          name: trimmedName,
+          description: groupDescription.trim() || undefined,
+          is_public: groupIsPublic,
+          group_photo: groupPhoto || undefined,
+          invitees: groupInvitees,
+        }),
+      });
+      if (!response.ok) {
+        const message = await response.json().catch(() => null);
+        throw new Error(message?.detail ?? "Create group failed");
+      }
+      setGroupCreateOpen(false);
+      resetGroupForm();
+      loadSocialData();
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Create group failed";
+      Alert.alert("Error", message);
+    }
+  };
+
+  const handleRequestJoin = async (groupId: number) => {
+    if (!currentUsername) {
+      return;
+    }
+    try {
+      const response = await fetch(`${API_BASE_URL}/groups/request`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          group_id: groupId,
+          username: currentUsername,
+        }),
+      });
+      if (!response.ok) {
+        const message = await response.json().catch(() => null);
+        throw new Error(message?.detail ?? "Request failed");
+      }
+      loadSocialData();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Request failed";
+      Alert.alert("Error", message);
+    }
+  };
+
+  const handleOpenGroupChat = (threadId: number) => {
+    router.push({
+      pathname: "/(tabs)/chat",
+      params: { thread: String(threadId) },
+    });
+  };
+
+  const toggleInvitee = (username: string) => {
+    setGroupInvitees((prev) =>
+      prev.includes(username)
+        ? prev.filter((item) => item !== username)
+        : [...prev, username],
+    );
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -426,42 +605,144 @@ export default function SocialScreen() {
           <View style={styles.section}>
             <View style={styles.sectionHeaderRow}>
               <Text style={styles.sectionTitle}>Study Groups</Text>
-              <Pressable
-                hitSlop={8}
-                onPress={() => console.log("Create group")}
-              >
-                <Text style={styles.linkText}>Create group +</Text>
-              </Pressable>
+              <View style={styles.headerTabs}>
+                <Pressable
+                  hitSlop={8}
+                  style={styles.headerTab}
+                  onPress={() => {
+                    resetGroupForm();
+                    setGroupCreateOpen(true);
+                  }}
+                >
+                  <Text style={styles.headerTabText}>Create group +</Text>
+                </Pressable>
+                <Pressable
+                  hitSlop={8}
+                  style={styles.headerTab}
+                  onPress={() => {
+                    loadSocialData();
+                    setGroupRequestsOpen(true);
+                  }}
+                >
+                  <Text style={styles.headerTabText}>Requests</Text>
+                </Pressable>
+              </View>
             </View>
             <View style={styles.groupsList}>
-              {mockGroups.map((group) => (
-                <Pressable
-                  key={group.id}
-                  style={[styles.groupCard, { borderColor: group.color }]}
-                  onPress={() => console.log("Join group", group.name)}
-                >
-                  <View style={styles.groupHeader}>
-                    <View
-                      style={[
-                        styles.groupIcon,
-                        { backgroundColor: group.color },
-                      ]}
+              {groups.length === 0 ? (
+                <Text style={styles.emptyText}>No groups yet</Text>
+              ) : (
+                groups.map((group) => {
+                  const hasInvite = incomingInviteGroupIds.has(group.group_id);
+                  const hasRequest = outgoingJoinGroupIds.has(group.group_id);
+                  return (
+                    <Pressable
+                      key={group.group_id}
+                      style={styles.groupCard}
+                      onPress={() =>
+                        group.is_member
+                          ? handleOpenGroupChat(group.chat_thread_id)
+                          : null
+                      }
                     >
-                      <Ionicons name="people-outline" size={20} color="white" />
-                    </View>
-                    <View style={styles.groupInfo}>
-                      <Text style={styles.groupName}>{group.name}</Text>
-                      <Text style={styles.groupMembers}>
-                        {group.members} members
-                      </Text>
-                    </View>
-                  </View>
-                  <Text style={styles.groupDescription}>
-                    {group.description}
-                  </Text>
-                  <Text style={styles.groupActivity}>{group.activity}</Text>
-                </Pressable>
-              ))}
+                      <View style={styles.groupHeader}>
+                        <View style={styles.groupAvatar}>
+                          {group.group_photo ? (
+                            <Image
+                              source={{
+                                uri: `data:image/jpeg;base64,${group.group_photo}`,
+                              }}
+                              style={styles.groupAvatarImage}
+                            />
+                          ) : (
+                            <Ionicons
+                              name="people-outline"
+                              size={18}
+                              color={COLORS.textMuted}
+                            />
+                          )}
+                        </View>
+                        <View style={styles.groupInfo}>
+                          <View style={styles.groupTitleRow}>
+                            <Text style={styles.groupName}>{group.name}</Text>
+                            <View
+                              style={
+                                group.is_public
+                                  ? styles.groupBadgePublic
+                                  : styles.groupBadgePrivate
+                              }
+                            >
+                              <Text style={styles.groupBadgeText}>
+                                {group.is_public ? "Public" : "Private"}
+                              </Text>
+                            </View>
+                          </View>
+                          <Text style={styles.groupMembers}>
+                            {group.members_count} members
+                          </Text>
+                        </View>
+                      </View>
+                      {group.description ? (
+                        <Text style={styles.groupDescription}>
+                          {group.description}
+                        </Text>
+                      ) : null}
+                      <View style={styles.groupActionsRow}>
+                        {group.is_member ? (
+                          <Pressable
+                            style={styles.groupActionPrimary}
+                            onPress={() =>
+                              handleOpenGroupChat(group.chat_thread_id)
+                            }
+                          >
+                            <Text style={styles.groupActionPrimaryText}>
+                              Open chat
+                            </Text>
+                          </Pressable>
+                        ) : group.is_public ? (
+                          hasRequest ? (
+                            <View style={styles.groupActionMuted}>
+                              <Text style={styles.groupActionMutedText}>
+                                Requested
+                              </Text>
+                            </View>
+                          ) : hasInvite ? (
+                            <View style={styles.groupActionMuted}>
+                              <Text style={styles.groupActionMutedText}>
+                                Invited
+                              </Text>
+                            </View>
+                          ) : (
+                            <Pressable
+                              style={styles.groupActionPrimary}
+                              onPress={() => handleRequestJoin(group.group_id)}
+                            >
+                              <Text style={styles.groupActionPrimaryText}>
+                                Request to join
+                              </Text>
+                            </Pressable>
+                          )
+                        ) : hasInvite ? (
+                          <View style={styles.groupActionMuted}>
+                            <Text style={styles.groupActionMutedText}>
+                              Invited
+                            </Text>
+                          </View>
+                        ) : (
+                          <View style={styles.groupActionMuted}>
+                            <Text style={styles.groupActionMutedText}>
+                              Invite only
+                            </Text>
+                          </View>
+                        )}
+                        {group.is_owner ? (
+                          <Text style={styles.groupOwnerTag}>Owner</Text>
+                        ) : null}
+                      </View>
+                    </Pressable>
+                  );
+                })
+              )}
             </View>
           </View>
 
@@ -863,6 +1144,399 @@ export default function SocialScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      <Modal
+        visible={groupCreateOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={closeGroupCreate}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={closeGroupCreate}>
+          <Pressable
+            style={styles.groupModalCard}
+            onPress={() => {
+              // noop
+            }}
+          >
+            <View style={styles.modalHeaderRow}>
+              <Text style={styles.modalTitle}>Create group</Text>
+              <Pressable
+                hitSlop={8}
+                style={styles.modalClose}
+                onPress={closeGroupCreate}
+              >
+                <Ionicons name="close" size={18} color={COLORS.textPrimary} />
+              </Pressable>
+            </View>
+
+            <TextInput
+              value={groupName}
+              onChangeText={setGroupName}
+              style={styles.groupInput}
+              placeholder="Group name"
+              placeholderTextColor={COLORS.textMuted}
+            />
+            <TextInput
+              value={groupDescription}
+              onChangeText={setGroupDescription}
+              style={styles.groupTextArea}
+              placeholder="Description"
+              placeholderTextColor={COLORS.textMuted}
+              multiline
+            />
+
+            <View style={styles.groupPhotoRow}>
+              <View style={styles.groupPhotoPreview}>
+                {groupPhoto ? (
+                  <Image
+                    source={{ uri: `data:image/jpeg;base64,${groupPhoto}` }}
+                    style={styles.groupPhotoImage}
+                  />
+                ) : (
+                  <Ionicons
+                    name="image-outline"
+                    size={18}
+                    color={COLORS.textMuted}
+                  />
+                )}
+              </View>
+              <View style={styles.groupPhotoActions}>
+                <Pressable
+                  style={styles.secondaryButton}
+                  onPress={handlePickGroupPhoto}
+                >
+                  <Text style={styles.secondaryButtonText}>Upload photo</Text>
+                </Pressable>
+                {groupPhoto ? (
+                  <Pressable
+                    style={styles.secondaryButton}
+                    onPress={() => setGroupPhoto("")}
+                  >
+                    <Text style={styles.secondaryButtonText}>Remove</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            </View>
+
+            <View style={styles.privacyRow}>
+              <Text style={styles.privacyLabel}>Privacy</Text>
+              <View style={styles.privacyToggle}>
+                <Pressable
+                  style={[
+                    styles.privacyOption,
+                    groupIsPublic && styles.privacyOptionActive,
+                  ]}
+                  onPress={() => setGroupIsPublic(true)}
+                >
+                  <Text
+                    style={[
+                      styles.privacyOptionText,
+                      groupIsPublic && styles.privacyOptionTextActive,
+                    ]}
+                  >
+                    Public
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={[
+                    styles.privacyOption,
+                    !groupIsPublic && styles.privacyOptionActive,
+                  ]}
+                  onPress={() => setGroupIsPublic(false)}
+                >
+                  <Text
+                    style={[
+                      styles.privacyOptionText,
+                      !groupIsPublic && styles.privacyOptionTextActive,
+                    ]}
+                  >
+                    Private
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+
+            <View style={styles.inviteSection}>
+              <Text style={styles.inviteTitle}>Invite friends</Text>
+              {friends.length === 0 ? (
+                <Text style={styles.emptyText}>No friends to invite</Text>
+              ) : (
+                <ScrollView
+                  style={styles.inviteList}
+                  showsVerticalScrollIndicator={false}
+                >
+                  {friends.map((friend) => {
+                    const selected = groupInvitees.includes(friend.username);
+                    return (
+                      <Pressable
+                        key={friend.username}
+                        style={[
+                          styles.inviteItem,
+                          selected && styles.inviteItemSelected,
+                        ]}
+                        onPress={() => toggleInvitee(friend.username)}
+                      >
+                        <View style={styles.inviteAvatar}>
+                          {friend.profile_photo ? (
+                            <Image
+                              source={{
+                                uri: `data:image/jpeg;base64,${friend.profile_photo}`,
+                              }}
+                              style={styles.inviteAvatarImage}
+                            />
+                          ) : (
+                            <Ionicons
+                              name="person"
+                              size={16}
+                              color={COLORS.textMuted}
+                            />
+                          )}
+                        </View>
+                        <View style={styles.inviteInfo}>
+                          <Text style={styles.friendName}>
+                            {friend.full_name || friend.username}
+                          </Text>
+                          <Text style={styles.friendStats}>
+                            @{friend.username}
+                          </Text>
+                        </View>
+                        <Ionicons
+                          name={selected ? "checkbox" : "square-outline"}
+                          size={18}
+                          color={selected ? COLORS.accent : COLORS.borderSubtle}
+                        />
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              )}
+            </View>
+
+            <Pressable style={styles.primaryButton} onPress={handleCreateGroup}>
+              <Text style={styles.primaryButtonText}>Create group</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={groupRequestsOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setGroupRequestsOpen(false)}
+      >
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => setGroupRequestsOpen(false)}
+        >
+          <Pressable
+            style={styles.requestsModalCard}
+            onPress={() => {
+              // noop
+            }}
+          >
+            <View style={styles.modalHeaderRow}>
+              <Text style={styles.modalTitle}>Group requests</Text>
+              <Pressable
+                hitSlop={8}
+                style={styles.modalClose}
+                onPress={() => setGroupRequestsOpen(false)}
+              >
+                <Ionicons name="close" size={18} color={COLORS.textPrimary} />
+              </Pressable>
+            </View>
+
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.requestsScroll}
+            >
+              <View style={styles.requestsSection}>
+                <Text style={styles.requestsTitle}>Invites</Text>
+                {incomingGroupInvites.length === 0 ? (
+                  <Text style={styles.emptyText}>No invites</Text>
+                ) : (
+                  incomingGroupInvites.map((invite) => (
+                    <View key={invite.invite_id} style={styles.requestItemWide}>
+                      <View style={styles.requestInfo}>
+                        <Text style={styles.friendName}>
+                          {invite.group_name}
+                        </Text>
+                        <Text style={styles.friendStats}>
+                          @{invite.from_username}
+                        </Text>
+                      </View>
+                      <View style={styles.requestActions}>
+                        <Pressable
+                          style={styles.acceptButton}
+                          onPress={async () => {
+                            if (!currentUsername) {
+                              return;
+                            }
+                            await fetch(
+                              `${API_BASE_URL}/groups/invites/${invite.invite_id}/accept`,
+                              {
+                                method: "POST",
+                                headers: {
+                                  "Content-Type": "application/json",
+                                },
+                                body: JSON.stringify({
+                                  username: currentUsername,
+                                }),
+                              },
+                            );
+                            loadSocialData();
+                          }}
+                        >
+                          <Text style={styles.acceptButtonText}>Accept</Text>
+                        </Pressable>
+                        <Pressable
+                          style={styles.declineButton}
+                          onPress={async () => {
+                            if (!currentUsername) {
+                              return;
+                            }
+                            await fetch(
+                              `${API_BASE_URL}/groups/invites/${invite.invite_id}/decline`,
+                              {
+                                method: "POST",
+                                headers: {
+                                  "Content-Type": "application/json",
+                                },
+                                body: JSON.stringify({
+                                  username: currentUsername,
+                                }),
+                              },
+                            );
+                            loadSocialData();
+                          }}
+                        >
+                          <Text style={styles.declineButtonText}>Decline</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  ))
+                )}
+              </View>
+
+              <View style={styles.requestsSection}>
+                <Text style={styles.requestsTitle}>Join requests</Text>
+                {incomingJoinRequests.length === 0 ? (
+                  <Text style={styles.emptyText}>No join requests</Text>
+                ) : (
+                  incomingJoinRequests.map((request) => (
+                    <View
+                      key={request.request_id}
+                      style={styles.requestItemWide}
+                    >
+                      <View style={styles.requestInfo}>
+                        <Text style={styles.friendName}>
+                          {request.group_name}
+                        </Text>
+                        <Text style={styles.friendStats}>
+                          @{request.username}
+                        </Text>
+                      </View>
+                      <View style={styles.requestActions}>
+                        <Pressable
+                          style={styles.acceptButton}
+                          onPress={async () => {
+                            if (!currentUsername) {
+                              return;
+                            }
+                            await fetch(
+                              `${API_BASE_URL}/groups/requests/${request.request_id}/approve`,
+                              {
+                                method: "POST",
+                                headers: {
+                                  "Content-Type": "application/json",
+                                },
+                                body: JSON.stringify({
+                                  username: currentUsername,
+                                }),
+                              },
+                            );
+                            loadSocialData();
+                          }}
+                        >
+                          <Text style={styles.acceptButtonText}>Accept</Text>
+                        </Pressable>
+                        <Pressable
+                          style={styles.declineButton}
+                          onPress={async () => {
+                            if (!currentUsername) {
+                              return;
+                            }
+                            await fetch(
+                              `${API_BASE_URL}/groups/requests/${request.request_id}/decline`,
+                              {
+                                method: "POST",
+                                headers: {
+                                  "Content-Type": "application/json",
+                                },
+                                body: JSON.stringify({
+                                  username: currentUsername,
+                                }),
+                              },
+                            );
+                            loadSocialData();
+                          }}
+                        >
+                          <Text style={styles.declineButtonText}>Decline</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  ))
+                )}
+              </View>
+
+              <View style={styles.requestsSection}>
+                <Text style={styles.requestsTitle}>Outgoing invites</Text>
+                {outgoingGroupInvites.length === 0 ? (
+                  <Text style={styles.emptyText}>No outgoing invites</Text>
+                ) : (
+                  outgoingGroupInvites.map((invite) => (
+                    <View key={invite.invite_id} style={styles.requestItemWide}>
+                      <View style={styles.requestInfo}>
+                        <Text style={styles.friendName}>
+                          {invite.group_name}
+                        </Text>
+                        <Text style={styles.friendStats}>
+                          @{invite.to_username}
+                        </Text>
+                      </View>
+                      <Text style={styles.requestStatus}>Pending</Text>
+                    </View>
+                  ))
+                )}
+              </View>
+
+              <View style={styles.requestsSection}>
+                <Text style={styles.requestsTitle}>Outgoing join requests</Text>
+                {outgoingJoinRequests.length === 0 ? (
+                  <Text style={styles.emptyText}>No outgoing requests</Text>
+                ) : (
+                  outgoingJoinRequests.map((request) => (
+                    <View
+                      key={request.request_id}
+                      style={styles.requestItemWide}
+                    >
+                      <View style={styles.requestInfo}>
+                        <Text style={styles.friendName}>
+                          {request.group_name}
+                        </Text>
+                        <Text style={styles.friendStats}>
+                          @{request.username}
+                        </Text>
+                      </View>
+                      <Text style={styles.requestStatus}>Pending</Text>
+                    </View>
+                  ))
+                )}
+              </View>
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -957,6 +1631,17 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: 420,
     maxHeight: "78%",
+    backgroundColor: COLORS.card,
+    borderRadius: 20,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.borderSoft,
+  },
+  groupModalCard: {
+    width: "100%",
+    maxWidth: 420,
+    maxHeight: "85%",
     backgroundColor: COLORS.card,
     borderRadius: 20,
     paddingHorizontal: SPACING.lg,
@@ -1090,6 +1775,28 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     backgroundColor: "#020617",
   },
+  groupInput: {
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.borderSubtle,
+    paddingHorizontal: SPACING.md,
+    color: COLORS.textPrimary,
+    backgroundColor: "#020617",
+    marginBottom: SPACING.sm,
+  },
+  groupTextArea: {
+    minHeight: 80,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.borderSubtle,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    color: COLORS.textPrimary,
+    backgroundColor: "#020617",
+    marginBottom: SPACING.sm,
+    textAlignVertical: "top",
+  },
   searchStatus: {
     color: COLORS.textMuted,
     fontSize: 12,
@@ -1148,6 +1855,135 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     fontWeight: "700",
     fontSize: 12,
+  },
+  groupPhotoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.sm,
+    marginBottom: SPACING.sm,
+  },
+  groupPhotoPreview: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: COLORS.borderSoft,
+    backgroundColor: "rgba(15,23,42,0.8)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  groupPhotoImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+  },
+  groupPhotoActions: {
+    flexDirection: "row",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+  secondaryButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: COLORS.borderSoft,
+  },
+  secondaryButtonText: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  primaryButton: {
+    marginTop: SPACING.sm,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: COLORS.accent,
+    alignItems: "center",
+  },
+  primaryButtonText: {
+    color: "#0B1020",
+    fontWeight: "700",
+    fontSize: 13,
+  },
+  privacyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: SPACING.sm,
+  },
+  privacyLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: COLORS.textSecondary,
+  },
+  privacyToggle: {
+    flexDirection: "row",
+    backgroundColor: "rgba(15,23,42,0.7)",
+    borderRadius: 999,
+    padding: 3,
+    borderWidth: 1,
+    borderColor: COLORS.borderSoft,
+  },
+  privacyOption: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  privacyOptionActive: {
+    backgroundColor: COLORS.accent,
+  },
+  privacyOptionText: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    fontWeight: "600",
+  },
+  privacyOptionTextActive: {
+    color: "#0B1020",
+    fontWeight: "700",
+  },
+  inviteSection: {
+    marginTop: SPACING.xs,
+    marginBottom: SPACING.sm,
+  },
+  inviteTitle: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: COLORS.textSecondary,
+    marginBottom: SPACING.xs,
+  },
+  inviteList: {
+    maxHeight: 200,
+  },
+  inviteItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.subtleCard,
+    borderRadius: 14,
+    padding: SPACING.sm,
+    borderWidth: 1,
+    borderColor: COLORS.borderSoft,
+    marginBottom: SPACING.sm,
+  },
+  inviteItemSelected: {
+    borderColor: COLORS.accent,
+  },
+  inviteAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(2,6,23,0.7)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: SPACING.sm,
+  },
+  inviteAvatarImage: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+  },
+  inviteInfo: {
+    flex: 1,
   },
   requestsPanel: {
     gap: SPACING.sm,
@@ -1232,6 +2068,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
   },
+  requestInfo: {
+    flex: 1,
+  },
   emptyText: {
     color: COLORS.textMuted,
     fontSize: 13,
@@ -1285,7 +2124,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.md,
-    borderWidth: 2,
+    borderWidth: 1,
+    borderColor: COLORS.borderSoft,
     shadowColor: COLORS.shadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.06,
@@ -1297,19 +2137,49 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: SPACING.xs,
   },
-  groupIcon: {
+  groupAvatar: {
     width: 36,
     height: 36,
     borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
     marginRight: SPACING.sm,
+    backgroundColor: "rgba(2,6,23,0.7)",
   },
-  groupInfo: {},
+  groupAvatarImage: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+  },
+  groupInfo: {
+    flex: 1,
+  },
+  groupTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
   groupName: {
     fontSize: 14,
     fontWeight: "700",
     color: COLORS.textPrimary,
+  },
+  groupBadgePublic: {
+    backgroundColor: "rgba(16,185,129,0.18)",
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  groupBadgePrivate: {
+    backgroundColor: "rgba(148,163,184,0.18)",
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  groupBadgeText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: COLORS.textSecondary,
   },
   groupMembers: {
     fontSize: 12,
@@ -1321,10 +2191,40 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     marginBottom: SPACING.xs,
   },
-  groupActivity: {
+  groupActionsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  groupActionPrimary: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: COLORS.accent,
+  },
+  groupActionPrimaryText: {
+    color: "#0B1020",
+    fontWeight: "700",
     fontSize: 12,
-    color: COLORS.accent,
+  },
+  groupActionMuted: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: COLORS.borderSoft,
+    backgroundColor: "rgba(15,23,42,0.6)",
+  },
+  groupActionMutedText: {
+    color: COLORS.textSecondary,
     fontWeight: "600",
+    fontSize: 12,
+  },
+  groupOwnerTag: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: COLORS.accent,
   },
   activityList: {
     gap: SPACING.sm,

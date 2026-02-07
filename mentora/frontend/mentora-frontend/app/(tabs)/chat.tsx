@@ -114,6 +114,7 @@ export default function ChatScreen() {
 
   const wsRef = useRef<WebSocket | null>(null);
   const lastFriendOpenRef = useRef<string | null>(null);
+  const lastThreadOpenRef = useRef<number | null>(null);
   const isChatFocusedRef = useRef(false);
   const activeThreadIdRef = useRef<number | null>(null);
 
@@ -126,6 +127,10 @@ export default function ChatScreen() {
     [friends],
   );
   const friendParam = typeof params.friend === "string" ? params.friend : null;
+  const threadParam = typeof params.thread === "string" ? params.thread : null;
+  const threadParamId = threadParam ? Number(threadParam) : null;
+  const normalizedThreadParamId =
+    threadParamId && Number.isFinite(threadParamId) ? threadParamId : null;
   const isGroupThread = activeThread?.is_group ?? false;
   const activeFriend =
     !isGroupThread && activeThread?.friend_username
@@ -352,6 +357,23 @@ export default function ChatScreen() {
     lastFriendOpenRef.current = friendParam;
     handleStartChat(friendParam);
   }, [friendParam, username]);
+
+  useEffect(() => {
+    if (!normalizedThreadParamId || threads.length === 0) {
+      return;
+    }
+    if (lastThreadOpenRef.current === normalizedThreadParamId) {
+      return;
+    }
+    const exists = threads.some(
+      (thread) => thread.thread_id === normalizedThreadParamId,
+    );
+    if (!exists) {
+      return;
+    }
+    lastThreadOpenRef.current = normalizedThreadParamId;
+    setActiveThreadId(normalizedThreadParamId);
+  }, [normalizedThreadParamId, threads]);
 
   const handleStartChat = async (friendUsername: string) => {
     if (!username) {

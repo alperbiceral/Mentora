@@ -175,3 +175,76 @@ class ChatThreadItem(BaseModel):
 
 class ChatThreadsResponse(BaseModel):
     threads: list[ChatThreadItem]
+
+
+class GroupCreate(BaseModel):
+    username: str
+    name: str
+    description: Optional[str] = None
+    is_public: bool = False
+    group_photo: Optional[str] = None
+    invitees: Optional[list[str]] = None
+
+
+class GroupListItem(BaseModel):
+    group_id: int
+    name: str
+    description: Optional[str]
+    group_photo: Optional[str]
+    is_public: bool
+    owner_username: str
+    members_count: int
+    chat_thread_id: int
+    is_member: bool
+    is_owner: bool
+
+
+class GroupListResponse(BaseModel):
+    groups: list[GroupListItem]
+
+
+class GroupInviteCreate(BaseModel):
+    group_id: int
+    from_username: str
+    to_username: str
+
+
+class GroupInviteAction(BaseModel):
+    username: str
+
+
+class GroupInviteItem(BaseModel):
+    invite_id: int
+    group_id: int
+    group_name: str
+    group_photo: Optional[str]
+    from_username: str
+    to_username: str
+    status: str
+    created_at: datetime
+
+
+class GroupJoinRequestCreate(BaseModel):
+    group_id: int
+    username: str
+
+
+class GroupJoinRequestAction(BaseModel):
+    username: str
+
+
+class GroupJoinRequestItem(BaseModel):
+    request_id: int
+    group_id: int
+    group_name: str
+    group_photo: Optional[str]
+    username: str
+    status: str
+    created_at: datetime
+
+
+class GroupRequestsList(BaseModel):
+    incoming_invites: list[GroupInviteItem]
+    outgoing_invites: list[GroupInviteItem]
+    incoming_join_requests: list[GroupJoinRequestItem]
+    outgoing_join_requests: list[GroupJoinRequestItem]
