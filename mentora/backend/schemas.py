@@ -77,3 +77,44 @@ class UserResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class FriendRequestCreate(BaseModel):
+    from_username: str
+    to_username: str
+
+
+class FriendRequestAction(BaseModel):
+    username: str
+
+
+class FriendRequestResponse(BaseModel):
+    request_id: int
+    from_username: str
+    to_username: str
+    status: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class FriendRequestsList(BaseModel):
+    incoming: list[FriendRequestResponse]
+    outgoing: list[FriendRequestResponse]
+
+
+class FriendProfile(BaseModel):
+    username: str
+    full_name: str
+    university: Optional[str]
+    streak_count: int
+    profile_photo: Optional[str]
+
+
+class FriendListResponse(BaseModel):
+    friends: list[FriendProfile]
+
+
+class FriendSearchResponse(BaseModel):
+    results: list[FriendProfile]

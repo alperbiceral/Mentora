@@ -226,6 +226,7 @@ export default function EditProfileScreen() {
             onChangeText={setEmail}
             autoCapitalize="none"
             keyboardType="email-address"
+            editable={false}
           />
 
           <Field

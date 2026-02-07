@@ -78,6 +78,33 @@ class Profile(Base):
     )
 
 
+class FriendRequest(Base):
+    __tablename__ = "friend_requests"
+
+    request_id: Mapped[int] = mapped_column(primary_key=True)
+    from_username: Mapped[str] = mapped_column(String(50), nullable=False)
+    to_username: Mapped[str] = mapped_column(String(50), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+    )
+
+
+class Friend(Base):
+    __tablename__ = "friends"
+
+    friend_id: Mapped[int] = mapped_column(primary_key=True)
+    user_a: Mapped[str] = mapped_column(String(50), nullable=False)
+    user_b: Mapped[str] = mapped_column(String(50), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+    )
+
+
 class UserFeedback(Base):
     __tablename__ = "user_feedback"
 

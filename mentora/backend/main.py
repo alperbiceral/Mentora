@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from database import engine
 from routers.auth_router import router as auth_router
+from routers.friends_router import router as friends_router
 from routers.profile_router import router as profile_router
 import models
 
@@ -27,3 +28,4 @@ async def root():
 
 app.include_router(auth_router)
 app.include_router(profile_router)
+app.include_router(friends_router)
