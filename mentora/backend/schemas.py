@@ -186,6 +186,25 @@ class GroupCreate(BaseModel):
     invitees: Optional[list[str]] = None
 
 
+class GroupUpdate(BaseModel):
+    username: str
+    name: Optional[str] = None
+    description: Optional[str] = None
+    is_public: Optional[bool] = None
+    group_photo: Optional[str] = None
+    add_members: Optional[list[str]] = None
+    remove_members: Optional[list[str]] = None
+
+
+class GroupAction(BaseModel):
+    username: str
+
+
+class GroupTransferOwner(BaseModel):
+    username: str
+    new_owner_username: str
+
+
 class GroupListItem(BaseModel):
     group_id: int
     name: str
@@ -201,6 +220,15 @@ class GroupListItem(BaseModel):
 
 class GroupListResponse(BaseModel):
     groups: list[GroupListItem]
+
+
+class GroupMemberItem(BaseModel):
+    username: str
+    role: str
+
+
+class GroupMembersResponse(BaseModel):
+    members: list[GroupMemberItem]
 
 
 class GroupInviteCreate(BaseModel):

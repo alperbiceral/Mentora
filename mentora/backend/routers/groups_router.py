@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Body, Depends, HTTPException, status
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from deps import get_db
 from models import (
+    ChatMessage,
     ChatParticipant,
     ChatThread,
     Group,
@@ -15,6 +16,7 @@ from models import (
     Profile,
 )
 from schemas import (
+    GroupAction,
     GroupCreate,
     GroupInviteAction,
     GroupInviteCreate,
@@ -24,7 +26,11 @@ from schemas import (
     GroupJoinRequestItem,
     GroupListItem,
     GroupListResponse,
+    GroupMemberItem,
+    GroupMembersResponse,
     GroupRequestsList,
+    GroupTransferOwner,
+    GroupUpdate,
 )
 
 router = APIRouter(prefix="/groups", tags=["groups"])
@@ -86,6 +92,24 @@ def _add_chat_participant(db: Session, thread_id: int, username: str) -> None:
     db.add(ChatParticipant(thread_id=thread_id, username=username))
 
 
+def _get_group(db: Session, group_id: int) -> Group:
+    group = db.query(Group).filter(Group.group_id == group_id).first()
+    if not group:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Group not found",
+        )
+    return group
+
+
+def _ensure_owner(group: Group, username: str) -> None:
+    if group.owner_username != username:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only owner can manage this group",
+        )
+
+
 @router.post("", response_model=GroupListItem)
 async def create_group(payload: GroupCreate, db: Session = Depends(get_db)):
     name = payload.name.strip()
@@ -135,7 +159,8 @@ async def create_group(payload: GroupCreate, db: Session = Depends(get_db)):
                 status="pending",
             )
         )
-    db.commit()
+    if invitees:
+        db.commit()
 
     return GroupListItem(
         group_id=group.group_id,
@@ -187,6 +212,279 @@ async def list_groups(username: str, db: Session = Depends(get_db)):
         )
 
     return {"groups": items}
+
+
+@router.get("/{group_id}/members", response_model=GroupMembersResponse)
+async def list_group_members(group_id: int, db: Session = Depends(get_db)):
+    group = _get_group(db, group_id)
+    members = (
+        db.query(GroupMember)
+        .filter(GroupMember.group_id == group.group_id)
+        .order_by(GroupMember.added_at.asc())
+        .all()
+    )
+    return {
+        "members": [
+            GroupMemberItem(username=member.username, role=member.role)
+            for member in members
+        ]
+    }
+
+
+@router.put("/{group_id}", response_model=GroupListItem)
+async def update_group(
+    group_id: int,
+    payload: GroupUpdate,
+    db: Session = Depends(get_db),
+):
+    group = _get_group(db, group_id)
+    _ensure_owner(group, payload.username)
+
+    if payload.name is not None:
+        name = payload.name.strip()
+        if not name:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Group name is required",
+            )
+        group.name = name
+        thread = (
+            db.query(ChatThread)
+            .filter(ChatThread.thread_id == group.chat_thread_id)
+            .first()
+        )
+        if thread:
+            thread.title = f"{name} Chat"
+
+    if payload.description is not None:
+        group.description = payload.description
+
+    if payload.is_public is not None:
+        group.is_public = payload.is_public
+
+    if payload.group_photo is not None:
+        group.group_photo = payload.group_photo
+        thread = (
+            db.query(ChatThread)
+            .filter(ChatThread.thread_id == group.chat_thread_id)
+            .first()
+        )
+        if thread:
+            thread.group_photo = payload.group_photo
+
+    add_members = list({u for u in (payload.add_members or [])})
+    remove_members = list({u for u in (payload.remove_members or [])})
+
+    if add_members:
+        for username in add_members:
+            if _is_member(db, group.group_id, username):
+                continue
+            _ensure_profile(db, username)
+            existing_invite = (
+                db.query(GroupInvite)
+                .filter(
+                    GroupInvite.group_id == group.group_id,
+                    GroupInvite.to_username == username,
+                    GroupInvite.status == "pending",
+                )
+                .first()
+            )
+            if existing_invite:
+                continue
+            db.add(
+                GroupInvite(
+                    group_id=group.group_id,
+                    from_username=payload.username,
+                    to_username=username,
+                    status="pending",
+                )
+            )
+
+    if remove_members:
+        if group.owner_username in remove_members:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot remove group owner",
+            )
+        (
+            db.query(GroupMember)
+            .filter(
+                GroupMember.group_id == group.group_id,
+                GroupMember.username.in_(remove_members),
+            )
+            .delete(synchronize_session=False)
+        )
+        (
+            db.query(ChatParticipant)
+            .filter(
+                ChatParticipant.thread_id == group.chat_thread_id,
+                ChatParticipant.username.in_(remove_members),
+            )
+            .delete(synchronize_session=False)
+        )
+
+    db.commit()
+
+    return GroupListItem(
+        group_id=group.group_id,
+        name=group.name,
+        description=group.description,
+        group_photo=group.group_photo,
+        is_public=group.is_public,
+        owner_username=group.owner_username,
+        members_count=_member_count(db, group.group_id),
+        chat_thread_id=group.chat_thread_id,
+        is_member=True,
+        is_owner=True,
+    )
+
+
+@router.post("/{group_id}/leave")
+async def leave_group(
+    group_id: int,
+    payload: GroupAction,
+    db: Session = Depends(get_db),
+):
+    group = _get_group(db, group_id)
+    if group.owner_username == payload.username:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Owner cannot leave the group",
+        )
+    (
+        db.query(GroupMember)
+        .filter(
+            GroupMember.group_id == group.group_id,
+            GroupMember.username == payload.username,
+        )
+        .delete(synchronize_session=False)
+    )
+    (
+        db.query(ChatParticipant)
+        .filter(
+            ChatParticipant.thread_id == group.chat_thread_id,
+            ChatParticipant.username == payload.username,
+        )
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    return {"detail": "Left group"}
+
+
+@router.delete("/{group_id}")
+async def delete_group(
+    group_id: int,
+    username: str | None = None,
+    payload: GroupAction | None = Body(default=None),
+    db: Session = Depends(get_db),
+):
+    group = _get_group(db, group_id)
+    resolved_username = payload.username if payload else username
+    if not resolved_username:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username is required",
+        )
+    _ensure_owner(group, resolved_username)
+
+    (
+        db.query(ChatMessage)
+        .filter(ChatMessage.thread_id == group.chat_thread_id)
+        .delete(synchronize_session=False)
+    )
+    (
+        db.query(ChatParticipant)
+        .filter(ChatParticipant.thread_id == group.chat_thread_id)
+        .delete(synchronize_session=False)
+    )
+    (
+        db.query(GroupInvite)
+        .filter(GroupInvite.group_id == group.group_id)
+        .delete(synchronize_session=False)
+    )
+    (
+        db.query(GroupJoinRequest)
+        .filter(GroupJoinRequest.group_id == group.group_id)
+        .delete(synchronize_session=False)
+    )
+    (
+        db.query(GroupMember)
+        .filter(GroupMember.group_id == group.group_id)
+        .delete(synchronize_session=False)
+    )
+    (
+        db.query(Group)
+        .filter(Group.group_id == group.group_id)
+        .delete(synchronize_session=False)
+    )
+    (
+        db.query(ChatThread)
+        .filter(ChatThread.thread_id == group.chat_thread_id)
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    return {"detail": "Group deleted"}
+
+
+@router.post("/{group_id}/delete")
+async def delete_group_post(
+    group_id: int,
+    payload: GroupAction,
+    db: Session = Depends(get_db),
+):
+    return await delete_group(
+        group_id=group_id,
+        username=payload.username,
+        payload=payload,
+        db=db,
+    )
+
+
+@router.post("/{group_id}/transfer-owner")
+async def transfer_owner(
+    group_id: int,
+    payload: GroupTransferOwner,
+    db: Session = Depends(get_db),
+):
+    group = _get_group(db, group_id)
+    _ensure_owner(group, payload.username)
+
+    if payload.new_owner_username == group.owner_username:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User is already the owner",
+        )
+    if not _is_member(db, group.group_id, payload.new_owner_username):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New owner must be a member",
+        )
+
+    group.owner_username = payload.new_owner_username
+    thread = (
+        db.query(ChatThread)
+        .filter(ChatThread.thread_id == group.chat_thread_id)
+        .first()
+    )
+    if thread:
+        thread.owner_username = payload.new_owner_username
+
+    (
+        db.query(GroupMember)
+        .filter(GroupMember.group_id == group.group_id)
+        .update({"role": "member"})
+    )
+    (
+        db.query(GroupMember)
+        .filter(
+            GroupMember.group_id == group.group_id,
+            GroupMember.username == payload.new_owner_username,
+        )
+        .update({"role": "owner"})
+    )
+
+    db.commit()
+    return {"detail": "Owner transferred"}
 
 
 @router.post("/invite", response_model=GroupInviteItem)
@@ -335,11 +633,6 @@ async def request_to_join(payload: GroupJoinRequestCreate, db: Session = Depends
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Group not found",
-        )
-    if not group.is_public:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Group is private",
         )
     if _is_member(db, group.group_id, payload.username):
         raise HTTPException(

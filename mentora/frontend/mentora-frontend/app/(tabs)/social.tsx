@@ -8,6 +8,7 @@ import {
   DeviceEventEmitter,
   Image,
   Modal,
+  Platform,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -122,6 +123,11 @@ type GroupRequestsList = {
   outgoing_join_requests: GroupJoinRequestItem[];
 };
 
+type GroupMemberItem = {
+  username: string;
+  role: string;
+};
+
 const mockActivityFeed = [
   {
     id: "1",
@@ -207,6 +213,19 @@ export default function SocialScreen() {
   const [groupPhoto, setGroupPhoto] = useState("");
   const [groupIsPublic, setGroupIsPublic] = useState(false);
   const [groupInvitees, setGroupInvitees] = useState<string[]>([]);
+  const [groupSettingsOpen, setGroupSettingsOpen] = useState(false);
+  const [activeGroup, setActiveGroup] = useState<GroupListItem | null>(null);
+  const [groupMembers, setGroupMembers] = useState<GroupMemberItem[]>([]);
+  const [groupNameDraft, setGroupNameDraft] = useState("");
+  const [groupDescriptionDraft, setGroupDescriptionDraft] = useState("");
+  const [groupPhotoDraft, setGroupPhotoDraft] = useState("");
+  const [groupIsPublicDraft, setGroupIsPublicDraft] = useState(false);
+  const [groupAddMembers, setGroupAddMembers] = useState<string[]>([]);
+  const [groupRemoveMembers, setGroupRemoveMembers] = useState<string[]>([]);
+  const [loadingMembers, setLoadingMembers] = useState(false);
+  const [transferOwnerUsername, setTransferOwnerUsername] = useState<
+    string | null
+  >(null);
 
   const loadSocialData = useCallback(() => {
     let active = true;
@@ -359,6 +378,13 @@ export default function SocialScreen() {
   const filteredSearchResults = searchResults.filter(
     (result) => !friendUsernames.has(result.username),
   );
+  const isGroupOwner = activeGroup?.is_owner ?? false;
+  const memberUsernames = new Set(
+    groupMembers.map((member) => member.username),
+  );
+  const addableFriends = friends.filter(
+    (friend) => !memberUsernames.has(friend.username),
+  );
 
   const resetGroupForm = () => {
     setGroupName("");
@@ -467,6 +493,215 @@ export default function SocialScreen() {
     );
   };
 
+  const closeGroupSettings = () => {
+    setGroupSettingsOpen(false);
+    setActiveGroup(null);
+    setGroupMembers([]);
+    setGroupNameDraft("");
+    setGroupDescriptionDraft("");
+    setGroupPhotoDraft("");
+    setGroupIsPublicDraft(false);
+    setGroupAddMembers([]);
+    setGroupRemoveMembers([]);
+    setTransferOwnerUsername(null);
+  };
+
+  const openGroupSettings = async (group: GroupListItem) => {
+    setActiveGroup(group);
+    setGroupNameDraft(group.name);
+    setGroupDescriptionDraft(group.description ?? "");
+    setGroupPhotoDraft(group.group_photo ?? "");
+    setGroupIsPublicDraft(group.is_public);
+    setGroupAddMembers([]);
+    setGroupRemoveMembers([]);
+    setTransferOwnerUsername(null);
+    setGroupSettingsOpen(true);
+
+    setLoadingMembers(true);
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/groups/${group.group_id}/members`,
+      );
+      if (response.ok) {
+        const data = await response.json();
+        setGroupMembers(data.members ?? []);
+      }
+    } finally {
+      setLoadingMembers(false);
+    }
+  };
+
+  const toggleAddMember = (username: string) => {
+    setGroupAddMembers((prev) =>
+      prev.includes(username)
+        ? prev.filter((item) => item !== username)
+        : [...prev, username],
+    );
+  };
+
+  const toggleRemoveMember = (username: string) => {
+    setGroupRemoveMembers((prev) =>
+      prev.includes(username)
+        ? prev.filter((item) => item !== username)
+        : [...prev, username],
+    );
+  };
+
+  const handlePickSettingsPhoto = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      base64: true,
+      quality: 0.6,
+    });
+
+    if (result.canceled || !result.assets?.length) {
+      return;
+    }
+    const [asset] = result.assets;
+    if (!asset.base64) {
+      Alert.alert("Photo error", "Could not read the image.");
+      return;
+    }
+    setGroupPhotoDraft(asset.base64);
+  };
+
+  const handleSaveGroupSettings = async () => {
+    if (!currentUsername || !activeGroup) {
+      return;
+    }
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/groups/${activeGroup.group_id}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            username: currentUsername,
+            name: groupNameDraft.trim() || undefined,
+            description: groupDescriptionDraft.trim() || undefined,
+            group_photo: groupPhotoDraft || undefined,
+            is_public: groupIsPublicDraft,
+            add_members: groupAddMembers,
+            remove_members: groupRemoveMembers,
+          }),
+        },
+      );
+      if (!response.ok) {
+        const message = await response.json().catch(() => null);
+        throw new Error(message?.detail ?? "Update failed");
+      }
+      closeGroupSettings();
+      loadSocialData();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Update failed";
+      Alert.alert("Error", message);
+    }
+  };
+
+  const handleLeaveGroup = async () => {
+    if (!currentUsername || !activeGroup) {
+      return;
+    }
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/groups/${activeGroup.group_id}/leave`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username: currentUsername }),
+        },
+      );
+      if (!response.ok) {
+        const message = await response.json().catch(() => null);
+        throw new Error(message?.detail ?? "Leave failed");
+      }
+      closeGroupSettings();
+      loadSocialData();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Leave failed";
+      Alert.alert("Error", message);
+    }
+  };
+
+  const handleDeleteGroup = async () => {
+    if (!currentUsername || !activeGroup) {
+      return;
+    }
+    const groupId = activeGroup.group_id;
+    const username = currentUsername;
+
+    const runDelete = async () => {
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/groups/${groupId}/delete`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username }),
+          },
+        );
+        if (!response.ok) {
+          const message = await response.json().catch(() => null);
+          throw new Error(message?.detail ?? "Delete failed");
+        }
+        closeGroupSettings();
+        loadSocialData();
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Delete failed";
+        Alert.alert("Error", message);
+      }
+    };
+
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      const confirmed = window.confirm(
+        "This will remove the group for everyone. Continue?",
+      );
+      if (confirmed) {
+        await runDelete();
+      }
+      return;
+    }
+
+    Alert.alert("Delete group", "This will remove the group for everyone.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: runDelete,
+      },
+    ]);
+  };
+
+  const handleTransferOwner = async () => {
+    if (!currentUsername || !activeGroup || !transferOwnerUsername) {
+      return;
+    }
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/groups/${activeGroup.group_id}/transfer-owner`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            username: currentUsername,
+            new_owner_username: transferOwnerUsername,
+          }),
+        },
+      );
+      if (!response.ok) {
+        const message = await response.json().catch(() => null);
+        throw new Error(message?.detail ?? "Transfer failed");
+      }
+      closeGroupSettings();
+      loadSocialData();
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Transfer failed";
+      Alert.alert("Error", message);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       {/* Fake gradient using two layers to feel like the login page */}
@@ -549,7 +784,12 @@ export default function SocialScreen() {
                 </Pressable>
               </View>
             </View>
-            <View style={styles.friendsList}>
+            <ScrollView
+              style={styles.listScroll}
+              contentContainerStyle={styles.friendsList}
+              nestedScrollEnabled
+              showsVerticalScrollIndicator={false}
+            >
               {friends.length === 0 ? (
                 <Text style={styles.emptyText}>No friends yet</Text>
               ) : (
@@ -598,7 +838,7 @@ export default function SocialScreen() {
                   </View>
                 ))
               )}
-            </View>
+            </ScrollView>
           </View>
 
           {/* Study Groups Section */}
@@ -628,7 +868,12 @@ export default function SocialScreen() {
                 </Pressable>
               </View>
             </View>
-            <View style={styles.groupsList}>
+            <ScrollView
+              style={styles.listScroll}
+              contentContainerStyle={styles.groupsList}
+              nestedScrollEnabled
+              showsVerticalScrollIndicator={false}
+            >
               {groups.length === 0 ? (
                 <Text style={styles.emptyText}>No groups yet</Text>
               ) : (
@@ -681,6 +926,19 @@ export default function SocialScreen() {
                             {group.members_count} members
                           </Text>
                         </View>
+                        {group.is_member ? (
+                          <Pressable
+                            hitSlop={8}
+                            style={styles.groupSettingsButton}
+                            onPress={() => openGroupSettings(group)}
+                          >
+                            <Ionicons
+                              name="settings-outline"
+                              size={18}
+                              color={COLORS.textSecondary}
+                            />
+                          </Pressable>
+                        ) : null}
                       </View>
                       {group.description ? (
                         <Text style={styles.groupDescription}>
@@ -743,7 +1001,7 @@ export default function SocialScreen() {
                   );
                 })
               )}
-            </View>
+            </ScrollView>
           </View>
 
           {/* Activity Feed Section */}
@@ -1537,6 +1795,265 @@ export default function SocialScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      <Modal
+        visible={groupSettingsOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={closeGroupSettings}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={closeGroupSettings}>
+          <Pressable
+            style={styles.groupModalCard}
+            onPress={() => {
+              // noop
+            }}
+          >
+            <View style={styles.modalHeaderRow}>
+              <Text style={styles.modalTitle}>Group settings</Text>
+              <Pressable
+                hitSlop={8}
+                style={styles.modalClose}
+                onPress={closeGroupSettings}
+              >
+                <Ionicons name="close" size={18} color={COLORS.textPrimary} />
+              </Pressable>
+            </View>
+
+            {!activeGroup ? (
+              <Text style={styles.emptyText}>No group selected</Text>
+            ) : (
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <TextInput
+                  value={groupNameDraft}
+                  onChangeText={setGroupNameDraft}
+                  style={styles.groupInput}
+                  placeholder="Group name"
+                  placeholderTextColor={COLORS.textMuted}
+                  editable={isGroupOwner}
+                />
+                <TextInput
+                  value={groupDescriptionDraft}
+                  onChangeText={setGroupDescriptionDraft}
+                  style={styles.groupTextArea}
+                  placeholder="Description"
+                  placeholderTextColor={COLORS.textMuted}
+                  multiline
+                  editable={isGroupOwner}
+                />
+
+                <View style={styles.groupPhotoRow}>
+                  <View style={styles.groupPhotoPreview}>
+                    {groupPhotoDraft ? (
+                      <Image
+                        source={{
+                          uri: `data:image/jpeg;base64,${groupPhotoDraft}`,
+                        }}
+                        style={styles.groupPhotoImage}
+                      />
+                    ) : (
+                      <Ionicons
+                        name="image-outline"
+                        size={18}
+                        color={COLORS.textMuted}
+                      />
+                    )}
+                  </View>
+                  <View style={styles.groupPhotoActions}>
+                    <Pressable
+                      style={styles.secondaryButton}
+                      onPress={handlePickSettingsPhoto}
+                      disabled={!isGroupOwner}
+                    >
+                      <Text style={styles.secondaryButtonText}>
+                        Update photo
+                      </Text>
+                    </Pressable>
+                    {groupPhotoDraft ? (
+                      <Pressable
+                        style={styles.secondaryButton}
+                        onPress={() => setGroupPhotoDraft("")}
+                        disabled={!isGroupOwner}
+                      >
+                        <Text style={styles.secondaryButtonText}>Remove</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                </View>
+
+                <View style={styles.privacyRow}>
+                  <Text style={styles.privacyLabel}>Privacy</Text>
+                  <View style={styles.privacyToggle}>
+                    <Pressable
+                      style={[
+                        styles.privacyOption,
+                        groupIsPublicDraft && styles.privacyOptionActive,
+                      ]}
+                      onPress={() => setGroupIsPublicDraft(true)}
+                      disabled={!isGroupOwner}
+                    >
+                      <Text
+                        style={[
+                          styles.privacyOptionText,
+                          groupIsPublicDraft && styles.privacyOptionTextActive,
+                        ]}
+                      >
+                        Public
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      style={[
+                        styles.privacyOption,
+                        !groupIsPublicDraft && styles.privacyOptionActive,
+                      ]}
+                      onPress={() => setGroupIsPublicDraft(false)}
+                      disabled={!isGroupOwner}
+                    >
+                      <Text
+                        style={[
+                          styles.privacyOptionText,
+                          !groupIsPublicDraft && styles.privacyOptionTextActive,
+                        ]}
+                      >
+                        Private
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
+
+                <View style={styles.settingsSection}>
+                  <Text style={styles.settingsTitle}>Members</Text>
+                  {loadingMembers ? (
+                    <Text style={styles.emptyText}>Loading members...</Text>
+                  ) : groupMembers.length === 0 ? (
+                    <Text style={styles.emptyText}>No members yet</Text>
+                  ) : (
+                    groupMembers.map((member) => {
+                      const isOwner =
+                        member.username === activeGroup.owner_username;
+                      const selected = groupRemoveMembers.includes(
+                        member.username,
+                      );
+                      return (
+                        <Pressable
+                          key={member.username}
+                          style={styles.memberRow}
+                          onPress={() =>
+                            isGroupOwner && !isOwner
+                              ? toggleRemoveMember(member.username)
+                              : null
+                          }
+                        >
+                          <Text style={styles.memberName}>
+                            @{member.username}
+                          </Text>
+                          {isOwner ? (
+                            <Text style={styles.ownerPill}>Owner</Text>
+                          ) : isGroupOwner ? (
+                            <View style={styles.memberActions}>
+                              <Pressable
+                                style={styles.ownerActionButton}
+                                onPress={() =>
+                                  setTransferOwnerUsername(member.username)
+                                }
+                              >
+                                <Text style={styles.ownerActionText}>
+                                  Make owner
+                                </Text>
+                              </Pressable>
+                              <Ionicons
+                                name={selected ? "checkbox" : "square-outline"}
+                                size={18}
+                                color={
+                                  selected ? COLORS.accent : COLORS.borderSubtle
+                                }
+                              />
+                            </View>
+                          ) : null}
+                        </Pressable>
+                      );
+                    })
+                  )}
+                </View>
+
+                {isGroupOwner && transferOwnerUsername ? (
+                  <View style={styles.ownerTransferRow}>
+                    <Text style={styles.ownerTransferText}>
+                      New owner: @{transferOwnerUsername}
+                    </Text>
+                    <Pressable
+                      style={styles.primaryButton}
+                      onPress={handleTransferOwner}
+                    >
+                      <Text style={styles.primaryButtonText}>
+                        Transfer owner
+                      </Text>
+                    </Pressable>
+                  </View>
+                ) : null}
+
+                {isGroupOwner ? (
+                  <View style={styles.settingsSection}>
+                    <Text style={styles.settingsTitle}>Add members</Text>
+                    {addableFriends.length === 0 ? (
+                      <Text style={styles.emptyText}>No friends to add</Text>
+                    ) : (
+                      addableFriends.map((friend) => {
+                        const selected = groupAddMembers.includes(
+                          friend.username,
+                        );
+                        return (
+                          <Pressable
+                            key={friend.username}
+                            style={styles.memberRow}
+                            onPress={() => toggleAddMember(friend.username)}
+                          >
+                            <Text style={styles.memberName}>
+                              @{friend.username}
+                            </Text>
+                            <Ionicons
+                              name={selected ? "checkbox" : "square-outline"}
+                              size={18}
+                              color={
+                                selected ? COLORS.accent : COLORS.borderSubtle
+                              }
+                            />
+                          </Pressable>
+                        );
+                      })
+                    )}
+                  </View>
+                ) : null}
+
+                <View style={styles.settingsActions}>
+                  {isGroupOwner ? (
+                    <Pressable
+                      style={styles.primaryButton}
+                      onPress={handleSaveGroupSettings}
+                    >
+                      <Text style={styles.primaryButtonText}>Save changes</Text>
+                    </Pressable>
+                  ) : null}
+                  <Pressable
+                    style={styles.secondaryDangerButton}
+                    onPress={handleLeaveGroup}
+                  >
+                    <Text style={styles.secondaryDangerText}>Leave group</Text>
+                  </Pressable>
+                  {isGroupOwner ? (
+                    <Pressable
+                      style={styles.dangerButton}
+                      onPress={handleDeleteGroup}
+                    >
+                      <Text style={styles.dangerButtonText}>Delete group</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              </ScrollView>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -1765,6 +2282,9 @@ const styles = StyleSheet.create({
   },
   friendsList: {
     gap: SPACING.sm,
+  },
+  listScroll: {
+    maxHeight: 320,
   },
   searchInput: {
     height: 44,
@@ -2137,6 +2657,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: SPACING.xs,
   },
+  groupSettingsButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(15,23,42,0.7)",
+  },
   groupAvatar: {
     width: 36,
     height: 36,
@@ -2225,6 +2753,93 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "700",
     color: COLORS.accent,
+  },
+  settingsSection: {
+    marginTop: SPACING.sm,
+  },
+  settingsTitle: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: COLORS.textSecondary,
+    marginBottom: SPACING.xs,
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+  },
+  memberRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: COLORS.subtleCard,
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: SPACING.sm,
+    borderWidth: 1,
+    borderColor: COLORS.borderSoft,
+    marginBottom: SPACING.xs,
+  },
+  memberName: {
+    color: COLORS.textPrimary,
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  ownerPill: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: COLORS.accent,
+  },
+  memberActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  ownerActionButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: COLORS.borderSoft,
+  },
+  ownerActionText: {
+    color: COLORS.textSecondary,
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  ownerTransferRow: {
+    marginTop: SPACING.sm,
+    gap: SPACING.xs,
+  },
+  ownerTransferText: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+  },
+  settingsActions: {
+    marginTop: SPACING.md,
+    gap: SPACING.sm,
+  },
+  dangerButton: {
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: "rgba(239,68,68,0.14)",
+    borderWidth: 1,
+    borderColor: "rgba(239,68,68,0.5)",
+    alignItems: "center",
+  },
+  dangerButtonText: {
+    color: "#FCA5A5",
+    fontWeight: "700",
+    fontSize: 13,
+  },
+  secondaryDangerButton: {
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(248,113,113,0.4)",
+    alignItems: "center",
+  },
+  secondaryDangerText: {
+    color: "#FCA5A5",
+    fontWeight: "700",
+    fontSize: 13,
   },
   activityList: {
     gap: SPACING.sm,
