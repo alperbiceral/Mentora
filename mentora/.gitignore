@@ -49,6 +49,7 @@ env/
 
 # === Node.js (Frontend) ===
 node_modules/
+.node-version
 
 # === Expo ===
 .expo/

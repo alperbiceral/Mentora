@@ -7,6 +7,7 @@ from routers.chat_router import router as chat_router
 from routers.friends_router import router as friends_router
 from routers.groups_router import router as groups_router
 from routers.profile_router import router as profile_router
+from routers.ocean_router import router as ocean_router
 import models
 
 # Create tables
@@ -33,3 +34,4 @@ app.include_router(profile_router)
 app.include_router(friends_router)
 app.include_router(chat_router)
 app.include_router(groups_router)
+app.include_router(ocean_router)
