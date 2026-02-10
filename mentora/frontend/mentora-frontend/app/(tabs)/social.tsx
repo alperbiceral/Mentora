@@ -46,7 +46,7 @@ const SPACING = {
   xl: 24,
 };
 
-type LeaderboardType = "global" | "group";
+type LeaderboardMetric = "hours" | "streak";
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -70,6 +70,17 @@ type FriendProfile = {
   username: string;
   full_name: string;
   university?: string | null;
+  streak_count: number;
+  study_hours: number;
+  profile_photo?: string | null;
+};
+
+type LeaderboardEntry = {
+  rank: number;
+  username: string;
+  full_name: string;
+  university?: string | null;
+  study_hours: number;
   streak_count: number;
   profile_photo?: string | null;
 };
@@ -128,67 +139,20 @@ type GroupMemberItem = {
   role: string;
 };
 
-const mockActivityFeed = [
-  {
-    id: "1",
-    type: "study_session",
-    user: "Ahmet Yılmaz",
-    action: "completed a 25-minute study session",
-    time: "2 hours ago",
-    subject: "Database Design",
-  },
-  {
-    id: "2",
-    type: "achievement",
-    user: "Mehmet Arslan",
-    action: "earned the 'Weekend Warrior' badge",
-    time: "4 hours ago",
-  },
-  {
-    id: "3",
-    type: "group_join",
-    user: "Fatma Demir",
-    action: "joined the group",
-    time: "6 hours ago",
-    group: "Math Olympiad Prep",
-  },
-  {
-    id: "4",
-    type: "streak",
-    user: "Ayşe Kaya",
-    action: "reached a 5-day study streak",
-    time: "1 day ago",
-  },
-  {
-    id: "5",
-    type: "study_session",
-    user: "You",
-    action: "completed a 50-minute study session",
-    time: "3 hours ago",
-    subject: "Algorithms",
-  },
-];
-
-const mockGlobalLeaderboard = [
-  { rank: 1, name: "Mehmet Arslan", hours: 67, streak: 12 },
-  { rank: 2, name: "Ahmet Yılmaz", hours: 45, streak: 8 },
-  { rank: 3, name: "Fatma Demir", hours: 28, streak: 3 },
-  { rank: 4, name: "Ayşe Kaya", hours: 32, streak: 5 },
-  { rank: 5, name: "Emre Çelik", hours: 54, streak: 10 },
-];
-
-const mockGroupLeaderboard = [
-  { rank: 1, name: "Ahmet Yılmaz", hours: 15, streak: 4 },
-  { rank: 2, name: "Mehmet Arslan", hours: 12, streak: 3 },
-  { rank: 3, name: "Aylin Koç", hours: 8, streak: 2 },
-  { rank: 4, name: "Can Bayram", hours: 6, streak: 1 },
-  { rank: 5, name: "Zeynep Aktaş", hours: 4, streak: 1 },
-];
+type GroupLeaderboardEntry = {
+  rank: number;
+  username: string;
+  full_name: string;
+  university?: string | null;
+  study_hours: number;
+  streak_count: number;
+  profile_photo?: string | null;
+};
 
 export default function SocialScreen() {
   const router = useRouter();
-  const [leaderboardType, setLeaderboardType] =
-    useState<LeaderboardType>("global");
+  const [leaderboardMetric, setLeaderboardMetric] =
+    useState<LeaderboardMetric>("hours");
   const [profile, setProfile] = useState<Profile | null>(null);
   const [friends, setFriends] = useState<FriendProfile[]>([]);
   const [incomingRequests, setIncomingRequests] = useState<FriendRequest[]>([]);
@@ -216,6 +180,18 @@ export default function SocialScreen() {
   const [groupSettingsOpen, setGroupSettingsOpen] = useState(false);
   const [activeGroup, setActiveGroup] = useState<GroupListItem | null>(null);
   const [groupMembers, setGroupMembers] = useState<GroupMemberItem[]>([]);
+  const [groupLeaderboardOpen, setGroupLeaderboardOpen] = useState(false);
+  const [groupLeaderboardEntries, setGroupLeaderboardEntries] = useState<
+    GroupLeaderboardEntry[]
+  >([]);
+  const [groupLeaderboardLoading, setGroupLeaderboardLoading] = useState(false);
+  const [activeLeaderboardGroupId, setActiveLeaderboardGroupId] = useState<
+    number | null
+  >(null);
+  const [leaderboardEntries, setLeaderboardEntries] = useState<
+    LeaderboardEntry[]
+  >([]);
+  const [leaderboardLoading, setLeaderboardLoading] = useState(false);
   const [groupNameDraft, setGroupNameDraft] = useState("");
   const [groupDescriptionDraft, setGroupDescriptionDraft] = useState("");
   const [groupPhotoDraft, setGroupPhotoDraft] = useState("");
@@ -323,6 +299,28 @@ export default function SocialScreen() {
   }, []);
 
   useFocusEffect(loadSocialData);
+
+  useEffect(() => {
+    const run = async () => {
+      setLeaderboardLoading(true);
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/profile/leaderboard?metric=${leaderboardMetric}`,
+        );
+        if (!response.ok) {
+          throw new Error("Leaderboard fetch failed");
+        }
+        const data = (await response.json()) as LeaderboardEntry[];
+        setLeaderboardEntries(data);
+      } catch (error) {
+        setLeaderboardEntries([]);
+      } finally {
+        setLeaderboardLoading(false);
+      }
+    };
+
+    run();
+  }, [leaderboardMetric]);
 
   useEffect(() => {
     if (!addFriendOpen) {
@@ -528,6 +526,30 @@ export default function SocialScreen() {
       }
     } finally {
       setLoadingMembers(false);
+    }
+  };
+
+  const openGroupLeaderboard = (groupId: number) => {
+    setActiveLeaderboardGroupId(groupId);
+    setGroupLeaderboardOpen(true);
+    void loadGroupLeaderboard(groupId);
+  };
+
+  const loadGroupLeaderboard = async (groupId: number) => {
+    setGroupLeaderboardLoading(true);
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/groups/${groupId}/leaderboard?metric=hours`,
+      );
+      if (!response.ok) {
+        throw new Error("Leaderboard fetch failed");
+      }
+      const data = (await response.json()) as GroupLeaderboardEntry[];
+      setGroupLeaderboardEntries(data);
+    } catch (error) {
+      setGroupLeaderboardEntries([]);
+    } finally {
+      setGroupLeaderboardLoading(false);
     }
   };
 
@@ -947,16 +969,33 @@ export default function SocialScreen() {
                       ) : null}
                       <View style={styles.groupActionsRow}>
                         {group.is_member ? (
-                          <Pressable
-                            style={styles.groupActionPrimary}
-                            onPress={() =>
-                              handleOpenGroupChat(group.chat_thread_id)
-                            }
-                          >
-                            <Text style={styles.groupActionPrimaryText}>
-                              Open chat
-                            </Text>
-                          </Pressable>
+                          <View style={styles.groupActionButtons}>
+                            <Pressable
+                              style={styles.groupActionPrimary}
+                              onPress={() =>
+                                handleOpenGroupChat(group.chat_thread_id)
+                              }
+                            >
+                              <Text style={styles.groupActionPrimaryText}>
+                                Chat
+                              </Text>
+                            </Pressable>
+                            <Pressable
+                              style={styles.groupActionSecondary}
+                              onPress={() =>
+                                openGroupLeaderboard(group.group_id)
+                              }
+                            >
+                              <Ionicons
+                                name="podium-outline"
+                                size={14}
+                                color={COLORS.accent}
+                              />
+                              <Text style={styles.groupActionSecondaryText}>
+                                Leaderboard
+                              </Text>
+                            </Pressable>
+                          </View>
                         ) : group.is_public ? (
                           hasRequest ? (
                             <View style={styles.groupActionMuted}>
@@ -1004,46 +1043,6 @@ export default function SocialScreen() {
             </ScrollView>
           </View>
 
-          {/* Activity Feed Section */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionTitle}>Activity Feed</Text>
-              <Pressable
-                hitSlop={8}
-                onPress={() => console.log("Refresh feed")}
-              >
-                <Text style={styles.linkText}>Refresh</Text>
-              </Pressable>
-            </View>
-            <View style={styles.activityList}>
-              {mockActivityFeed.map((activity) => (
-                <View key={activity.id} style={styles.activityItem}>
-                  <View
-                    style={[
-                      styles.activityIcon,
-                      { backgroundColor: getActivityColor(activity.type) },
-                    ]}
-                  >
-                    <Ionicons
-                      name={getActivityIcon(activity.type)}
-                      size={16}
-                      color="white"
-                    />
-                  </View>
-                  <View style={styles.activityContent}>
-                    <Text style={styles.activityText}>
-                      <Text style={styles.activityUser}>{activity.user}</Text>{" "}
-                      {activity.action}
-                      {activity.subject && ` • ${activity.subject}`}
-                      {activity.group && ` • ${activity.group}`}
-                    </Text>
-                    <Text style={styles.activityTime}>{activity.time}</Text>
-                  </View>
-                </View>
-              ))}
-            </View>
-          </View>
-
           {/* Leaderboards Section */}
           <View style={styles.section}>
             <View style={styles.sectionHeaderRow}>
@@ -1052,78 +1051,251 @@ export default function SocialScreen() {
                 <Pressable
                   style={[
                     styles.toggleButton,
-                    leaderboardType === "global" && styles.toggleButtonActive,
+                    leaderboardMetric === "hours" && styles.toggleButtonActive,
                   ]}
-                  onPress={() => setLeaderboardType("global")}
+                  onPress={() => setLeaderboardMetric("hours")}
                 >
                   <Text
                     style={[
                       styles.toggleText,
-                      leaderboardType === "global" && styles.toggleTextActive,
+                      leaderboardMetric === "hours" && styles.toggleTextActive,
                     ]}
                   >
-                    Global
+                    Study hours
                   </Text>
                 </Pressable>
                 <Pressable
                   style={[
                     styles.toggleButton,
-                    leaderboardType === "group" && styles.toggleButtonActive,
+                    leaderboardMetric === "streak" && styles.toggleButtonActive,
                   ]}
-                  onPress={() => setLeaderboardType("group")}
+                  onPress={() => setLeaderboardMetric("streak")}
                 >
                   <Text
                     style={[
                       styles.toggleText,
-                      leaderboardType === "group" && styles.toggleTextActive,
+                      leaderboardMetric === "streak" && styles.toggleTextActive,
                     ]}
                   >
-                    Group
+                    Streak
                   </Text>
                 </Pressable>
               </View>
             </View>
 
-            <View style={styles.leaderboardContainer}>
-              {(leaderboardType === "global"
-                ? mockGlobalLeaderboard
-                : mockGroupLeaderboard
-              ).map((entry) => (
-                <View key={entry.rank} style={styles.leaderboardItem}>
-                  <View style={styles.rankContainer}>
-                    <Text style={styles.rankNumber}>{entry.rank}</Text>
-                    {entry.rank <= 3 && (
-                      <Ionicons
-                        name={
-                          entry.rank === 1
-                            ? "trophy"
-                            : entry.rank === 2
-                              ? "medal-outline"
-                              : "medal"
-                        }
-                        size={20}
-                        color={
-                          entry.rank === 1
-                            ? "#FBBF24"
-                            : entry.rank === 2
-                              ? "#9CA3AF"
-                              : "#A0744F"
-                        }
-                      />
+            <ScrollView
+              style={styles.listScroll}
+              contentContainerStyle={styles.leaderboardList}
+              nestedScrollEnabled
+              showsVerticalScrollIndicator={false}
+            >
+              {leaderboardLoading ? (
+                <Text style={styles.emptyText}>Loading...</Text>
+              ) : leaderboardEntries.length === 0 ? (
+                <Text style={styles.emptyText}>No leaderboard data yet</Text>
+              ) : (
+                leaderboardEntries.map((entry) => (
+                  <View
+                    key={`${entry.username}-${entry.rank}`}
+                    style={styles.leaderboardItem}
+                  >
+                    <View style={styles.rankContainer}>
+                      <Text style={styles.rankNumber}>{entry.rank}</Text>
+                      {entry.rank <= 3 && (
+                        <Ionicons
+                          name={
+                            entry.rank === 1
+                              ? "trophy"
+                              : entry.rank === 2
+                                ? "medal-outline"
+                                : "medal"
+                          }
+                          size={18}
+                          color={
+                            entry.rank === 1
+                              ? "#FBBF24"
+                              : entry.rank === 2
+                                ? "#9CA3AF"
+                                : "#A0744F"
+                          }
+                        />
+                      )}
+                    </View>
+                    <View style={styles.friendAvatar}>
+                      {entry.profile_photo ? (
+                        <Image
+                          source={{
+                            uri: `data:image/jpeg;base64,${entry.profile_photo}`,
+                          }}
+                          style={styles.friendAvatarImage}
+                        />
+                      ) : (
+                        <Ionicons
+                          name="person"
+                          size={18}
+                          color={COLORS.textMuted}
+                        />
+                      )}
+                    </View>
+                    <View style={styles.leaderboardInfo}>
+                      <Text style={styles.leaderboardName}>
+                        {entry.full_name || entry.username}
+                      </Text>
+                      <Text style={styles.leaderboardStats}>
+                        {entry.university ?? `@${entry.username}`}
+                      </Text>
+                    </View>
+                    {leaderboardMetric === "hours" ? (
+                      <Text style={styles.leaderboardValue}>
+                        {formatLeaderboardHours(entry.study_hours ?? 0)}
+                      </Text>
+                    ) : (
+                      <View style={styles.leaderboardStreak}>
+                        <Ionicons
+                          name="flame"
+                          size={16}
+                          color={COLORS.accent}
+                        />
+                        <Text style={styles.leaderboardStreakValue}>
+                          {entry.streak_count ?? 0}
+                        </Text>
+                      </View>
                     )}
                   </View>
-                  <View style={styles.leaderboardInfo}>
-                    <Text style={styles.leaderboardName}>{entry.name}</Text>
-                    <Text style={styles.leaderboardStats}>
-                      {entry.hours}h • {entry.streak} day streak
-                    </Text>
-                  </View>
-                </View>
-              ))}
-            </View>
+                ))
+              )}
+            </ScrollView>
           </View>
         </ScrollView>
       </View>
+
+      <Modal
+        visible={groupLeaderboardOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setGroupLeaderboardOpen(false)}
+      >
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => setGroupLeaderboardOpen(false)}
+        >
+          <Pressable
+            style={styles.groupLeaderboardModal}
+            onPress={() => {
+              // noop
+            }}
+          >
+            <View style={styles.modalHeaderRow}>
+              <Text style={styles.modalTitle}>Group leaderboard</Text>
+              <Pressable
+                hitSlop={8}
+                style={styles.modalClose}
+                onPress={() => setGroupLeaderboardOpen(false)}
+              >
+                <Ionicons name="close" size={18} color={COLORS.textPrimary} />
+              </Pressable>
+            </View>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.groupLeaderboardTabs}
+            >
+              {groups.map((group) => (
+                <Pressable
+                  key={group.group_id}
+                  style={[
+                    styles.groupLeaderboardTab,
+                    activeLeaderboardGroupId === group.group_id &&
+                      styles.groupLeaderboardTabActive,
+                  ]}
+                  onPress={() => {
+                    setActiveLeaderboardGroupId(group.group_id);
+                    void loadGroupLeaderboard(group.group_id);
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.groupLeaderboardTabText,
+                      activeLeaderboardGroupId === group.group_id &&
+                        styles.groupLeaderboardTabTextActive,
+                    ]}
+                  >
+                    {group.name}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {groupLeaderboardLoading ? (
+                <Text style={styles.emptyText}>Loading...</Text>
+              ) : groupLeaderboardEntries.length === 0 ? (
+                <Text style={styles.emptyText}>No group data yet</Text>
+              ) : (
+                <View style={styles.leaderboardList}>
+                  {groupLeaderboardEntries.map((entry) => (
+                    <View
+                      key={`${entry.username}-${entry.rank}`}
+                      style={styles.leaderboardItem}
+                    >
+                      <View style={styles.rankContainer}>
+                        <Text style={styles.rankNumber}>{entry.rank}</Text>
+                        {entry.rank <= 3 && (
+                          <Ionicons
+                            name={
+                              entry.rank === 1
+                                ? "trophy"
+                                : entry.rank === 2
+                                  ? "medal-outline"
+                                  : "medal"
+                            }
+                            size={18}
+                            color={
+                              entry.rank === 1
+                                ? "#FBBF24"
+                                : entry.rank === 2
+                                  ? "#9CA3AF"
+                                  : "#A0744F"
+                            }
+                          />
+                        )}
+                      </View>
+                      <View style={styles.friendAvatar}>
+                        {entry.profile_photo ? (
+                          <Image
+                            source={{
+                              uri: `data:image/jpeg;base64,${entry.profile_photo}`,
+                            }}
+                            style={styles.friendAvatarImage}
+                          />
+                        ) : (
+                          <Ionicons
+                            name="person"
+                            size={18}
+                            color={COLORS.textMuted}
+                          />
+                        )}
+                      </View>
+                      <View style={styles.leaderboardInfo}>
+                        <Text style={styles.leaderboardName}>
+                          {entry.full_name || entry.username}
+                        </Text>
+                        <Text style={styles.leaderboardStats}>
+                          {entry.university ?? `@${entry.username}`}
+                        </Text>
+                      </View>
+                      <Text style={styles.leaderboardValue}>
+                        {formatLeaderboardHours(entry.study_hours ?? 0)}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       <Modal
         visible={addFriendOpen}
@@ -2058,36 +2230,14 @@ export default function SocialScreen() {
   );
 }
 
-// Helper functions for activity feed
-function getActivityColor(type: string) {
-  switch (type) {
-    case "study_session":
-      return "#3B82F6";
-    case "achievement":
-      return "#10B981";
-    case "group_join":
-      return "#F59E0B";
-    case "streak":
-      return "#8B5CF6";
-    default:
-      return "#6D5EF7";
+const formatLeaderboardHours = (hours: number) => {
+  if (hours < 1) {
+    const minutes = Math.round(hours * 60);
+    return `${minutes}m`;
   }
-}
-
-function getActivityIcon(type: string) {
-  switch (type) {
-    case "study_session":
-      return "timer-outline";
-    case "achievement":
-      return "star-outline";
-    case "group_join":
-      return "person-add-outline";
-    case "streak":
-      return "flame";
-    default:
-      return "pulse-outline";
-  }
-}
+  const rounded = Math.round(hours * 10) / 10;
+  return `${rounded}h`;
+};
 
 const styles = StyleSheet.create({
   safeArea: {
@@ -2725,6 +2875,11 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 8,
   },
+  groupActionButtons: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   groupActionPrimary: {
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -2734,6 +2889,22 @@ const styles = StyleSheet.create({
   groupActionPrimaryText: {
     color: "#0B1020",
     fontWeight: "700",
+    fontSize: 12,
+  },
+  groupActionSecondary: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: COLORS.borderSoft,
+    backgroundColor: "rgba(15,23,42,0.6)",
+  },
+  groupActionSecondaryText: {
+    color: COLORS.textSecondary,
+    fontWeight: "600",
     fontSize: 12,
   },
   groupActionMuted: {
@@ -2841,43 +3012,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     fontSize: 13,
   },
-  activityList: {
-    gap: SPACING.sm,
-  },
-  activityItem: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    backgroundColor: "rgba(30, 41, 59, 0.95)",
-    borderRadius: 12,
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.md,
-  },
-  activityIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: SPACING.sm,
-    marginTop: 2,
-  },
-  activityContent: {
-    flex: 1,
-  },
-  activityText: {
-    fontSize: 13,
-    color: COLORS.textPrimary,
-    lineHeight: 18,
-  },
-  activityUser: {
-    fontWeight: "700",
-    color: COLORS.accent,
-  },
-  activityTime: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginTop: 4,
-  },
   leaderboardToggle: {
     flexDirection: "row",
     backgroundColor: "rgba(15,23,42,0.65)",
@@ -2914,6 +3048,9 @@ const styles = StyleSheet.create({
   leaderboardContainer: {
     gap: SPACING.sm,
   },
+  leaderboardList: {
+    gap: SPACING.sm,
+  },
   leaderboardItem: {
     flexDirection: "row",
     alignItems: "center",
@@ -2945,5 +3082,54 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textSecondary,
     marginTop: 2,
+  },
+  leaderboardValue: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: COLORS.textPrimary,
+  },
+  leaderboardStreak: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  leaderboardStreakValue: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: COLORS.textPrimary,
+  },
+  groupLeaderboardModal: {
+    width: "100%",
+    maxWidth: 420,
+    maxHeight: "80%",
+    backgroundColor: COLORS.card,
+    borderRadius: 20,
+    padding: SPACING.lg,
+    borderWidth: 1,
+    borderColor: COLORS.borderSubtle,
+  },
+  groupLeaderboardTabs: {
+    paddingBottom: SPACING.sm,
+    gap: SPACING.sm,
+  },
+  groupLeaderboardTab: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: COLORS.borderSubtle,
+    backgroundColor: "rgba(15,23,42,0.6)",
+  },
+  groupLeaderboardTabActive: {
+    backgroundColor: COLORS.accent,
+    borderColor: COLORS.accent,
+  },
+  groupLeaderboardTabText: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    fontWeight: "600",
+  },
+  groupLeaderboardTabTextActive: {
+    color: "#FFFFFF",
   },
 });

@@ -79,6 +79,26 @@ class Profile(Base):
     )
 
 
+class StudySession(Base):
+    __tablename__ = "study_sessions"
+
+    session_id: Mapped[int] = mapped_column(primary_key=True)
+    username: Mapped[str] = mapped_column(String(50), nullable=False)
+    mode: Mapped[str] = mapped_column(String(20), nullable=False)
+    timer_type: Mapped[Optional[str]] = mapped_column(String(20))
+    duration_minutes: Mapped[float] = mapped_column(Float, nullable=False)
+    focus_minutes: Mapped[Optional[int]] = mapped_column(Integer)
+    break_minutes: Mapped[Optional[int]] = mapped_column(Integer)
+    cycles: Mapped[Optional[int]] = mapped_column(Integer)
+    started_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    ended_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+    )
+
+
 class FriendRequest(Base):
     __tablename__ = "friend_requests"
 

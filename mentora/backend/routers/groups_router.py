@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Body, Depends, HTTPException, status
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from deps import get_db
@@ -14,6 +14,7 @@ from models import (
     GroupJoinRequest,
     GroupMember,
     Profile,
+    StudySession,
 )
 from schemas import (
     GroupAction,
@@ -26,6 +27,7 @@ from schemas import (
     GroupJoinRequestItem,
     GroupListItem,
     GroupListResponse,
+    GroupLeaderboardEntry,
     GroupMemberItem,
     GroupMembersResponse,
     GroupRequestsList,
@@ -229,6 +231,81 @@ async def list_group_members(group_id: int, db: Session = Depends(get_db)):
             for member in members
         ]
     }
+
+
+@router.get("/{group_id}/leaderboard", response_model=list[GroupLeaderboardEntry])
+async def group_leaderboard(
+    group_id: int,
+    metric: str = "hours",
+    db: Session = Depends(get_db),
+):
+    if metric not in {"hours", "streak"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid metric",
+        )
+
+    group = _get_group(db, group_id)
+    members = (
+        db.query(GroupMember)
+        .filter(GroupMember.group_id == group.group_id)
+        .all()
+    )
+    member_usernames = [member.username for member in members]
+    if not member_usernames:
+        return []
+
+    profiles = (
+        db.query(Profile)
+        .filter(Profile.username.in_(member_usernames))
+        .all()
+    )
+
+    hours_map: dict[str, float] = {}
+    if metric == "hours":
+        totals = (
+            db.query(
+                StudySession.username,
+                func.coalesce(func.sum(StudySession.duration_minutes), 0),
+            )
+            .filter(
+                StudySession.username.in_(member_usernames),
+                StudySession.started_at >= group.created_at,
+            )
+            .group_by(StudySession.username)
+            .all()
+        )
+        hours_map = {
+            username: float(total_minutes or 0) / 60.0
+            for username, total_minutes in totals
+        }
+
+    entries: list[GroupLeaderboardEntry] = []
+    for profile in profiles:
+        study_hours = hours_map.get(profile.username, 0.0)
+        metric_value = study_hours if metric == "hours" else profile.streak_count
+        entries.append(
+            GroupLeaderboardEntry(
+                rank=0,
+                username=profile.username,
+                full_name=profile.full_name,
+                university=profile.university,
+                study_hours=study_hours,
+                streak_count=profile.streak_count,
+                profile_photo=profile.profile_photo,
+            )
+        )
+
+    entries.sort(
+        key=lambda entry: (
+            entry.study_hours if metric == "hours" else entry.streak_count
+        ),
+        reverse=True,
+    )
+    for index, entry in enumerate(entries, start=1):
+        entry.rank = index
+
+    return entries
 
 
 @router.put("/{group_id}", response_model=GroupListItem)

@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from deps import get_db
 from models import Profile
-from schemas import ProfileCreate, ProfileResponse, ProfileUpdate
+from schemas import ProfileCreate, ProfileLeaderboardEntry, ProfileResponse, ProfileUpdate
 
 router = APIRouter(prefix="/profile", tags=["profile"])
 
@@ -11,6 +11,38 @@ router = APIRouter(prefix="/profile", tags=["profile"])
 @router.options("")
 async def options_profile():
     return {}
+
+
+@router.get("/leaderboard", response_model=list[ProfileLeaderboardEntry])
+async def profile_leaderboard(
+    metric: str = "hours",
+    limit: int = 50,
+    db: Session = Depends(get_db),
+):
+    if metric not in {"hours", "streak"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid metric",
+        )
+
+    order_field = Profile.study_hours if metric == "hours" else Profile.streak_count
+    profiles = db.query(Profile).order_by(order_field.desc()).limit(limit).all()
+
+    entries: list[ProfileLeaderboardEntry] = []
+    for index, profile in enumerate(profiles, start=1):
+        entries.append(
+            ProfileLeaderboardEntry(
+                rank=index,
+                username=profile.username,
+                full_name=profile.full_name,
+                university=profile.university,
+                study_hours=profile.study_hours,
+                streak_count=profile.streak_count,
+                profile_photo=profile.profile_photo,
+            )
+        )
+
+    return entries
 
 
 @router.get("/{username}", response_model=ProfileResponse)
@@ -67,3 +99,5 @@ async def update_profile(
     db.commit()
     db.refresh(profile)
     return profile
+
+

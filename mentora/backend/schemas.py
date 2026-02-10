@@ -64,6 +64,35 @@ class ProfileResponse(BaseModel):
         from_attributes = True
 
 
+class StudySessionCreate(BaseModel):
+    username: str
+    mode: str
+    timer_type: Optional[str] = None
+    duration_minutes: float
+    focus_minutes: Optional[int] = None
+    break_minutes: Optional[int] = None
+    cycles: Optional[int] = None
+    started_at: datetime
+    ended_at: datetime
+
+
+class StudySessionResponse(BaseModel):
+    session_id: int
+    username: str
+    mode: str
+    timer_type: Optional[str]
+    duration_minutes: float
+    focus_minutes: Optional[int]
+    break_minutes: Optional[int]
+    cycles: Optional[int]
+    started_at: datetime
+    ended_at: datetime
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class Token(BaseModel):
     access_token: str
     token_type: str
@@ -109,6 +138,7 @@ class FriendProfile(BaseModel):
     full_name: str
     university: Optional[str]
     streak_count: int
+    study_hours: float
     profile_photo: Optional[str]
 
 
@@ -229,6 +259,26 @@ class GroupMemberItem(BaseModel):
 
 class GroupMembersResponse(BaseModel):
     members: list[GroupMemberItem]
+
+
+class GroupLeaderboardEntry(BaseModel):
+    rank: int
+    username: str
+    full_name: str
+    university: Optional[str]
+    study_hours: float
+    streak_count: int
+    profile_photo: Optional[str]
+
+
+class ProfileLeaderboardEntry(BaseModel):
+    rank: int
+    username: str
+    full_name: str
+    university: Optional[str]
+    study_hours: float
+    streak_count: int
+    profile_photo: Optional[str]
 
 
 class GroupInviteCreate(BaseModel):

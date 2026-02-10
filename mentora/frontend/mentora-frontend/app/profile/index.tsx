@@ -33,6 +33,8 @@ const SPACING = {
   xl: 24,
 };
 
+const FOCUS_BAR_HEIGHT = 110;
+
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
 
 type Profile = {
@@ -51,10 +53,24 @@ type Profile = {
   updated_at: string;
 };
 
+type StudySession = {
+  session_id: number;
+  username: string;
+  mode: string;
+  duration_minutes: number;
+  started_at: string;
+  ended_at: string;
+};
+
 export default function ProfileScreen() {
   const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [focusRange, setFocusRange] = useState<
+    "hourly" | "daily" | "weekly" | "monthly"
+  >("daily");
+  const [sessions, setSessions] = useState<StudySession[]>([]);
+  const [focusLoading, setFocusLoading] = useState(false);
 
   const avatarSource = useMemo(() => {
     if (!profile?.profile_photo) {
@@ -67,11 +83,13 @@ export default function ProfileScreen() {
     let active = true;
     const run = async () => {
       setLoading(true);
+      setFocusLoading(true);
       try {
         const username = await AsyncStorage.getItem("mentora.username");
         if (!username) {
           if (active) {
             setProfile(null);
+            setSessions([]);
           }
           return;
         }
@@ -91,13 +109,32 @@ export default function ProfileScreen() {
         if (active) {
           setProfile(data);
         }
+
+        try {
+          const sessionResponse = await fetch(
+            `${API_BASE_URL}/study-sessions/${encodeURIComponent(username)}?limit=200`,
+          );
+          if (!sessionResponse.ok) {
+            throw new Error("Session fetch failed");
+          }
+          const sessionData = (await sessionResponse.json()) as StudySession[];
+          if (active) {
+            setSessions(sessionData);
+          }
+        } catch (error) {
+          if (active) {
+            setSessions([]);
+          }
+        }
       } catch (error) {
         if (active) {
           setProfile(null);
+          setSessions([]);
         }
       } finally {
         if (active) {
           setLoading(false);
+          setFocusLoading(false);
         }
       }
     };
@@ -109,6 +146,12 @@ export default function ProfileScreen() {
   }, []);
 
   useFocusEffect(loadProfile);
+
+  const focusSeries = useMemo(
+    () => buildFocusSeries(sessions, focusRange),
+    [sessions, focusRange],
+  );
+  const maxFocusValue = Math.max(1, ...focusSeries.values);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -206,7 +249,7 @@ export default function ProfileScreen() {
           <InsightRow
             icon="speedometer-outline"
             label="Study Hours"
-            value={`${profile?.study_hours ?? 0} hrs`}
+            value={formatStudyHours(profile?.study_hours ?? 0)}
           />
           <InsightRow
             icon="repeat-outline"
@@ -219,26 +262,64 @@ export default function ProfileScreen() {
         <View style={styles.sectionCard}>
           <View style={styles.focusHeaderRow}>
             <Text style={styles.sectionTitle}>Focus Level</Text>
+            <View style={styles.focusToggle}>
+              {FOCUS_RANGES.map((range) => (
+                <Pressable
+                  key={range.value}
+                  onPress={() => setFocusRange(range.value)}
+                  style={[
+                    styles.focusToggleItem,
+                    focusRange === range.value && styles.focusToggleItemActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.focusToggleText,
+                      focusRange === range.value &&
+                        styles.focusToggleTextActive,
+                    ]}
+                  >
+                    {range.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
           </View>
 
-          <View style={styles.fakeChart}>
-            <View style={styles.fakeChartGrid} />
-            <View style={styles.fakeChartLine} />
+          <View style={styles.focusChart}>
+            <View style={styles.focusChartGrid} />
+            {focusLoading ? (
+              <Text style={styles.focusEmptyText}>Loading...</Text>
+            ) : focusSeries.values.every((value) => value === 0) ? (
+              <Text style={styles.focusEmptyText}>No study data yet</Text>
+            ) : (
+              <View style={styles.focusChartBars}>
+                {focusSeries.values.map((value, index) => (
+                  <View key={`bar-${index}`} style={styles.focusBarItem}>
+                    <View
+                      style={[
+                        styles.focusBar,
+                        {
+                          height: Math.max(
+                            2,
+                            Math.round(
+                              (value / maxFocusValue) * FOCUS_BAR_HEIGHT,
+                            ),
+                          ),
+                        },
+                      ]}
+                    />
+                  </View>
+                ))}
+              </View>
+            )}
 
-            <View style={styles.fakeChartDotsRow}>
-              <View style={styles.fakeChartDot} />
-              <View style={[styles.fakeChartDot, styles.fakeChartDotHigh]} />
-              <View style={styles.fakeChartDot} />
-              <View style={[styles.fakeChartDot, styles.fakeChartDotHigh]} />
-              <View style={styles.fakeChartDot} />
-            </View>
-
-            <View style={styles.fakeChartLabelsRow}>
-              <Text style={styles.fakeChartLabel}>Mon</Text>
-              <Text style={styles.fakeChartLabel}>Tue</Text>
-              <Text style={styles.fakeChartLabel}>Wed</Text>
-              <Text style={styles.fakeChartLabel}>Thu</Text>
-              <Text style={styles.fakeChartLabel}>Fri</Text>
+            <View style={styles.focusChartLabelsRow}>
+              {focusSeries.labels.map((label, index) => (
+                <View key={`label-${index}`} style={styles.focusChartLabelItem}>
+                  <Text style={styles.focusChartLabel}>{label}</Text>
+                </View>
+              ))}
             </View>
           </View>
 
@@ -256,6 +337,201 @@ export default function ProfileScreen() {
     </SafeAreaView>
   );
 }
+
+const formatStudyHours = (hours: number) => {
+  const totalSeconds = Math.round(hours * 3600);
+  if (totalSeconds < 60) {
+    return `${Math.max(1, totalSeconds)} sec`;
+  }
+  if (totalSeconds < 3600) {
+    const minutes = Math.round(totalSeconds / 60);
+    return `${minutes} min`;
+  }
+  const rounded = Math.round(hours * 10) / 10;
+  const roundedText =
+    rounded % 1 === 0 ? String(rounded.toFixed(0)) : String(rounded);
+  return `${roundedText} h`;
+};
+
+const FOCUS_RANGES: Array<{
+  value: "hourly" | "daily" | "weekly" | "monthly";
+  label: string;
+}> = [
+  { value: "hourly", label: "Hourly" },
+  { value: "daily", label: "Daily" },
+  { value: "weekly", label: "Weekly" },
+  { value: "monthly", label: "Monthly" },
+];
+
+const buildFocusSeries = (
+  sessions: StudySession[],
+  range: "hourly" | "daily" | "weekly" | "monthly",
+) => {
+  if (range === "hourly") {
+    const today = new Date();
+    const start = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate(),
+    );
+    const values = Array.from({ length: 24 }, () => 0);
+    sessions.forEach((session) => {
+      const ended = parseSessionDate(session.ended_at);
+      if (!ended || ended < start) {
+        return;
+      }
+      const hour = ended.getHours();
+      values[hour] += session.duration_minutes;
+    });
+    const labels = Array.from({ length: 24 }, (_, index) =>
+      index % 3 === 0 ? String(index) : "",
+    );
+    return { labels, values };
+  }
+
+  if (range === "daily") {
+    const days = getDateRange(7);
+    const values = days.map(() => 0);
+    sessions.forEach((session) => {
+      const ended = parseSessionDate(session.ended_at);
+      if (!ended) {
+        return;
+      }
+      const index = days.findIndex((day) => isSameDay(day, ended));
+      if (index >= 0) {
+        values[index] += session.duration_minutes;
+      }
+    });
+    const labels = days.map((day) =>
+      day.toLocaleDateString(undefined, { weekday: "short" }),
+    );
+    return { labels, values };
+  }
+
+  if (range === "weekly") {
+    const weeks = getWeekRange(4);
+    const values = weeks.map(() => 0);
+    sessions.forEach((session) => {
+      const ended = parseSessionDate(session.ended_at);
+      if (!ended) {
+        return;
+      }
+      const index = weeks.findIndex(
+        (week) => ended >= week.start && ended <= week.end,
+      );
+      if (index >= 0) {
+        values[index] += session.duration_minutes;
+      }
+    });
+    const labels = weeks.map((week) =>
+      week.start.toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+      }),
+    );
+    return { labels, values };
+  }
+
+  const months = getMonthRange(6);
+  const values = months.map(() => 0);
+  sessions.forEach((session) => {
+    const ended = parseSessionDate(session.ended_at);
+    if (!ended) {
+      return;
+    }
+    const index = months.findIndex(
+      (month) =>
+        month.getFullYear() === ended.getFullYear() &&
+        month.getMonth() === ended.getMonth(),
+    );
+    if (index >= 0) {
+      values[index] += session.duration_minutes;
+    }
+  });
+  const labels = months.map((month) =>
+    month.toLocaleDateString(undefined, { month: "short" }),
+  );
+  return { labels, values };
+};
+
+const getDateRange = (days: number) => {
+  const today = new Date();
+  const start = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate(),
+  );
+  return Array.from({ length: days }, (_, index) => {
+    const date = new Date(start);
+    date.setDate(start.getDate() - (days - 1 - index));
+    return date;
+  });
+};
+
+const getWeekRange = (count: number) => {
+  const today = new Date();
+  const startOfWeek = getWeekStart(today);
+  return Array.from({ length: count }, (_, index) => {
+    const start = new Date(startOfWeek);
+    start.setDate(startOfWeek.getDate() - (count - 1 - index) * 7);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    end.setHours(23, 59, 59, 999);
+    return { start, end };
+  });
+};
+
+const getMonthRange = (count: number) => {
+  const today = new Date();
+  const months: Date[] = [];
+  for (let i = count - 1; i >= 0; i -= 1) {
+    months.push(new Date(today.getFullYear(), today.getMonth() - i, 1));
+  }
+  return months;
+};
+
+const getWeekStart = (date: Date) => {
+  const result = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const day = result.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  result.setDate(result.getDate() + diff);
+  result.setHours(0, 0, 0, 0);
+  return result;
+};
+
+const isSameDay = (a: Date, b: Date) =>
+  a.getFullYear() === b.getFullYear() &&
+  a.getMonth() === b.getMonth() &&
+  a.getDate() === b.getDate();
+
+const parseSessionDate = (value: string) => {
+  if (!value) {
+    return null;
+  }
+  const normalized = value.trim();
+  const parts = normalized.includes("T")
+    ? normalized.split("T")
+    : normalized.split(" ");
+  if (parts.length < 2) {
+    const parsed = new Date(normalized);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  const [datePart, timePart] = parts;
+  const [year, month, day] = datePart.split("-").map(Number);
+  const [timeOnly] = timePart.split(".");
+  const [hour = "0", minute = "0", second = "0"] = timeOnly
+    .split(":")
+    .map((valuePart) => valuePart.trim());
+  const parsed = new Date(
+    year,
+    Math.max(0, month - 1),
+    day,
+    Number(hour),
+    Number(minute),
+    Number(second),
+  );
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
 
 type ProfileRowProps = {
   label: string;
@@ -468,7 +744,32 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: SPACING.sm,
   },
-  fakeChart: {
+  focusToggle: {
+    flexDirection: "row",
+    gap: 6,
+    padding: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: COLORS.borderSubtle,
+    backgroundColor: "rgba(15,23,42,0.75)",
+  },
+  focusToggleItem: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  focusToggleItemActive: {
+    backgroundColor: COLORS.accent,
+  },
+  focusToggleText: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    fontWeight: "600",
+  },
+  focusToggleTextActive: {
+    color: "#FFFFFF",
+  },
+  focusChart: {
     marginTop: SPACING.sm,
     borderRadius: 14,
     borderWidth: 1,
@@ -476,8 +777,9 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.md,
     backgroundColor: "#020617",
+    minHeight: 160,
   },
-  fakeChartGrid: {
+  focusChartGrid: {
     position: "absolute",
     top: SPACING.sm,
     left: SPACING.md,
@@ -487,37 +789,41 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: "rgba(148,163,184,0.35)",
   },
-  fakeChartLine: {
-    position: "absolute",
-    top: "35%",
-    left: SPACING.md,
-    right: SPACING.md,
-    borderTopWidth: 1,
-    borderColor: "rgba(109, 94, 247, 0.7)",
-  },
-  fakeChartDotsRow: {
+  focusChartBars: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "flex-end",
+    justifyContent: "space-between",
+    height: FOCUS_BAR_HEIGHT,
     marginBottom: SPACING.sm,
   },
-  fakeChartDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#4B5563",
+  focusBarItem: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "flex-end",
   },
-  fakeChartDotHigh: {
-    height: 10,
+  focusBar: {
+    width: 8,
+    borderRadius: 8,
     backgroundColor: COLORS.accentSoft,
   },
-  fakeChartLabelsRow: {
+  focusChartLabelsRow: {
     flexDirection: "row",
     justifyContent: "space-between",
   },
-  fakeChartLabel: {
+  focusChartLabelItem: {
+    flex: 1,
+    alignItems: "center",
+  },
+  focusChartLabel: {
     fontSize: 11,
     color: COLORS.textMuted,
+  },
+  focusEmptyText: {
+    textAlign: "center",
+    color: COLORS.textMuted,
+    fontSize: 12,
+    marginTop: SPACING.lg,
+    marginBottom: SPACING.sm,
   },
   viewDetailsRow: {
     marginTop: SPACING.sm,

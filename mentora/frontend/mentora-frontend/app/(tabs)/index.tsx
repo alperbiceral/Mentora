@@ -433,8 +433,8 @@ const QuickActions = () => {
   const router = useRouter();
 
   const handlePress = (action: string) => {
-    if (action === "Pomodoro") {
-      router.push("/(tabs)/pomodoro");
+    if (action === "Study") {
+      router.push("/(tabs)/study");
       return;
     }
 
@@ -466,7 +466,7 @@ const QuickActions = () => {
 
         <Pressable
           style={styles.quickActionCard}
-          onPress={() => handlePress("Pomodoro")}
+          onPress={() => handlePress("Study")}
         >
           <Ionicons
             name="alarm-outline"
@@ -474,7 +474,7 @@ const QuickActions = () => {
             color={COLORS.accentSoft}
             style={{ marginBottom: 6 }}
           />
-          <Text style={styles.quickActionText}>Pomodoro</Text>
+          <Text style={styles.quickActionText}>Study</Text>
         </Pressable>
 
         <Pressable
@@ -517,9 +517,9 @@ const RecommendationCard = () => {
 
       <Pressable
         style={styles.recommendationButton}
-        onPress={() => router.push("/(tabs)/pomodoro")}
+        onPress={() => router.push("/(tabs)/study")}
       >
-        <Text style={styles.recommendationButtonText}>Start pomodoro</Text>
+        <Text style={styles.recommendationButtonText}>Start study</Text>
       </Pressable>
     </View>
   );

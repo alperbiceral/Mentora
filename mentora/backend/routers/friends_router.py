@@ -23,6 +23,7 @@ def _to_profile_item(profile: Profile) -> FriendProfile:
         full_name=profile.full_name,
         university=profile.university,
         streak_count=profile.streak_count,
+        study_hours=profile.study_hours,
         profile_photo=profile.profile_photo,
     )
 

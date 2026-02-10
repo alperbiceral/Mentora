@@ -230,9 +230,9 @@ export default function TabsLayout() {
       />
 
       <Tabs.Screen
-        name="pomodoro"
+        name="study"
         options={{
-          title: "Pomodoro",
+          title: "Study",
           tabBarIcon: ({ color, size, focused }) => (
             <TabIcon
               focused={focused}

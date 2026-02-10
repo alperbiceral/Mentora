@@ -55,6 +55,7 @@ type FriendProfile = {
   full_name: string;
   university?: string | null;
   streak_count: number;
+  study_hours: number;
   profile_photo?: string | null;
 };
 
