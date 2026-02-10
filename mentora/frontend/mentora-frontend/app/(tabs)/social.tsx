@@ -5,7 +5,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   Alert,
-  DeviceEventEmitter,
   Image,
   Modal,
   Platform,
@@ -165,9 +164,7 @@ export default function SocialScreen() {
     outgoing_join_requests: [],
   });
   const [addFriendOpen, setAddFriendOpen] = useState(false);
-  const [requestsOpen, setRequestsOpen] = useState(false);
   const [groupCreateOpen, setGroupCreateOpen] = useState(false);
-  const [groupRequestsOpen, setGroupRequestsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<FriendProfile[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -247,12 +244,6 @@ export default function SocialScreen() {
           if (active) {
             setIncomingRequests(data.incoming ?? []);
             setOutgoingRequests(data.outgoing ?? []);
-            const count = (data.incoming ?? []).length;
-            await AsyncStorage.setItem(
-              "mentora.friendRequestsCount",
-              String(count),
-            );
-            DeviceEventEmitter.emit("friendRequestsCount", count);
           }
         }
 
@@ -286,8 +277,6 @@ export default function SocialScreen() {
             incoming_join_requests: [],
             outgoing_join_requests: [],
           });
-          await AsyncStorage.setItem("mentora.friendRequestsCount", "0");
-          DeviceEventEmitter.emit("friendRequestsCount", 0);
         }
       }
     };
@@ -783,27 +772,6 @@ export default function SocialScreen() {
                     Add friend +
                   </Text>
                 </Pressable>
-                <Pressable
-                  hitSlop={8}
-                  style={[
-                    styles.headerTab,
-                    requestsOpen && styles.headerTabActive,
-                  ]}
-                  onPress={() => {
-                    setRequestsOpen(true);
-                    AsyncStorage.setItem("mentora.friendRequestsCount", "0");
-                    DeviceEventEmitter.emit("friendRequestsCount", 0);
-                  }}
-                >
-                  <Text
-                    style={[
-                      styles.headerTabText,
-                      requestsOpen && styles.headerTabTextActive,
-                    ]}
-                  >
-                    Friend requests
-                  </Text>
-                </Pressable>
               </View>
             </View>
             <ScrollView
@@ -877,16 +845,6 @@ export default function SocialScreen() {
                   }}
                 >
                   <Text style={styles.headerTabText}>Create group +</Text>
-                </Pressable>
-                <Pressable
-                  hitSlop={8}
-                  style={styles.headerTab}
-                  onPress={() => {
-                    loadSocialData();
-                    setGroupRequestsOpen(true);
-                  }}
-                >
-                  <Text style={styles.headerTabText}>Requests</Text>
                 </Pressable>
               </View>
             </View>
@@ -1431,151 +1389,6 @@ export default function SocialScreen() {
       </Modal>
 
       <Modal
-        visible={requestsOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setRequestsOpen(false)}
-      >
-        <Pressable
-          style={styles.modalBackdrop}
-          onPress={() => setRequestsOpen(false)}
-        >
-          <Pressable
-            style={styles.requestsModalCard}
-            onPress={() => {
-              // noop
-            }}
-          >
-            <View style={styles.modalHeaderRow}>
-              <Text style={styles.modalTitle}>Friend requests</Text>
-              <Pressable
-                hitSlop={8}
-                style={styles.modalClose}
-                onPress={() => setRequestsOpen(false)}
-              >
-                <Ionicons name="close" size={18} color={COLORS.textPrimary} />
-              </Pressable>
-            </View>
-
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.requestsScroll}
-            >
-              <View style={styles.requestsSection}>
-                <Text style={styles.requestsTitle}>Incoming</Text>
-                {incomingRequests.length === 0 ? (
-                  <Text style={styles.emptyText}>No incoming requests</Text>
-                ) : (
-                  incomingRequests.map((request) => (
-                    <View
-                      key={request.request_id}
-                      style={styles.requestItemWide}
-                    >
-                      <Text style={styles.friendName}>
-                        @{request.from_username}
-                      </Text>
-                      <View style={styles.requestActions}>
-                        <Pressable
-                          style={styles.acceptButton}
-                          onPress={async () => {
-                            if (!currentUsername) {
-                              return;
-                            }
-                            await fetch(
-                              `${API_BASE_URL}/friends/requests/${request.request_id}/accept`,
-                              {
-                                method: "POST",
-                                headers: {
-                                  "Content-Type": "application/json",
-                                },
-                                body: JSON.stringify({
-                                  username: currentUsername,
-                                }),
-                              },
-                            );
-                            loadSocialData();
-                          }}
-                        >
-                          <Text style={styles.acceptButtonText}>Accept</Text>
-                        </Pressable>
-                        <Pressable
-                          style={styles.declineButton}
-                          onPress={async () => {
-                            if (!currentUsername) {
-                              return;
-                            }
-                            await fetch(
-                              `${API_BASE_URL}/friends/requests/${request.request_id}/decline`,
-                              {
-                                method: "POST",
-                                headers: {
-                                  "Content-Type": "application/json",
-                                },
-                                body: JSON.stringify({
-                                  username: currentUsername,
-                                }),
-                              },
-                            );
-                            loadSocialData();
-                          }}
-                        >
-                          <Text style={styles.declineButtonText}>Decline</Text>
-                        </Pressable>
-                      </View>
-                    </View>
-                  ))
-                )}
-              </View>
-
-              <View style={styles.requestsSection}>
-                <Text style={styles.requestsTitle}>Outgoing</Text>
-                {outgoingRequests.length === 0 ? (
-                  <Text style={styles.emptyText}>No outgoing requests</Text>
-                ) : (
-                  outgoingRequests.map((request) => (
-                    <View
-                      key={request.request_id}
-                      style={styles.requestItemWide}
-                    >
-                      <Text style={styles.friendName}>
-                        @{request.to_username}
-                      </Text>
-                      <View style={styles.requestActions}>
-                        <Text style={styles.requestStatus}>Pending</Text>
-                        <Pressable
-                          style={styles.cancelButton}
-                          onPress={async () => {
-                            if (!currentUsername) {
-                              return;
-                            }
-                            await fetch(
-                              `${API_BASE_URL}/friends/requests/${request.request_id}/cancel`,
-                              {
-                                method: "POST",
-                                headers: {
-                                  "Content-Type": "application/json",
-                                },
-                                body: JSON.stringify({
-                                  username: currentUsername,
-                                }),
-                              },
-                            );
-                            loadSocialData();
-                          }}
-                        >
-                          <Text style={styles.cancelButtonText}>Cancel</Text>
-                        </Pressable>
-                      </View>
-                    </View>
-                  ))
-                )}
-              </View>
-            </ScrollView>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      <Modal
         visible={groupCreateOpen}
         transparent
         animationType="fade"
@@ -1745,225 +1558,6 @@ export default function SocialScreen() {
             <Pressable style={styles.primaryButton} onPress={handleCreateGroup}>
               <Text style={styles.primaryButtonText}>Create group</Text>
             </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      <Modal
-        visible={groupRequestsOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setGroupRequestsOpen(false)}
-      >
-        <Pressable
-          style={styles.modalBackdrop}
-          onPress={() => setGroupRequestsOpen(false)}
-        >
-          <Pressable
-            style={styles.requestsModalCard}
-            onPress={() => {
-              // noop
-            }}
-          >
-            <View style={styles.modalHeaderRow}>
-              <Text style={styles.modalTitle}>Group requests</Text>
-              <Pressable
-                hitSlop={8}
-                style={styles.modalClose}
-                onPress={() => setGroupRequestsOpen(false)}
-              >
-                <Ionicons name="close" size={18} color={COLORS.textPrimary} />
-              </Pressable>
-            </View>
-
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.requestsScroll}
-            >
-              <View style={styles.requestsSection}>
-                <Text style={styles.requestsTitle}>Invites</Text>
-                {incomingGroupInvites.length === 0 ? (
-                  <Text style={styles.emptyText}>No invites</Text>
-                ) : (
-                  incomingGroupInvites.map((invite) => (
-                    <View key={invite.invite_id} style={styles.requestItemWide}>
-                      <View style={styles.requestInfo}>
-                        <Text style={styles.friendName}>
-                          {invite.group_name}
-                        </Text>
-                        <Text style={styles.friendStats}>
-                          @{invite.from_username}
-                        </Text>
-                      </View>
-                      <View style={styles.requestActions}>
-                        <Pressable
-                          style={styles.acceptButton}
-                          onPress={async () => {
-                            if (!currentUsername) {
-                              return;
-                            }
-                            await fetch(
-                              `${API_BASE_URL}/groups/invites/${invite.invite_id}/accept`,
-                              {
-                                method: "POST",
-                                headers: {
-                                  "Content-Type": "application/json",
-                                },
-                                body: JSON.stringify({
-                                  username: currentUsername,
-                                }),
-                              },
-                            );
-                            loadSocialData();
-                          }}
-                        >
-                          <Text style={styles.acceptButtonText}>Accept</Text>
-                        </Pressable>
-                        <Pressable
-                          style={styles.declineButton}
-                          onPress={async () => {
-                            if (!currentUsername) {
-                              return;
-                            }
-                            await fetch(
-                              `${API_BASE_URL}/groups/invites/${invite.invite_id}/decline`,
-                              {
-                                method: "POST",
-                                headers: {
-                                  "Content-Type": "application/json",
-                                },
-                                body: JSON.stringify({
-                                  username: currentUsername,
-                                }),
-                              },
-                            );
-                            loadSocialData();
-                          }}
-                        >
-                          <Text style={styles.declineButtonText}>Decline</Text>
-                        </Pressable>
-                      </View>
-                    </View>
-                  ))
-                )}
-              </View>
-
-              <View style={styles.requestsSection}>
-                <Text style={styles.requestsTitle}>Join requests</Text>
-                {incomingJoinRequests.length === 0 ? (
-                  <Text style={styles.emptyText}>No join requests</Text>
-                ) : (
-                  incomingJoinRequests.map((request) => (
-                    <View
-                      key={request.request_id}
-                      style={styles.requestItemWide}
-                    >
-                      <View style={styles.requestInfo}>
-                        <Text style={styles.friendName}>
-                          {request.group_name}
-                        </Text>
-                        <Text style={styles.friendStats}>
-                          @{request.username}
-                        </Text>
-                      </View>
-                      <View style={styles.requestActions}>
-                        <Pressable
-                          style={styles.acceptButton}
-                          onPress={async () => {
-                            if (!currentUsername) {
-                              return;
-                            }
-                            await fetch(
-                              `${API_BASE_URL}/groups/requests/${request.request_id}/approve`,
-                              {
-                                method: "POST",
-                                headers: {
-                                  "Content-Type": "application/json",
-                                },
-                                body: JSON.stringify({
-                                  username: currentUsername,
-                                }),
-                              },
-                            );
-                            loadSocialData();
-                          }}
-                        >
-                          <Text style={styles.acceptButtonText}>Accept</Text>
-                        </Pressable>
-                        <Pressable
-                          style={styles.declineButton}
-                          onPress={async () => {
-                            if (!currentUsername) {
-                              return;
-                            }
-                            await fetch(
-                              `${API_BASE_URL}/groups/requests/${request.request_id}/decline`,
-                              {
-                                method: "POST",
-                                headers: {
-                                  "Content-Type": "application/json",
-                                },
-                                body: JSON.stringify({
-                                  username: currentUsername,
-                                }),
-                              },
-                            );
-                            loadSocialData();
-                          }}
-                        >
-                          <Text style={styles.declineButtonText}>Decline</Text>
-                        </Pressable>
-                      </View>
-                    </View>
-                  ))
-                )}
-              </View>
-
-              <View style={styles.requestsSection}>
-                <Text style={styles.requestsTitle}>Outgoing invites</Text>
-                {outgoingGroupInvites.length === 0 ? (
-                  <Text style={styles.emptyText}>No outgoing invites</Text>
-                ) : (
-                  outgoingGroupInvites.map((invite) => (
-                    <View key={invite.invite_id} style={styles.requestItemWide}>
-                      <View style={styles.requestInfo}>
-                        <Text style={styles.friendName}>
-                          {invite.group_name}
-                        </Text>
-                        <Text style={styles.friendStats}>
-                          @{invite.to_username}
-                        </Text>
-                      </View>
-                      <Text style={styles.requestStatus}>Pending</Text>
-                    </View>
-                  ))
-                )}
-              </View>
-
-              <View style={styles.requestsSection}>
-                <Text style={styles.requestsTitle}>Outgoing join requests</Text>
-                {outgoingJoinRequests.length === 0 ? (
-                  <Text style={styles.emptyText}>No outgoing requests</Text>
-                ) : (
-                  outgoingJoinRequests.map((request) => (
-                    <View
-                      key={request.request_id}
-                      style={styles.requestItemWide}
-                    >
-                      <View style={styles.requestInfo}>
-                        <Text style={styles.friendName}>
-                          {request.group_name}
-                        </Text>
-                        <Text style={styles.friendStats}>
-                          @{request.username}
-                        </Text>
-                      </View>
-                      <Text style={styles.requestStatus}>Pending</Text>
-                    </View>
-                  ))
-                )}
-              </View>
-            </ScrollView>
           </Pressable>
         </Pressable>
       </Modal>

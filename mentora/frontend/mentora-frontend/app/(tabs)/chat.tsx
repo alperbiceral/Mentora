@@ -11,7 +11,6 @@ import React, {
 } from "react";
 import {
   Alert,
-  DeviceEventEmitter,
   Image,
   Modal,
   Pressable,
@@ -49,6 +48,7 @@ const SPACING = {
 };
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
+const CHAT_LAST_SEEN_KEY = "mentora.chatLastSeenByThread";
 
 type FriendProfile = {
   username: string;
@@ -216,6 +216,23 @@ export default function ChatScreen() {
     }
   }, []);
 
+  const markThreadSeen = useCallback(async (threadId: number) => {
+    const stored = await AsyncStorage.getItem(CHAT_LAST_SEEN_KEY);
+    let parsed: Record<string, number> = {};
+    if (stored) {
+      try {
+        parsed = JSON.parse(stored) as Record<string, number>;
+      } catch {
+        parsed = {};
+      }
+    }
+    const next = {
+      ...parsed,
+      [String(threadId)]: Date.now(),
+    };
+    await AsyncStorage.setItem(CHAT_LAST_SEEN_KEY, JSON.stringify(next));
+  }, []);
+
   const refreshAll = useCallback(() => {
     let active = true;
     const run = async () => {
@@ -262,15 +279,8 @@ export default function ChatScreen() {
   useFocusEffect(
     useCallback(() => {
       isChatFocusedRef.current = true;
-      DeviceEventEmitter.emit("chatFocus", true);
-      const resetUnread = async () => {
-        await AsyncStorage.setItem("mentora.chatUnreadCount", "0");
-        DeviceEventEmitter.emit("chatUnreadCount", 0);
-      };
-      resetUnread();
       return () => {
         isChatFocusedRef.current = false;
-        DeviceEventEmitter.emit("chatFocus", false);
       };
     }, []),
   );
@@ -336,12 +346,14 @@ export default function ChatScreen() {
       if (activeThread?.is_group) {
         fetchGroupParticipants(activeThreadId);
       }
+      markThreadSeen(activeThreadId);
     }
   }, [
     activeThreadId,
     activeThread?.is_group,
     fetchMessages,
     fetchGroupParticipants,
+    markThreadSeen,
   ]);
 
   useEffect(() => {

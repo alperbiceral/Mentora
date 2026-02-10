@@ -1,10 +1,17 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
-import React, { useCallback, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Alert,
   Image,
+  Modal,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -44,6 +51,8 @@ const SPACING = {
 };
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
+const NOTIFICATIONS_LAST_SEEN_KEY = "mentora.notificationsLastSeenAt";
+const CHAT_LAST_SEEN_KEY = "mentora.chatLastSeenByThread";
 
 type Profile = {
   profile_id: number;
@@ -61,6 +70,61 @@ type Profile = {
   updated_at: string;
 };
 
+type FriendRequest = {
+  request_id: number;
+  from_username: string;
+  to_username: string;
+  status: string;
+  created_at: string;
+};
+
+type FriendRequestsList = {
+  incoming: FriendRequest[];
+  outgoing: FriendRequest[];
+};
+
+type GroupInviteItem = {
+  invite_id: number;
+  group_id: number;
+  group_name: string;
+  group_photo?: string | null;
+  from_username: string;
+  to_username: string;
+  status: string;
+  created_at: string;
+};
+
+type GroupJoinRequestItem = {
+  request_id: number;
+  group_id: number;
+  group_name: string;
+  group_photo?: string | null;
+  username: string;
+  status: string;
+  created_at: string;
+};
+
+type GroupRequestsList = {
+  incoming_invites: GroupInviteItem[];
+  outgoing_invites: GroupInviteItem[];
+  incoming_join_requests: GroupJoinRequestItem[];
+  outgoing_join_requests: GroupJoinRequestItem[];
+};
+
+type ChatThreadItem = {
+  thread_id: number;
+  is_group: boolean;
+  friend_username?: string | null;
+  title?: string | null;
+  owner_username?: string | null;
+  group_photo?: string | null;
+  members_count?: number;
+  last_message?: string | null;
+  last_message_at?: string | null;
+};
+
+type NotificationTab = "friends" | "groups" | "chats";
+
 type Range = "today" | "week";
 
 export default function HomeScreen() {
@@ -73,6 +137,27 @@ export default function HomeScreen() {
   const [language, setLanguage] = useState<SettingsLanguage>("English");
   const [profile, setProfile] = useState<Profile | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notificationTab, setNotificationTab] =
+    useState<NotificationTab>("friends");
+  const [currentUsername, setCurrentUsername] = useState<string | null>(null);
+  const [friendRequests, setFriendRequests] = useState<FriendRequestsList>({
+    incoming: [],
+    outgoing: [],
+  });
+  const [groupRequests, setGroupRequests] = useState<GroupRequestsList>({
+    incoming_invites: [],
+    outgoing_invites: [],
+    incoming_join_requests: [],
+    outgoing_join_requests: [],
+  });
+  const [chatThreads, setChatThreads] = useState<ChatThreadItem[]>([]);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const [notificationBadgeCount, setNotificationBadgeCount] = useState(0);
+  const [chatLastSeenMap, setChatLastSeenMap] = useState<
+    Record<number, number>
+  >({});
+  const notificationsLastSeenRef = useRef(0);
 
   const headerTitle = useMemo(() => {
     if (!profile) {
@@ -136,6 +221,377 @@ export default function HomeScreen() {
   }, []);
 
   useFocusEffect(loadProfile);
+
+  const toTimestampMs = useCallback((value?: string | null) => {
+    if (!value) {
+      return 0;
+    }
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+  }, []);
+
+  const getStoredNotificationsLastSeen = useCallback(async () => {
+    const stored = await AsyncStorage.getItem(NOTIFICATIONS_LAST_SEEN_KEY);
+    const parsed = stored ? Number(stored) : 0;
+    return Number.isFinite(parsed) ? parsed : 0;
+  }, []);
+
+  const getStoredChatLastSeen = useCallback(async () => {
+    const stored = await AsyncStorage.getItem(CHAT_LAST_SEEN_KEY);
+    if (!stored) {
+      return {} as Record<number, number>;
+    }
+    try {
+      const parsed = JSON.parse(stored) as Record<string, number>;
+      return Object.fromEntries(
+        Object.entries(parsed).map(([key, value]) => [
+          Number(key),
+          Number(value) || 0,
+        ]),
+      ) as Record<number, number>;
+    } catch {
+      return {} as Record<number, number>;
+    }
+  }, []);
+
+  const ensureChatLastSeen = useCallback(
+    async (threads: ChatThreadItem[], storedMap: Record<number, number>) => {
+      const hasSeen =
+        Object.keys(storedMap).length > 0 &&
+        Object.values(storedMap).some((value) => value > 0);
+      if (hasSeen || threads.length === 0) {
+        setChatLastSeenMap(storedMap);
+        return storedMap;
+      }
+      const now = Date.now();
+      const seeded = Object.fromEntries(
+        threads.map((thread) => [
+          thread.thread_id,
+          toTimestampMs(thread.last_message_at) || now,
+        ]),
+      ) as Record<number, number>;
+      await AsyncStorage.setItem(CHAT_LAST_SEEN_KEY, JSON.stringify(seeded));
+      setChatLastSeenMap(seeded);
+      return seeded;
+    },
+    [toTimestampMs],
+  );
+
+  const fetchNotifications = useCallback(async () => {
+    setNotificationsLoading(true);
+    try {
+      const storedLastSeen = await getStoredNotificationsLastSeen();
+      const storedChatLastSeen = await getStoredChatLastSeen();
+      notificationsLastSeenRef.current = storedLastSeen;
+
+      let friendUnreadCount = 0;
+      let groupUnreadCount = 0;
+      let chatUnreadCount = 0;
+
+      const username = await AsyncStorage.getItem("mentora.username");
+      if (!username) {
+        setCurrentUsername(null);
+        setFriendRequests({ incoming: [], outgoing: [] });
+        setGroupRequests({
+          incoming_invites: [],
+          outgoing_invites: [],
+          incoming_join_requests: [],
+          outgoing_join_requests: [],
+        });
+        setChatThreads([]);
+        setNotificationBadgeCount(0);
+        return;
+      }
+      setCurrentUsername(username);
+
+      const [friendsRes, groupsRes, threadsRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/friends/requests/${username}`),
+        fetch(
+          `${API_BASE_URL}/groups/requests/${encodeURIComponent(username)}`,
+        ),
+        fetch(`${API_BASE_URL}/chat/threads/${username}`),
+      ]);
+
+      if (friendsRes.ok) {
+        const data = (await friendsRes.json()) as FriendRequestsList;
+        setFriendRequests({
+          incoming: data.incoming ?? [],
+          outgoing: data.outgoing ?? [],
+        });
+        const incomingUnread = (data.incoming ?? []).filter(
+          (request) => toTimestampMs(request.created_at) > storedLastSeen,
+        ).length;
+        friendUnreadCount = incomingUnread;
+      } else {
+        setFriendRequests({ incoming: [], outgoing: [] });
+      }
+
+      if (groupsRes.ok) {
+        const data = (await groupsRes.json()) as GroupRequestsList;
+        setGroupRequests({
+          incoming_invites: data.incoming_invites ?? [],
+          outgoing_invites: data.outgoing_invites ?? [],
+          incoming_join_requests: data.incoming_join_requests ?? [],
+          outgoing_join_requests: data.outgoing_join_requests ?? [],
+        });
+        const inviteUnread = (data.incoming_invites ?? []).filter(
+          (invite) => toTimestampMs(invite.created_at) > storedLastSeen,
+        ).length;
+        const joinUnread = (data.incoming_join_requests ?? []).filter(
+          (request) => toTimestampMs(request.created_at) > storedLastSeen,
+        ).length;
+        groupUnreadCount = inviteUnread + joinUnread;
+      } else {
+        setGroupRequests({
+          incoming_invites: [],
+          outgoing_invites: [],
+          incoming_join_requests: [],
+          outgoing_join_requests: [],
+        });
+      }
+
+      if (threadsRes.ok) {
+        const data = await threadsRes.json();
+        setChatThreads(data.threads ?? []);
+        const chatLastSeen = await ensureChatLastSeen(
+          data.threads ?? [],
+          storedChatLastSeen,
+        );
+        const chatUnread = (data.threads ?? []).filter(
+          (thread: ChatThreadItem) => {
+            const lastMessageAt = toTimestampMs(thread.last_message_at);
+            if (!lastMessageAt) {
+              return false;
+            }
+            return lastMessageAt > storedLastSeen;
+          },
+        ).length;
+        chatUnreadCount = chatUnread;
+      } else {
+        setChatThreads([]);
+      }
+
+      setNotificationBadgeCount(
+        friendUnreadCount + groupUnreadCount + chatUnreadCount,
+      );
+    } finally {
+      setNotificationsLoading(false);
+    }
+  }, [
+    ensureChatLastSeen,
+    getStoredChatLastSeen,
+    getStoredNotificationsLastSeen,
+    toTimestampMs,
+  ]);
+
+  useEffect(() => {
+    if (!notificationsOpen) {
+      return;
+    }
+
+    fetchNotifications();
+  }, [notificationsOpen, fetchNotifications]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchNotifications();
+      const interval = setInterval(() => {
+        fetchNotifications();
+      }, 15000);
+      return () => clearInterval(interval);
+    }, [fetchNotifications]),
+  );
+
+  const markNotificationsSeen = useCallback(async () => {
+    const now = Date.now();
+    await AsyncStorage.setItem(NOTIFICATIONS_LAST_SEEN_KEY, String(now));
+    notificationsLastSeenRef.current = now;
+    setNotificationBadgeCount(0);
+  }, []);
+
+  const handleOpenNotifications = async () => {
+    setNotificationTab("friends");
+    await markNotificationsSeen();
+    setNotificationsOpen(true);
+  };
+
+  const handleFriendRequestAction = async (
+    requestId: number,
+    action: "accept" | "decline" | "cancel",
+  ) => {
+    try {
+      const username = await AsyncStorage.getItem("mentora.username");
+      if (!username) {
+        return;
+      }
+      const response = await fetch(
+        `${API_BASE_URL}/friends/requests/${requestId}/${action}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username }),
+        },
+      );
+      if (!response.ok) {
+        const message = await response.json().catch(() => null);
+        throw new Error(message?.detail ?? "Request failed");
+      }
+      await fetchNotifications();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Request failed";
+      Alert.alert("Error", message);
+    }
+  };
+
+  const handleGroupInviteAction = async (
+    inviteId: number,
+    action: "accept" | "decline",
+  ) => {
+    try {
+      const username = await AsyncStorage.getItem("mentora.username");
+      if (!username) {
+        return;
+      }
+      const response = await fetch(
+        `${API_BASE_URL}/groups/invites/${inviteId}/${action}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username }),
+        },
+      );
+      if (!response.ok) {
+        const message = await response.json().catch(() => null);
+        throw new Error(message?.detail ?? "Invite action failed");
+      }
+      await fetchNotifications();
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Invite action failed";
+      Alert.alert("Error", message);
+    }
+  };
+
+  const handleJoinRequestAction = async (
+    requestId: number,
+    action: "approve" | "decline",
+  ) => {
+    try {
+      const username = await AsyncStorage.getItem("mentora.username");
+      if (!username) {
+        return;
+      }
+      const response = await fetch(
+        `${API_BASE_URL}/groups/requests/${requestId}/${action}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username }),
+        },
+      );
+      if (!response.ok) {
+        const message = await response.json().catch(() => null);
+        throw new Error(message?.detail ?? "Request action failed");
+      }
+      await fetchNotifications();
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Request action failed";
+      Alert.alert("Error", message);
+    }
+  };
+
+  const formatNotificationTimestamp = (value?: string | null) => {
+    if (!value) {
+      return "";
+    }
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return "";
+    }
+    const datePart = date.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+    });
+    const timePart = date.toLocaleTimeString(undefined, {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    return `${datePart} ${timePart}`;
+  };
+
+  const unreadChatThreads = useMemo(() => {
+    return chatThreads.filter((thread) => {
+      const lastMessageAt = toTimestampMs(thread.last_message_at);
+      if (!lastMessageAt) {
+        return false;
+      }
+      const seenAt = chatLastSeenMap[thread.thread_id] ?? 0;
+      return lastMessageAt > seenAt;
+    });
+  }, [chatLastSeenMap, chatThreads, toTimestampMs]);
+
+  useEffect(() => {
+    if (!currentUsername) {
+      return;
+    }
+
+    const wsUrl = API_BASE_URL.replace(/^http/, "ws").concat(
+      `/chat/ws/${currentUsername}`,
+    );
+    const ws = new WebSocket(wsUrl);
+
+    ws.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload.type !== "message") {
+          return;
+        }
+        const message = payload.message as {
+          thread_id: number;
+          content: string;
+          created_at: string;
+        };
+        setChatThreads((prev) => {
+          const existing = prev.find(
+            (thread) => thread.thread_id === message.thread_id,
+          );
+          const next = existing
+            ? prev.map((thread) =>
+                thread.thread_id === message.thread_id
+                  ? {
+                      ...thread,
+                      last_message: message.content,
+                      last_message_at: message.created_at,
+                    }
+                  : thread,
+              )
+            : prev;
+          const lastSeen = notificationsLastSeenRef.current;
+          const prevLastMessageAt = existing
+            ? toTimestampMs(existing.last_message_at)
+            : 0;
+          const newMessageAt = toTimestampMs(message.created_at);
+          const shouldIncrement =
+            newMessageAt > lastSeen && prevLastMessageAt <= lastSeen;
+          if (shouldIncrement) {
+            setNotificationBadgeCount((count) => count + 1);
+          }
+          return next;
+        });
+      } catch (error) {
+        // ignore
+      }
+    };
+
+    ws.onerror = () => {
+      // ignore
+    };
+
+    return () => {
+      ws.close();
+    };
+  }, [currentUsername, toTimestampMs]);
 
   const handleLogout = async () => {
     try {
@@ -201,6 +657,8 @@ export default function HomeScreen() {
             streakCount={profile?.streak_count ?? 0}
             profilePhoto={profile?.profile_photo ?? null}
             onOpenSettings={() => setSettingsOpen(true)}
+            onOpenNotifications={handleOpenNotifications}
+            notificationCount={notificationBadgeCount}
             loading={profileLoading}
           />
 
@@ -232,12 +690,370 @@ export default function HomeScreen() {
         onLogout={handleLogout}
         onChangePassword={handleChangePassword}
       />
+
+      <Modal
+        visible={notificationsOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setNotificationsOpen(false)}
+      >
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => setNotificationsOpen(false)}
+        >
+          <Pressable
+            style={styles.notificationsCard}
+            onPress={(event) => event.stopPropagation()}
+          >
+            <View style={styles.modalHeaderRow}>
+              <Text style={styles.modalTitle}>Notifications</Text>
+              <Pressable
+                style={styles.modalClose}
+                onPress={() => setNotificationsOpen(false)}
+              >
+                <Ionicons name="close" size={16} color={COLORS.textSecondary} />
+              </Pressable>
+            </View>
+
+            <View style={styles.notificationTabsRow}>
+              <Pressable
+                style={[
+                  styles.notificationTab,
+                  notificationTab === "friends" && styles.notificationTabActive,
+                ]}
+                onPress={() => setNotificationTab("friends")}
+              >
+                <Text
+                  style={[
+                    styles.notificationTabText,
+                    notificationTab === "friends" &&
+                      styles.notificationTabTextActive,
+                  ]}
+                >
+                  Friend requests
+                </Text>
+              </Pressable>
+
+              <Pressable
+                style={[
+                  styles.notificationTab,
+                  notificationTab === "groups" && styles.notificationTabActive,
+                ]}
+                onPress={() => setNotificationTab("groups")}
+              >
+                <Text
+                  style={[
+                    styles.notificationTabText,
+                    notificationTab === "groups" &&
+                      styles.notificationTabTextActive,
+                  ]}
+                >
+                  Group requests
+                </Text>
+              </Pressable>
+
+              <Pressable
+                style={[
+                  styles.notificationTab,
+                  notificationTab === "chats" && styles.notificationTabActive,
+                ]}
+                onPress={() => setNotificationTab("chats")}
+              >
+                <Text
+                  style={[
+                    styles.notificationTabText,
+                    notificationTab === "chats" &&
+                      styles.notificationTabTextActive,
+                  ]}
+                >
+                  Chat messages
+                </Text>
+              </Pressable>
+            </View>
+
+            <ScrollView
+              style={styles.notificationsScroll}
+              contentContainerStyle={styles.notificationsContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {notificationsLoading ? (
+                <Text style={styles.emptyText}>Loading notifications...</Text>
+              ) : null}
+
+              {!notificationsLoading && notificationTab === "friends" ? (
+                <View style={styles.notificationSection}>
+                  <Text style={styles.sectionTitle}>Incoming</Text>
+                  {friendRequests.incoming.length === 0 ? (
+                    <Text style={styles.emptyText}>No incoming requests.</Text>
+                  ) : (
+                    friendRequests.incoming.map((request) => (
+                      <View
+                        key={request.request_id}
+                        style={styles.notificationItem}
+                      >
+                        <View style={styles.notificationInfo}>
+                          <Text style={styles.notificationTitle}>
+                            @{request.from_username}
+                          </Text>
+                          <Text style={styles.notificationSubtitle}>
+                            sent you a friend request
+                          </Text>
+                        </View>
+                        <View style={styles.actionRow}>
+                          <Pressable
+                            style={styles.actionButtonPrimary}
+                            onPress={() =>
+                              handleFriendRequestAction(
+                                request.request_id,
+                                "accept",
+                              )
+                            }
+                          >
+                            <Text style={styles.actionButtonTextPrimary}>
+                              Accept
+                            </Text>
+                          </Pressable>
+                          <Pressable
+                            style={styles.actionButton}
+                            onPress={() =>
+                              handleFriendRequestAction(
+                                request.request_id,
+                                "decline",
+                              )
+                            }
+                          >
+                            <Text style={styles.actionButtonText}>Decline</Text>
+                          </Pressable>
+                        </View>
+                      </View>
+                    ))
+                  )}
+
+                  <Text style={styles.sectionTitle}>Outgoing</Text>
+                  {friendRequests.outgoing.length === 0 ? (
+                    <Text style={styles.emptyText}>No outgoing requests.</Text>
+                  ) : (
+                    friendRequests.outgoing.map((request) => (
+                      <View
+                        key={request.request_id}
+                        style={styles.notificationItem}
+                      >
+                        <View style={styles.notificationInfo}>
+                          <Text style={styles.notificationTitle}>
+                            @{request.to_username}
+                          </Text>
+                          <Text style={styles.notificationSubtitle}>
+                            pending request
+                          </Text>
+                        </View>
+                        <Pressable
+                          style={styles.actionButton}
+                          onPress={() =>
+                            handleFriendRequestAction(
+                              request.request_id,
+                              "cancel",
+                            )
+                          }
+                        >
+                          <Text style={styles.actionButtonText}>Cancel</Text>
+                        </Pressable>
+                      </View>
+                    ))
+                  )}
+                </View>
+              ) : null}
+
+              {!notificationsLoading && notificationTab === "groups" ? (
+                <View style={styles.notificationSection}>
+                  <Text style={styles.sectionTitle}>Group invites</Text>
+                  {groupRequests.incoming_invites.length === 0 ? (
+                    <Text style={styles.emptyText}>No group invites.</Text>
+                  ) : (
+                    groupRequests.incoming_invites.map((invite) => (
+                      <View
+                        key={invite.invite_id}
+                        style={styles.notificationItem}
+                      >
+                        <View style={styles.notificationInfo}>
+                          <Text style={styles.notificationTitle}>
+                            {invite.group_name}
+                          </Text>
+                          <Text style={styles.notificationSubtitle}>
+                            Invite from @{invite.from_username}
+                          </Text>
+                        </View>
+                        <View style={styles.actionRow}>
+                          <Pressable
+                            style={styles.actionButtonPrimary}
+                            onPress={() =>
+                              handleGroupInviteAction(
+                                invite.invite_id,
+                                "accept",
+                              )
+                            }
+                          >
+                            <Text style={styles.actionButtonTextPrimary}>
+                              Accept
+                            </Text>
+                          </Pressable>
+                          <Pressable
+                            style={styles.actionButton}
+                            onPress={() =>
+                              handleGroupInviteAction(
+                                invite.invite_id,
+                                "decline",
+                              )
+                            }
+                          >
+                            <Text style={styles.actionButtonText}>Decline</Text>
+                          </Pressable>
+                        </View>
+                      </View>
+                    ))
+                  )}
+
+                  <Text style={styles.sectionTitle}>Join requests</Text>
+                  {groupRequests.incoming_join_requests.length === 0 ? (
+                    <Text style={styles.emptyText}>No join requests.</Text>
+                  ) : (
+                    groupRequests.incoming_join_requests.map((request) => (
+                      <View
+                        key={request.request_id}
+                        style={styles.notificationItem}
+                      >
+                        <View style={styles.notificationInfo}>
+                          <Text style={styles.notificationTitle}>
+                            {request.group_name}
+                          </Text>
+                          <Text style={styles.notificationSubtitle}>
+                            Request from @{request.username}
+                          </Text>
+                        </View>
+                        <View style={styles.actionRow}>
+                          <Pressable
+                            style={styles.actionButtonPrimary}
+                            onPress={() =>
+                              handleJoinRequestAction(
+                                request.request_id,
+                                "approve",
+                              )
+                            }
+                          >
+                            <Text style={styles.actionButtonTextPrimary}>
+                              Approve
+                            </Text>
+                          </Pressable>
+                          <Pressable
+                            style={styles.actionButton}
+                            onPress={() =>
+                              handleJoinRequestAction(
+                                request.request_id,
+                                "decline",
+                              )
+                            }
+                          >
+                            <Text style={styles.actionButtonText}>Decline</Text>
+                          </Pressable>
+                        </View>
+                      </View>
+                    ))
+                  )}
+
+                  <Text style={styles.sectionTitle}>Pending outgoing</Text>
+                  {groupRequests.outgoing_invites.length === 0 &&
+                  groupRequests.outgoing_join_requests.length === 0 ? (
+                    <Text style={styles.emptyText}>No pending outgoing.</Text>
+                  ) : (
+                    <View style={styles.notificationSectionList}>
+                      {groupRequests.outgoing_invites.map((invite) => (
+                        <View
+                          key={`invite-${invite.invite_id}`}
+                          style={styles.notificationItem}
+                        >
+                          <View style={styles.notificationInfo}>
+                            <Text style={styles.notificationTitle}>
+                              {invite.group_name}
+                            </Text>
+                            <Text style={styles.notificationSubtitle}>
+                              Invite sent to @{invite.to_username}
+                            </Text>
+                          </View>
+                          <Text style={styles.notificationMeta}>Pending</Text>
+                        </View>
+                      ))}
+                      {groupRequests.outgoing_join_requests.map((request) => (
+                        <View
+                          key={`join-${request.request_id}`}
+                          style={styles.notificationItem}
+                        >
+                          <View style={styles.notificationInfo}>
+                            <Text style={styles.notificationTitle}>
+                              {request.group_name}
+                            </Text>
+                            <Text style={styles.notificationSubtitle}>
+                              Join request sent
+                            </Text>
+                          </View>
+                          <Text style={styles.notificationMeta}>Pending</Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              ) : null}
+
+              {!notificationsLoading && notificationTab === "chats" ? (
+                <View style={styles.notificationSection}>
+                  {unreadChatThreads.length === 0 ? (
+                    <Text style={styles.emptyText}>No new messages.</Text>
+                  ) : (
+                    unreadChatThreads.map((thread) => {
+                      const title = thread.is_group
+                        ? (thread.title ?? "Group chat")
+                        : (thread.friend_username ?? "Direct message");
+                      return (
+                        <Pressable
+                          key={thread.thread_id}
+                          style={styles.notificationItem}
+                          onPress={() => {
+                            setNotificationsOpen(false);
+                            router.push({
+                              pathname: "/chat",
+                              params: { thread: String(thread.thread_id) },
+                            });
+                          }}
+                        >
+                          <View style={styles.notificationInfo}>
+                            <Text style={styles.notificationTitle}>
+                              {title}
+                            </Text>
+                            <Text style={styles.notificationSubtitle}>
+                              {thread.last_message ?? "No messages yet"}
+                            </Text>
+                          </View>
+                          <Text style={styles.notificationMeta}>
+                            {formatNotificationTimestamp(
+                              thread.last_message_at,
+                            )}
+                          </Text>
+                        </Pressable>
+                      );
+                    })
+                  )}
+                </View>
+              ) : null}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
 
 const HeaderCard: React.FC<{
   onOpenSettings: () => void;
+  onOpenNotifications: () => void;
+  notificationCount: number;
   title: string;
   subtitle: string;
   streakCount: number;
@@ -245,6 +1061,8 @@ const HeaderCard: React.FC<{
   loading: boolean;
 }> = ({
   onOpenSettings,
+  onOpenNotifications,
+  notificationCount,
   title,
   subtitle,
   streakCount,
@@ -292,6 +1110,25 @@ const HeaderCard: React.FC<{
             />
             <Text style={styles.streakText}>{streakCount} day</Text>
           </View>
+
+          <Pressable
+            hitSlop={12}
+            style={styles.notificationButton}
+            onPress={onOpenNotifications}
+          >
+            <Ionicons
+              name="notifications-outline"
+              size={20}
+              color={COLORS.textSecondary}
+            />
+            {notificationCount > 0 ? (
+              <View style={styles.notificationBadge}>
+                <Text style={styles.notificationBadgeText}>
+                  {notificationCount}
+                </Text>
+              </View>
+            ) : null}
+          </Pressable>
 
           <Pressable
             hitSlop={12}
@@ -606,6 +1443,140 @@ const styles = StyleSheet.create({
     maxWidth: 430,
     paddingHorizontal: SPACING.lg,
   },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(2,6,23,0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: SPACING.lg,
+  },
+  notificationsCard: {
+    width: "100%",
+    maxWidth: 420,
+    maxHeight: "82%",
+    backgroundColor: COLORS.card,
+    borderRadius: 20,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.borderSoft,
+  },
+  modalHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: SPACING.sm,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: COLORS.textPrimary,
+  },
+  modalClose: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(15,23,42,0.7)",
+  },
+  notificationTabsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: SPACING.sm,
+  },
+  notificationTab: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: COLORS.borderSoft,
+    backgroundColor: "rgba(15,23,42,0.4)",
+  },
+  notificationTabActive: {
+    backgroundColor: COLORS.accent,
+    borderColor: COLORS.accent,
+  },
+  notificationTabText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: COLORS.textSecondary,
+  },
+  notificationTabTextActive: {
+    color: "#0B1020",
+  },
+  notificationsScroll: {
+    marginTop: SPACING.xs,
+  },
+  notificationsContent: {
+    paddingBottom: SPACING.lg,
+    gap: SPACING.md,
+  },
+  notificationSection: {
+    gap: SPACING.sm,
+  },
+  notificationSectionList: {
+    gap: SPACING.sm,
+  },
+  notificationItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "rgba(30, 41, 59, 0.95)",
+    borderRadius: 12,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    gap: SPACING.sm,
+  },
+  notificationInfo: {
+    flex: 1,
+  },
+  notificationTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: COLORS.textPrimary,
+  },
+  notificationSubtitle: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  notificationMeta: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+  },
+  actionRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  actionButtonPrimary: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    backgroundColor: COLORS.accent,
+  },
+  actionButtonTextPrimary: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#0B1020",
+  },
+  actionButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.borderSubtle,
+  },
+  actionButtonText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: COLORS.textPrimary,
+  },
+  emptyText: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
   scrollContent: {
     paddingTop: SPACING.lg,
     paddingBottom: SPACING.xl * 2,
@@ -675,6 +1646,33 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
     color: COLORS.accent,
+  },
+  notificationButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(15,23,42,0.8)",
+    marginRight: SPACING.xs,
+    position: "relative",
+  },
+  notificationBadge: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#EF4444",
+  },
+  notificationBadgeText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
   settingsButton: {
     width: 32,
