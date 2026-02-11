@@ -93,6 +93,56 @@ class StudySessionResponse(BaseModel):
         from_attributes = True
 
 
+class CourseBlockCreate(BaseModel):
+    day: str
+    start: str
+    end: str
+
+
+class CourseCreate(BaseModel):
+    username: str
+    name: str
+    description: Optional[str] = None
+    instructor: Optional[str] = None
+    location: Optional[str] = None
+    color: Optional[str] = None
+    blocks: list[CourseBlockCreate] = []
+
+
+class CourseUpdate(BaseModel):
+    username: str
+    name: str
+    description: Optional[str] = None
+    instructor: Optional[str] = None
+    location: Optional[str] = None
+    color: Optional[str] = None
+    blocks: list[CourseBlockCreate] = []
+
+
+class CourseBlockResponse(BaseModel):
+    block_id: int
+    day: str
+    start: str
+    end: str
+
+    class Config:
+        from_attributes = True
+
+
+class CourseResponse(BaseModel):
+    course_id: int
+    username: str
+    name: str
+    description: Optional[str]
+    instructor: Optional[str]
+    location: Optional[str]
+    color: Optional[str]
+    blocks: list[CourseBlockResponse] = []
+
+    class Config:
+        from_attributes = True
+
+
 class Token(BaseModel):
     access_token: str
     token_type: str

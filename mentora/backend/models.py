@@ -308,6 +308,44 @@ class AcademicInfo(Base):
     user = relationship("User", back_populates="academic_info")
 
 
+class Course(Base):
+    __tablename__ = "courses"
+
+    course_id: Mapped[int] = mapped_column(primary_key=True)
+    username: Mapped[str] = mapped_column(String(50), nullable=False)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    instructor: Mapped[Optional[str]] = mapped_column(String(120))
+    location: Mapped[Optional[str]] = mapped_column(String(120))
+    color: Mapped[Optional[str]] = mapped_column(String(20))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+    )
+
+    blocks = relationship(
+        "CourseBlock",
+        back_populates="course",
+        cascade="all, delete-orphan",
+    )
+
+
+class CourseBlock(Base):
+    __tablename__ = "course_blocks"
+
+    block_id: Mapped[int] = mapped_column(primary_key=True)
+    course_id: Mapped[int] = mapped_column(
+        ForeignKey("courses.course_id"),
+        nullable=False,
+    )
+    day: Mapped[str] = mapped_column(String(3), nullable=False)
+    start: Mapped[str] = mapped_column(String(5), nullable=False)
+    end: Mapped[str] = mapped_column(String(5), nullable=False)
+
+    course = relationship("Course", back_populates="blocks")
+
+
 class Plan(Base):
     __tablename__ = "plan"
 

@@ -96,7 +96,7 @@ export default function OceanQuestionScreen() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ value: selected }),
       });
@@ -109,12 +109,15 @@ export default function OceanQuestionScreen() {
       if (isLast) {
         // Save personality profile to database after last question
         try {
-          const saveResponse = await fetch(`${API_BASE_URL}/ocean/profile/save`, {
-            method: "POST",
-            headers: {
-              "Authorization": `Bearer ${token}`,
+          const saveResponse = await fetch(
+            `${API_BASE_URL}/ocean/profile/save`,
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
             },
-          });
+          );
 
           if (saveResponse.ok) {
             setStatus("saved");
@@ -197,7 +200,15 @@ export default function OceanQuestionScreen() {
                       isSelected && styles.optionLabelSelected,
                     ]}
                   >
-                    {value === 1 ? "Definitely Not" : value === 2 ? "Not much" : value === 3 ? "Neutral" : value === 4 ? "Pretty much" : "Definitely"}
+                    {value === 1
+                      ? "Definitely Not"
+                      : value === 2
+                        ? "Not much"
+                        : value === 3
+                          ? "Neutral"
+                          : value === 4
+                            ? "Pretty much"
+                            : "Definitely"}
                   </Text>
                 </Pressable>
               );
