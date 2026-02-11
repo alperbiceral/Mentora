@@ -88,6 +88,9 @@ export default function AuthScreen() {
       if (data?.user?.email) {
         await AsyncStorage.setItem("mentora.email", data.user.email);
       }
+      if (data?.access_token) {
+        await AsyncStorage.setItem("mentora.token", data.access_token);
+      }
       Alert.alert(isRegister ? "Registered" : "Logged in");
       router.replace("/(tabs)");
     } catch (err) {

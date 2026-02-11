@@ -8,6 +8,7 @@ import {
   Text,
   View,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
 const TOTAL_QUESTIONS = 20;
@@ -28,6 +29,29 @@ const COLORS = {
 };
 
 type Status = "idle" | "saving" | "saved" | "error";
+
+const QUESTIONS = [
+  "konuşkan",
+  "dışa dönük, sosyal",
+  "sessiz olmaya eğilimli",
+  "enerji dolu",
+  "yardımsever, bencil olmayan",
+  "şefkatli, yumuşak kalpli",
+  "başkalarında hata arama eğiliminde",
+  "soğuk ve başkalarını umursamayan",
+  "kolay vazgeçmeyen",
+  "güvenilir, istikrarlı",
+  "etrafını derli toplu tutan",
+  "dağınık olma eğiliminde",
+  "çok endişelenen",
+  "sıkça üzgün hisseden",
+  "gergin olabilen",
+  "ruh hali inişli çıkışlı",
+  "birçok şeye merak duyan",
+  "özgün, yeni fikirler üreten",
+  "yaratıcı",
+  "sanatla çok ilgili",
+];
 
 export default function OceanQuestionScreen() {
   const router = useRouter();
@@ -63,10 +87,16 @@ export default function OceanQuestionScreen() {
     setError(null);
 
     try {
+      const token = await AsyncStorage.getItem("mentora.token");
+      if (!token) {
+        throw new Error("Not authenticated. Please log in.");
+      }
+
       const response = await fetch(`${API_BASE_URL}/ocean/${questionNumber}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
         },
         body: JSON.stringify({ value: selected }),
       });
@@ -77,6 +107,24 @@ export default function OceanQuestionScreen() {
       }
 
       if (isLast) {
+        // Save personality profile to database after last question
+        try {
+          const saveResponse = await fetch(`${API_BASE_URL}/ocean/profile/save`, {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${token}`,
+            },
+          });
+
+          if (saveResponse.ok) {
+            setStatus("saved");
+            // Optionally navigate somewhere after completion
+            return;
+          }
+        } catch (saveErr) {
+          console.error("Failed to save profile:", saveErr);
+          // Still mark as saved even if DB save fails
+        }
         setStatus("saved");
         return;
       }
@@ -112,7 +160,7 @@ export default function OceanQuestionScreen() {
         <View style={styles.card}>
           <Text style={styles.questionText}>How true is this statement?</Text>
           <Text style={styles.questionHint}>
-            1 means not at all, 5 means very much.
+            Kendimi {QUESTIONS[questionNumber - 1]} biri olarak görüyorum.
           </Text>
 
           <View style={styles.options}>

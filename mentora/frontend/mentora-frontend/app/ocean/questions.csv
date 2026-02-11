@@ -1,0 +1,21 @@
+question,openness,conscientiousness,extraversion,agreeableness,neuroticism
+"konuşkan",0,0,1,0,0
+"dışa dönük, sosyal",0,0,1,0,0
+"sessiz olmaya eğilimli",0,0,-1,0,0
+"enerji dolu",0,0,-1,0,0
+"yardımsever, bencil olmayan",0,0,0,1,0
+"şefkatli, yumuşak kalpli",0,0,0,1,0
+"başkalarında hata arama eğiliminde",0,0,0,-1,0
+"soğuk ve başkalarını umursamayan",0,0,0,-1,0
+"kolay vazgeçmeyen",0,1,0,0,0
+"güvenilir, istikrarlı",0,1,0,0,0
+"etrafını derli toplu tutan",0,1,0,0,0
+"dağınık olma eğiliminde",0,-1,0,0,0
+"çok endişelenen",0,0,0,0,1
+"sıkça üzgün hisseden"0,0,0,0,1
+"gergin olabilen",0,0,0,0,1
+"ruh hali inişli çıkışlı",0,0,0,0,1
+"birçok şeye merak duyan",1,0,0,0,0
+"özgün, yeni fikirler üreten",1,0,0,0,0
+"yaratıcı",1,0,0,0,0
+"sanatla çok ilgili",1,0,0,0,0
