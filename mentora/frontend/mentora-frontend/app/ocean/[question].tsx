@@ -118,7 +118,10 @@ export default function OceanQuestionScreen() {
 
           if (saveResponse.ok) {
             setStatus("saved");
-            // Optionally navigate somewhere after completion
+            // Navigate to main app after profile is saved
+            setTimeout(() => {
+              router.replace("/(tabs)");
+            }, 150);
             return;
           }
         } catch (saveErr) {
@@ -126,6 +129,10 @@ export default function OceanQuestionScreen() {
           // Still mark as saved even if DB save fails
         }
         setStatus("saved");
+        // Navigate to main app after completing all questions
+        setTimeout(() => {
+          router.replace("/(tabs)");
+        }, 150);
         return;
       }
       setStatus("saved");
@@ -148,7 +155,7 @@ export default function OceanQuestionScreen() {
 
       <View style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.eyebrow}>Ocean profile</Text>
+          <Text style={styles.eyebrow}>Personality Test</Text>
           <Text style={styles.title}>
             Question {questionNumber} of {TOTAL_QUESTIONS}
           </Text>
@@ -158,10 +165,10 @@ export default function OceanQuestionScreen() {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.questionText}>How true is this statement?</Text>
-          <Text style={styles.questionHint}>
+          <Text style={styles.questionText}>
             Kendimi {QUESTIONS[questionNumber - 1]} biri olarak görüyorum.
           </Text>
+          <Text style={styles.questionHint}>How true is this statement?</Text>
 
           <View style={styles.options}>
             {OPTIONS.map((value) => {
@@ -190,7 +197,7 @@ export default function OceanQuestionScreen() {
                       isSelected && styles.optionLabelSelected,
                     ]}
                   >
-                    {value <= 2 ? "Not much" : value === 3 ? "Neutral" : "A lot"}
+                    {value === 1 ? "Definitely Not" : value === 2 ? "Not much" : value === 3 ? "Neutral" : value === 4 ? "Pretty much" : "Definitely"}
                   </Text>
                 </Pressable>
               );
