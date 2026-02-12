@@ -2,10 +2,23 @@ from typing import List, Optional
 
 from datetime import date
 
+import warnings
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from transformers import pipeline
+
+# Suppress known non-actionable warnings from HF libraries
+warnings.filterwarnings(
+    "ignore",
+    category=FutureWarning,
+    module=r"huggingface_hub.file_download",
+)
+warnings.filterwarnings(
+    "ignore",
+    category=UserWarning,
+    message=r"`return_all_scores` is now deprecated.*",
+)
 
 from deps import get_db
 from models import Emotion, User
@@ -16,7 +29,7 @@ router = APIRouter(prefix="/emotion", tags=["emotion"])
 classifier = pipeline(
     "text-classification",
     model="j-hartmann/emotion-english-distilroberta-base",
-    return_all_scores=True,
+    top_k=None,
 )
 
 

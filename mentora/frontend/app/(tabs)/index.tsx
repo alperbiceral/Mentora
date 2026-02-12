@@ -1363,12 +1363,14 @@ const RecommendationCard = () => {
 };
 
 const CarouselSection = () => {
+  const router = useRouter();
+
   return (
     <View style={styles.carouselSection}>
       <View style={styles.carouselRow}>
         <Pressable
           style={styles.carouselCard}
-          onPress={() => console.log("Daily emotion check")}
+          onPress={() => router.push("/emotion")}
         >
           <View style={styles.carouselHeaderRow}>
             <Ionicons
