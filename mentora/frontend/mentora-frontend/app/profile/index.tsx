@@ -12,19 +12,7 @@ import {
   Image,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
-const COLORS = {
-  // Match Home dark theme
-  background: "#0B1220",
-  card: "rgba(15,23,42,0.85)",
-  textPrimary: "#EAF0FF",
-  textSecondary: "#9CA3AF",
-  textMuted: "#6B7280",
-  borderSubtle: "rgba(148,163,184,0.35)",
-  accent: "#6D5EF7",
-  accentSoft: "#6D5EF7",
-  shadow: "#000000",
-};
+import { useTheme, type ThemeColors } from "../../context/ThemeContext";
 
 const SPACING = {
   sm: 12,
@@ -53,6 +41,8 @@ type Profile = {
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const { colors: COLORS, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(COLORS, isDark), [COLORS, isDark]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -287,7 +277,8 @@ const InsightRow: React.FC<InsightRowProps> = ({ icon, label, value }) => (
   </View>
 );
 
-const styles = StyleSheet.create({
+const createStyles = (COLORS: ThemeColors, isDark: boolean) =>
+  StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: COLORS.background,
@@ -313,7 +304,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(15,23,42,0.8)",
+    backgroundColor: isDark ? "rgba(15,23,42,0.8)" : "rgba(2,6,23,0.06)",
   },
   topBarSpacer: {
     flex: 1,
@@ -321,7 +312,7 @@ const styles = StyleSheet.create({
   streakPill: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(30,41,59,0.95)",
+    backgroundColor: isDark ? "rgba(30,41,59,0.95)" : "rgba(77,163,255,0.12)",
     paddingHorizontal: SPACING.sm,
     paddingVertical: 6,
     borderRadius: 999,

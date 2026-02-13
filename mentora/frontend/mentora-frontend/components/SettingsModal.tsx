@@ -10,14 +10,13 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { useTheme } from "../context/ThemeContext";
 
 export type SettingsLanguage = "English" | "Turkish";
 
 type Props = {
   visible: boolean;
   onClose: () => void;
-  darkMode: boolean;
-  setDarkMode: (v: boolean) => void;
   vibration: boolean;
   setVibration: (v: boolean) => void;
   notifications: boolean;
@@ -31,8 +30,6 @@ type Props = {
 export function SettingsModal({
   visible,
   onClose,
-  darkMode,
-  setDarkMode,
   vibration,
   setVibration,
   notifications,
@@ -42,6 +39,7 @@ export function SettingsModal({
   onLogout,
   onChangePassword,
 }: Props) {
+  const { isDark, setDarkMode, colors } = useTheme();
   const [languageOpen, setLanguageOpen] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [oldPassword, setOldPassword] = useState("");
@@ -66,23 +64,28 @@ export function SettingsModal({
         <View style={styles.centerWrap}>
           {/* Prevent backdrop press when interacting with the card */}
           <Pressable
-            style={styles.card}
+            style={[
+              styles.card,
+              { backgroundColor: colors.backgroundAlt, borderColor: colors.accent },
+            ]}
             onPress={() => {
               // noop: keeps taps inside from closing
             }}
           >
             <View style={styles.headerRow}>
               <View style={{ width: 28 }} />
-              <Text style={styles.title}>Settings</Text>
+              <Text style={[styles.title, { color: colors.textPrimary }]}>
+                Settings
+              </Text>
               <Pressable hitSlop={10} onPress={onClose} style={styles.closeBtn}>
-                <Ionicons name="close" size={20} color="#111827" />
+                <Ionicons name="close" size={20} color={colors.textPrimary} />
               </Pressable>
             </View>
 
             <View style={styles.rows}>
               <SettingSwitchRow
                 label="Dark Mode"
-                value={darkMode}
+                value={isDark}
                 onValueChange={setDarkMode}
               />
               <SettingSwitchRow
@@ -97,22 +100,42 @@ export function SettingsModal({
               />
 
               <View style={styles.row}>
-                <Text style={styles.rowLabel}>Language</Text>
+                <Text style={[styles.rowLabel, { color: colors.textPrimary }]}>
+                  Language
+                </Text>
                 <View style={styles.languageWrap}>
                   <Pressable
-                    style={styles.languageButton}
+                    style={[
+                      styles.languageButton,
+                      {
+                        backgroundColor: isDark
+                          ? "rgba(15,23,42,0.7)"
+                          : "rgba(2,6,23,0.06)",
+                        borderColor: colors.borderSoft,
+                      },
+                    ]}
                     onPress={() => setLanguageOpen((v) => !v)}
                   >
-                    <Text style={styles.languageText}>{language}</Text>
+                    <Text style={[styles.languageText, { color: colors.textPrimary }]}>
+                      {language}
+                    </Text>
                     <Ionicons
                       name={languageOpen ? "chevron-up" : "chevron-down"}
                       size={18}
-                      color="#6B7280"
+                      color={colors.textMuted}
                     />
                   </Pressable>
 
                   {languageOpen ? (
-                    <View style={styles.dropdown}>
+                    <View
+                      style={[
+                        styles.dropdown,
+                        {
+                          backgroundColor: colors.backgroundAlt,
+                          borderColor: colors.borderSoft,
+                        },
+                      ]}
+                    >
                       {languageOptions.map((opt) => {
                         const selected = opt === language;
                         return (
@@ -120,7 +143,13 @@ export function SettingsModal({
                             key={opt}
                             style={[
                               styles.dropdownItem,
-                              selected && styles.dropdownItemSelected,
+                              {
+                                backgroundColor: selected
+                                  ? isDark
+                                    ? "rgba(77,163,255,0.18)"
+                                    : "rgba(77,163,255,0.12)"
+                                  : colors.backgroundAlt,
+                              },
                             ]}
                             onPress={() => {
                               setLanguage(opt);
@@ -130,7 +159,7 @@ export function SettingsModal({
                             <Text
                               style={[
                                 styles.dropdownItemText,
-                                selected && styles.dropdownItemTextSelected,
+                                { color: selected ? colors.accent : colors.textPrimary },
                               ]}
                             >
                               {opt}
@@ -145,10 +174,17 @@ export function SettingsModal({
             </View>
 
             <Pressable
-              style={styles.changePasswordButton}
+              style={[
+                styles.changePasswordButton,
+                {
+                  backgroundColor: isDark
+                    ? "rgba(77,163,255,0.14)"
+                    : "rgba(77,163,255,0.12)",
+                },
+              ]}
               onPress={() => setPasswordOpen((v) => !v)}
             >
-              <Text style={styles.changePasswordText}>
+              <Text style={[styles.changePasswordText, { color: colors.accent }]}>
                 {passwordOpen ? "Back" : "Change Password"}
               </Text>
             </Pressable>
@@ -158,32 +194,66 @@ export function SettingsModal({
                 <TextInput
                   value={oldPassword}
                   onChangeText={setOldPassword}
-                  style={styles.passwordInput}
+                  style={[
+                    styles.passwordInput,
+                    {
+                      backgroundColor: isDark
+                        ? "rgba(15,23,42,0.7)"
+                        : "rgba(2,6,23,0.04)",
+                      borderColor: colors.borderSoft,
+                      color: colors.textPrimary,
+                    },
+                  ]}
                   placeholder="Old password"
-                  placeholderTextColor="#6B7280"
+                  placeholderTextColor={colors.textMuted}
                   secureTextEntry
                 />
                 <TextInput
                   value={newPassword}
                   onChangeText={setNewPassword}
-                  style={styles.passwordInput}
+                  style={[
+                    styles.passwordInput,
+                    {
+                      backgroundColor: isDark
+                        ? "rgba(15,23,42,0.7)"
+                        : "rgba(2,6,23,0.04)",
+                      borderColor: colors.borderSoft,
+                      color: colors.textPrimary,
+                    },
+                  ]}
                   placeholder="New password"
-                  placeholderTextColor="#6B7280"
+                  placeholderTextColor={colors.textMuted}
                   secureTextEntry
                 />
                 <TextInput
                   value={confirmPassword}
                   onChangeText={setConfirmPassword}
-                  style={styles.passwordInput}
+                  style={[
+                    styles.passwordInput,
+                    {
+                      backgroundColor: isDark
+                        ? "rgba(15,23,42,0.7)"
+                        : "rgba(2,6,23,0.04)",
+                      borderColor: colors.borderSoft,
+                      color: colors.textPrimary,
+                    },
+                  ]}
                   placeholder="Confirm new password"
-                  placeholderTextColor="#6B7280"
+                  placeholderTextColor={colors.textMuted}
                   secureTextEntry
                 />
                 {passwordError ? (
                   <Text style={styles.passwordErrorText}>{passwordError}</Text>
                 ) : null}
                 <Pressable
-                  style={styles.passwordSubmitButton}
+                  style={[
+                    styles.passwordSubmitButton,
+                    {
+                      backgroundColor: isDark
+                        ? "rgba(77,163,255,0.14)"
+                        : "rgba(77,163,255,0.12)",
+                    },
+                  ]}
                   onPress={async () => {
                     if (passwordLoading) {
                       return;
@@ -223,8 +293,20 @@ export function SettingsModal({
               </View>
             ) : null}
 
-            <Pressable style={styles.logoutButton} onPress={onLogout}>
-              <Text style={styles.logoutText}>Log Out</Text>
+            <Pressable
+              style={[
+                styles.logoutButton,
+                {
+                  backgroundColor: isDark
+                    ? "rgba(77,163,255,0.14)"
+                    : "rgba(77,163,255,0.12)",
+                },
+              ]}
+              onPress={onLogout}
+            >
+              <Text style={[styles.logoutText, { color: colors.accent }]}>
+                Log Out
+              </Text>
             </Pressable>
           </Pressable>
         </View>
@@ -240,20 +322,24 @@ type SwitchRowProps = {
 };
 
 function SettingSwitchRow({ label, value, onValueChange }: SwitchRowProps) {
+  const { colors, isDark } = useTheme();
   return (
     <View style={styles.row}>
-      <Text style={styles.rowLabel}>{label}</Text>
+      <Text style={[styles.rowLabel, { color: colors.textPrimary }]}>
+        {label}
+      </Text>
       <Switch
         value={value}
         onValueChange={onValueChange}
-        trackColor={{ false: "#D1D5DB", true: "#A7B7F3" }}
-        thumbColor={value ? "#3B5BA9" : "#FFFFFF"}
+        trackColor={{
+          false: isDark ? "rgba(148,163,184,0.35)" : "rgba(2,6,23,0.18)",
+          true: colors.accentSoft,
+        }}
+        thumbColor={value ? colors.accent : colors.backgroundAlt}
       />
     </View>
   );
 }
-
-const BORDER = "#3B5BA9";
 
 const styles = StyleSheet.create({
   backdrop: {
@@ -273,7 +359,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 24,
     borderWidth: 6,
-    borderColor: BORDER,
+    borderColor: "#3B5BA9",
     paddingHorizontal: 16,
     paddingTop: 14,
     paddingBottom: 16,
@@ -357,16 +443,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     backgroundColor: "#FFFFFF",
   },
-  dropdownItemSelected: {
-    backgroundColor: "rgba(59,91,169,0.10)",
-  },
   dropdownItemText: {
     fontSize: 14,
     color: "#111827",
     fontWeight: "600",
-  },
-  dropdownItemTextSelected: {
-    color: BORDER,
   },
   logoutButton: {
     marginTop: 18,
@@ -384,7 +464,7 @@ const styles = StyleSheet.create({
   logoutText: {
     fontSize: 14,
     fontWeight: "800",
-    color: BORDER,
+    color: "#3B5BA9",
   },
   changePasswordButton: {
     marginTop: 10,
@@ -402,7 +482,7 @@ const styles = StyleSheet.create({
   changePasswordText: {
     fontSize: 14,
     fontWeight: "800",
-    color: BORDER,
+    color: "#3B5BA9",
   },
   passwordCard: {
     marginTop: 10,
@@ -430,7 +510,7 @@ const styles = StyleSheet.create({
   },
   passwordSubmitText: {
     fontSize: 14,
-    color: BORDER,
+    color: "#3B5BA9",
     fontWeight: "800",
   },
 });

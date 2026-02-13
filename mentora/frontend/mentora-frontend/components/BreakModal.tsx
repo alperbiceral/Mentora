@@ -77,7 +77,7 @@ function BreakRow({ icon, title, subtitle }: BreakRowProps) {
     <View style={styles.row}>
       <View style={styles.rowLeft}>
         <View style={styles.iconWrapper}>
-          <Ionicons name={icon} size={20} color="#6D5EF7" />
+          <Ionicons name={icon} size={20} color="#4DA3FF" />
         </View>
         <View>
           <Text style={styles.rowTitle}>{title}</Text>

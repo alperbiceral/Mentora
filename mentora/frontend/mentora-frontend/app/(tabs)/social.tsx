@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
   DeviceEventEmitter,
@@ -18,25 +18,7 @@ import {
   View,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
-
-const COLORS = {
-  // Dark navy theme to match the login screen
-  background: "#0B1220",
-  backgroundAlt: "#101B2E",
-  card: "rgba(15,23,42,0.85)", // glassy dark card
-  subtleCard: "rgba(15,23,42,0.85)",
-  // Use the same lavender as "See history >" everywhere
-  accent: "#6D5EF7",
-  accentSoft: "#6D5EF7",
-  textPrimary: "#EAF0FF",
-  textSecondary: "#9CA3AF",
-  textMuted: "#6B7280",
-  borderSubtle: "rgba(148,163,184,0.35)",
-  borderSoft: "rgba(148,163,184,0.18)",
-  shadow: "#000000",
-  online: "#10B981",
-  offline: "#6B7280",
-};
+import { useTheme, type ThemeColors } from "../../context/ThemeContext";
 
 const SPACING = {
   xs: 8,
@@ -187,8 +169,15 @@ const mockGroupLeaderboard = [
 
 export default function SocialScreen() {
   const router = useRouter();
+<<<<<<< Updated upstream:mentora/frontend/mentora-frontend/app/(tabs)/social.tsx
   const [leaderboardType, setLeaderboardType] =
     useState<LeaderboardType>("global");
+=======
+  const { colors: COLORS, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(COLORS, isDark), [COLORS, isDark]);
+  const [leaderboardMetric, setLeaderboardMetric] =
+    useState<LeaderboardMetric>("hours");
+>>>>>>> Stashed changes:mentora/frontend/app/(tabs)/social.tsx
   const [profile, setProfile] = useState<Profile | null>(null);
   const [friends, setFriends] = useState<FriendProfile[]>([]);
   const [incomingRequests, setIncomingRequests] = useState<FriendRequest[]>([]);
@@ -345,12 +334,18 @@ export default function SocialScreen() {
           )}&requester=${encodeURIComponent(currentUsername)}`,
         );
         if (!response.ok) {
-          throw new Error("Search failed");
+          const errorData = await response.json().catch(() => null);
+          throw new Error(errorData?.detail ?? "Search failed");
         }
         const data = await response.json();
         setSearchResults(data.results ?? []);
       } catch (error) {
+        console.error("Search error:", error);
         setSearchResults([]);
+        Alert.alert(
+          "Search Error",
+          error instanceof Error ? error.message : "Failed to search users",
+        );
       } finally {
         setSearchLoading(false);
       }
@@ -1212,6 +1207,9 @@ export default function SocialScreen() {
                             return;
                           }
                           try {
+                            console.log(
+                              `Sending friend request from ${currentUsername} to ${result.username}`,
+                            );
                             const response = await fetch(
                               `${API_BASE_URL}/friends/request`,
                               {
@@ -1226,23 +1224,30 @@ export default function SocialScreen() {
                               },
                             );
                             if (!response.ok) {
-                              const message = await response
+                              const errorData = await response
                                 .json()
                                 .catch(() => null);
+                              console.error(
+                                "Friend request failed:",
+                                response.status,
+                                errorData,
+                              );
                               throw new Error(
-                                message?.detail ?? "Request failed",
+                                errorData?.detail ?? `Request failed (${response.status})`,
                               );
                             }
                             const created =
                               (await response.json()) as FriendRequest;
+                            console.log("Friend request sent successfully:", created);
                             setOutgoingRequests((prev) => [created, ...prev]);
-                            Alert.alert("Request sent");
+                            Alert.alert("Success", "Friend request sent!");
                             loadSocialData();
                           } catch (error) {
                             const message =
                               error instanceof Error
                                 ? error.message
                                 : "Request failed";
+                            console.error("Friend request error:", error);
                             Alert.alert("Error", message);
                           }
                         }}
@@ -2089,7 +2094,8 @@ function getActivityIcon(type: string) {
   }
 }
 
-const styles = StyleSheet.create({
+const createStyles = (COLORS: ThemeColors, isDark: boolean) =>
+  StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: COLORS.background,
@@ -2100,7 +2106,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: "100%",
-    backgroundColor: "#0B1220",
+    backgroundColor: COLORS.background,
   },
   backgroundBottom: {
     position: "absolute",
@@ -2108,8 +2114,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: "100%",
-    backgroundColor: "#0F1A2B",
-    opacity: 0.45,
+    backgroundColor: isDark ? "#0F1A2B" : COLORS.backgroundAlt,
+    opacity: isDark ? 0.45 : 1,
   },
   glow: {
     position: "absolute",
@@ -2118,7 +2124,7 @@ const styles = StyleSheet.create({
     right: -60,
     height: 260,
     borderRadius: 260,
-    backgroundColor: "rgba(109,94,247,0.18)",
+    backgroundColor: "rgba(77,163,255,0.18)",
     opacity: 0.25,
   },
   wrapper: {
@@ -2130,7 +2136,7 @@ const styles = StyleSheet.create({
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(2,6,23,0.6)",
+    backgroundColor: isDark ? "rgba(2,6,23,0.6)" : "rgba(2,6,23,0.12)",
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: SPACING.lg,
@@ -2183,7 +2189,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(15,23,42,0.7)",
+    backgroundColor: isDark ? "rgba(15,23,42,0.7)" : "rgba(2,6,23,0.06)",
   },
   scrollContent: {
     paddingTop: SPACING.lg,
@@ -2221,7 +2227,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: SPACING.sm,
     paddingVertical: 6,
-    backgroundColor: "rgba(15,23,42,0.8)",
+    backgroundColor: isDark ? "rgba(15,23,42,0.8)" : "rgba(77,163,255,0.12)",
     borderRadius: 12,
   },
   statText: {
@@ -2256,7 +2262,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
     borderColor: COLORS.borderSoft,
-    backgroundColor: "rgba(15,23,42,0.4)",
+    backgroundColor: isDark ? "rgba(15,23,42,0.4)" : "rgba(77,163,255,0.10)",
   },
   headerTabActive: {
     backgroundColor: COLORS.accent,
@@ -2293,7 +2299,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.borderSubtle,
     paddingHorizontal: SPACING.md,
     color: COLORS.textPrimary,
-    backgroundColor: "#020617",
+    backgroundColor: isDark ? "#020617" : "rgba(77,163,255,0.08)",
   },
   groupInput: {
     height: 44,
@@ -2302,7 +2308,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.borderSubtle,
     paddingHorizontal: SPACING.md,
     color: COLORS.textPrimary,
-    backgroundColor: "#020617",
+    backgroundColor: isDark ? "#020617" : "rgba(77,163,255,0.08)",
     marginBottom: SPACING.sm,
   },
   groupTextArea: {
@@ -2313,7 +2319,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     color: COLORS.textPrimary,
-    backgroundColor: "#020617",
+    backgroundColor: isDark ? "#020617" : "rgba(77,163,255,0.08)",
     marginBottom: SPACING.sm,
     textAlignVertical: "top",
   },
@@ -2339,7 +2345,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "rgba(2,6,23,0.7)",
+    backgroundColor: isDark ? "rgba(2,6,23,0.7)" : "rgba(77,163,255,0.12)",
     alignItems: "center",
     justifyContent: "center",
     marginRight: SPACING.sm,
@@ -2388,7 +2394,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     borderWidth: 1,
     borderColor: COLORS.borderSoft,
-    backgroundColor: "rgba(15,23,42,0.8)",
+    backgroundColor: isDark ? "rgba(15,23,42,0.8)" : "rgba(77,163,255,0.10)",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -2439,7 +2445,7 @@ const styles = StyleSheet.create({
   },
   privacyToggle: {
     flexDirection: "row",
-    backgroundColor: "rgba(15,23,42,0.7)",
+    backgroundColor: isDark ? "rgba(15,23,42,0.7)" : "rgba(77,163,255,0.10)",
     borderRadius: 999,
     padding: 3,
     borderWidth: 1,
@@ -2492,7 +2498,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: "rgba(2,6,23,0.7)",
+    backgroundColor: isDark ? "rgba(2,6,23,0.7)" : "rgba(77,163,255,0.12)",
     alignItems: "center",
     justifyContent: "center",
     marginRight: SPACING.sm,
@@ -2598,7 +2604,7 @@ const styles = StyleSheet.create({
   friendItem: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(30, 41, 59, 0.95)",
+    backgroundColor: isDark ? "rgba(30, 41, 59, 0.95)" : COLORS.subtleCard,
     borderRadius: 12,
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.md,
@@ -2607,7 +2613,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "rgba(15,23,42,0.9)",
+    backgroundColor: isDark ? "rgba(15,23,42,0.9)" : "rgba(77,163,255,0.12)",
     alignItems: "center",
     justifyContent: "center",
     marginRight: SPACING.sm,
@@ -2634,7 +2640,7 @@ const styles = StyleSheet.create({
   messageButton: {
     padding: 8,
     borderRadius: 16,
-    backgroundColor: "rgba(15,23,42,0.8)",
+    backgroundColor: isDark ? "rgba(15,23,42,0.8)" : "rgba(77,163,255,0.10)",
   },
   groupsList: {
     gap: SPACING.sm,
@@ -2663,7 +2669,7 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(15,23,42,0.7)",
+    backgroundColor: isDark ? "rgba(15,23,42,0.7)" : "rgba(77,163,255,0.10)",
   },
   groupAvatar: {
     width: 36,
@@ -2672,7 +2678,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginRight: SPACING.sm,
-    backgroundColor: "rgba(2,6,23,0.7)",
+    backgroundColor: isDark ? "rgba(2,6,23,0.7)" : "rgba(77,163,255,0.12)",
   },
   groupAvatarImage: {
     width: 36,
@@ -2736,13 +2742,32 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     fontSize: 12,
   },
+<<<<<<< Updated upstream:mentora/frontend/mentora-frontend/app/(tabs)/social.tsx
+=======
+  groupActionSecondary: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: COLORS.borderSoft,
+    backgroundColor: isDark ? "rgba(15,23,42,0.6)" : "rgba(77,163,255,0.10)",
+  },
+  groupActionSecondaryText: {
+    color: COLORS.textSecondary,
+    fontWeight: "600",
+    fontSize: 12,
+  },
+>>>>>>> Stashed changes:mentora/frontend/app/(tabs)/social.tsx
   groupActionMuted: {
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: COLORS.borderSoft,
-    backgroundColor: "rgba(15,23,42,0.6)",
+    backgroundColor: isDark ? "rgba(15,23,42,0.6)" : "rgba(77,163,255,0.10)",
   },
   groupActionMutedText: {
     color: COLORS.textSecondary,
@@ -2880,7 +2905,7 @@ const styles = StyleSheet.create({
   },
   leaderboardToggle: {
     flexDirection: "row",
-    backgroundColor: "rgba(15,23,42,0.65)",
+    backgroundColor: isDark ? "rgba(15,23,42,0.65)" : "rgba(77,163,255,0.10)",
     borderRadius: 14,
     padding: 4,
     borderWidth: 1,
@@ -2917,7 +2942,7 @@ const styles = StyleSheet.create({
   leaderboardItem: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(30, 41, 59, 0.95)",
+    backgroundColor: isDark ? "rgba(30, 41, 59, 0.95)" : COLORS.subtleCard,
     borderRadius: 12,
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.md,
@@ -2946,4 +2971,56 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     marginTop: 2,
   },
+<<<<<<< Updated upstream:mentora/frontend/mentora-frontend/app/(tabs)/social.tsx
+=======
+  leaderboardValue: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: COLORS.textPrimary,
+  },
+  leaderboardStreak: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  leaderboardStreakValue: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: COLORS.textPrimary,
+  },
+  groupLeaderboardModal: {
+    width: "100%",
+    maxWidth: 420,
+    maxHeight: "80%",
+    backgroundColor: COLORS.card,
+    borderRadius: 20,
+    padding: SPACING.lg,
+    borderWidth: 1,
+    borderColor: COLORS.borderSubtle,
+  },
+  groupLeaderboardTabs: {
+    paddingBottom: SPACING.sm,
+    gap: SPACING.sm,
+  },
+  groupLeaderboardTab: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: COLORS.borderSubtle,
+    backgroundColor: isDark ? "rgba(15,23,42,0.6)" : "rgba(77,163,255,0.10)",
+  },
+  groupLeaderboardTabActive: {
+    backgroundColor: COLORS.accent,
+    borderColor: COLORS.accent,
+  },
+  groupLeaderboardTabText: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    fontWeight: "600",
+  },
+  groupLeaderboardTabTextActive: {
+    color: "#FFFFFF",
+  },
+>>>>>>> Stashed changes:mentora/frontend/app/(tabs)/social.tsx
 });

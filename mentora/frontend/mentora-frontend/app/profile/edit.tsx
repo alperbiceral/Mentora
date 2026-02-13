@@ -14,20 +14,7 @@ import {
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
-
-const COLORS = {
-  // Match Home dark theme
-  background: "#0B1220",
-  card: "rgba(15,23,42,0.85)",
-  textPrimary: "#EAF0FF",
-  textSecondary: "#9CA3AF",
-  textMuted: "#6B7280",
-  borderSubtle: "rgba(148,163,184,0.35)",
-  accent: "#6D5EF7",
-  accentSoft: "#6D5EF7",
-  shadow: "#000000",
-  danger: "#EF4444",
-};
+import { useTheme, type ThemeColors } from "../../context/ThemeContext";
 
 const SPACING = {
   sm: 12,
@@ -56,6 +43,8 @@ type Profile = {
 
 export default function EditProfileScreen() {
   const router = useRouter();
+  const { colors: COLORS, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(COLORS, isDark), [COLORS, isDark]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [username, setUsername] = useState("");
   const [fullName, setFullName] = useState("");
@@ -350,7 +339,8 @@ const Field: React.FC<FieldProps> = ({
   </View>
 );
 
-const styles = StyleSheet.create({
+const createStyles = (COLORS: ThemeColors, isDark: boolean) =>
+  StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: COLORS.background,

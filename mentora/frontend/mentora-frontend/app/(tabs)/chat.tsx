@@ -23,22 +23,7 @@ import {
   View,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
-
-const COLORS = {
-  background: "#0B1220",
-  backgroundAlt: "#101B2E",
-  card: "rgba(15,23,42,0.85)",
-  subtleCard: "rgba(15,23,42,0.85)",
-  accent: "#6D5EF7",
-  accentSoft: "#6D5EF7",
-  textPrimary: "#EAF0FF",
-  textSecondary: "#9CA3AF",
-  textMuted: "#6B7280",
-  borderSubtle: "rgba(148,163,184,0.35)",
-  borderSoft: "rgba(148,163,184,0.18)",
-  shadow: "#000000",
-  danger: "#EF4444",
-};
+import { useTheme, type ThemeColors } from "../../context/ThemeContext";
 
 const SPACING = {
   xs: 8,
@@ -87,6 +72,8 @@ const EMOJI_SET = ["🙂", "😂", "😍", "🥳", "👍", "🔥", "👏", "😮
 
 export default function ChatScreen() {
   const params = useLocalSearchParams();
+  const { colors: COLORS, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(COLORS, isDark), [COLORS, isDark]);
   const [username, setUsername] = useState<string | null>(null);
   const [threads, setThreads] = useState<ChatThreadItem[]>([]);
   const [friends, setFriends] = useState<FriendProfile[]>([]);
@@ -111,6 +98,9 @@ export default function ChatScreen() {
   >({});
   const [loadingThreads, setLoadingThreads] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [listViewportHeight, setListViewportHeight] = useState(0);
+  const [privateSectionHeight, setPrivateSectionHeight] = useState(0);
+  const [groupSectionHeight, setGroupSectionHeight] = useState(0);
 
   const wsRef = useRef<WebSocket | null>(null);
   const lastFriendOpenRef = useRef<string | null>(null);
@@ -144,6 +134,21 @@ export default function ChatScreen() {
     () => threads.filter((thread) => thread.is_group),
     [threads],
   );
+  const groupSectionSpacerHeight = useMemo(() => {
+    if (!listViewportHeight) {
+      return 0;
+    }
+
+    // If the combined content already needs scroll, keep normal layout.
+    const contentNoSpacer = privateSectionHeight + groupSectionHeight;
+    if (contentNoSpacer >= listViewportHeight) {
+      return 0;
+    }
+
+    // Aim for group section to start around mid-screen (slightly above center).
+    const targetGroupStartY = Math.floor(listViewportHeight * 0.45);
+    return Math.max(0, targetGroupStartY - privateSectionHeight);
+  }, [groupSectionHeight, listViewportHeight, privateSectionHeight]);
   const activeGroupMembers =
     activeThreadId && groupParticipants[activeThreadId]
       ? groupParticipants[activeThreadId]
@@ -861,119 +866,138 @@ export default function ChatScreen() {
             </View>
 
             <ScrollView
+              onLayout={(event) =>
+                setListViewportHeight(event.nativeEvent.layout.height)
+              }
               contentContainerStyle={styles.listContent}
               showsVerticalScrollIndicator={false}
             >
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Private chats</Text>
-                <Pressable
-                  hitSlop={8}
-                  style={styles.sectionAction}
-                  onPress={() => setNewChatOpen(true)}
-                >
-                  <Ionicons name="add" size={16} color="#0B1020" />
-                  <Text style={styles.sectionActionText}>New</Text>
-                </Pressable>
-              </View>
-
-              {loadingThreads ? (
-                <Text style={styles.emptyText}>Loading chats...</Text>
-              ) : privateThreads.length === 0 ? (
-                <Text style={styles.emptyText}>No private chats yet.</Text>
-              ) : (
-                privateThreads.map((thread) => (
+              <View
+                onLayout={(event) =>
+                  setPrivateSectionHeight(event.nativeEvent.layout.height)
+                }
+              >
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Private chats</Text>
                   <Pressable
-                    key={thread.thread_id}
-                    style={styles.threadCard}
-                    onPress={() => setActiveThreadId(thread.thread_id)}
+                    hitSlop={8}
+                    style={styles.sectionAction}
+                    onPress={() => setNewChatOpen(true)}
                   >
-                    <View style={styles.threadAvatar}>
-                      {thread.friend_username &&
-                      friendMap.get(thread.friend_username)?.profile_photo ? (
-                        <Image
-                          source={{
-                            uri: `data:image/jpeg;base64,${friendMap.get(thread.friend_username)?.profile_photo}`,
-                          }}
-                          style={styles.threadAvatarImage}
-                        />
-                      ) : (
-                        <Ionicons
-                          name="person"
-                          size={18}
-                          color={COLORS.textMuted}
-                        />
-                      )}
-                    </View>
-                    <View style={styles.threadInfo}>
-                      <Text style={styles.threadTitle}>
-                        {(thread.friend_username &&
-                          friendMap.get(thread.friend_username)?.full_name) ||
-                          thread.friend_username ||
-                          "Private chat"}
-                      </Text>
-                      <Text style={styles.threadPreview}>
-                        {thread.last_message ?? "New conversation"}
-                      </Text>
-                    </View>
+                    <Ionicons name="add" size={16} color="#0B1020" />
+                    <Text style={styles.sectionActionText}>New</Text>
+                  </Pressable>
+                </View>
+
+                {loadingThreads ? (
+                  <Text style={styles.emptyText}>Loading chats...</Text>
+                ) : privateThreads.length === 0 ? (
+                  <Text style={styles.emptyText}>No private chats yet.</Text>
+                ) : (
+                  privateThreads.map((thread) => (
                     <Pressable
-                      hitSlop={8}
-                      style={styles.threadDelete}
-                      onPress={() => handleDeleteThread(thread.thread_id)}
+                      key={thread.thread_id}
+                      style={styles.threadCard}
+                      onPress={() => setActiveThreadId(thread.thread_id)}
                     >
-                      <Ionicons name="trash" size={16} color={COLORS.danger} />
+                      <View style={styles.threadAvatar}>
+                        {thread.friend_username &&
+                        friendMap.get(thread.friend_username)?.profile_photo ? (
+                          <Image
+                            source={{
+                              uri: `data:image/jpeg;base64,${friendMap.get(thread.friend_username)?.profile_photo}`,
+                            }}
+                            style={styles.threadAvatarImage}
+                          />
+                        ) : (
+                          <Ionicons
+                            name="person"
+                            size={18}
+                            color={COLORS.textMuted}
+                          />
+                        )}
+                      </View>
+                      <View style={styles.threadInfo}>
+                        <Text style={styles.threadTitle}>
+                          {(thread.friend_username &&
+                            friendMap.get(thread.friend_username)?.full_name) ||
+                            thread.friend_username ||
+                            "Private chat"}
+                        </Text>
+                        <Text style={styles.threadPreview}>
+                          {thread.last_message ?? "New conversation"}
+                        </Text>
+                      </View>
+                      <Pressable
+                        hitSlop={8}
+                        style={styles.threadDelete}
+                        onPress={() => handleDeleteThread(thread.thread_id)}
+                      >
+                        <Ionicons name="trash" size={16} color={COLORS.danger} />
+                      </Pressable>
                     </Pressable>
-                  </Pressable>
-                ))
-              )}
-
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Group chats</Text>
-                <Pressable
-                  hitSlop={8}
-                  style={styles.sectionAction}
-                  onPress={() => setGroupCreateOpen(true)}
-                >
-                  <Ionicons name="add" size={16} color="#0B1020" />
-                  <Text style={styles.sectionActionText}>New</Text>
-                </Pressable>
+                  ))
+                )}
               </View>
 
-              {groupThreads.length === 0 ? (
-                <Text style={styles.emptyText}>No group chats yet.</Text>
-              ) : (
-                groupThreads.map((thread) => (
+              {groupSectionSpacerHeight > 0 ? (
+                <View style={{ height: groupSectionSpacerHeight }} />
+              ) : null}
+
+              <View
+                onLayout={(event) =>
+                  setGroupSectionHeight(event.nativeEvent.layout.height)
+                }
+              >
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Group chats</Text>
                   <Pressable
-                    key={thread.thread_id}
-                    style={styles.threadCard}
-                    onPress={() => setActiveThreadId(thread.thread_id)}
+                    hitSlop={8}
+                    style={styles.sectionAction}
+                    onPress={() => setGroupCreateOpen(true)}
                   >
-                    <View style={styles.threadAvatar}>
-                      {thread.group_photo ? (
-                        <Image
-                          source={{
-                            uri: `data:image/jpeg;base64,${thread.group_photo}`,
-                          }}
-                          style={styles.threadAvatarImage}
-                        />
-                      ) : (
-                        <Ionicons
-                          name="people"
-                          size={18}
-                          color={COLORS.textMuted}
-                        />
-                      )}
-                    </View>
-                    <View style={styles.threadInfo}>
-                      <Text style={styles.threadTitle}>
-                        {thread.title || "Group chat"}
-                      </Text>
-                      <Text style={styles.threadPreview}>
-                        {thread.members_count ?? 0} members
-                      </Text>
-                    </View>
+                    <Ionicons name="add" size={16} color="#0B1020" />
+                    <Text style={styles.sectionActionText}>New</Text>
                   </Pressable>
-                ))
-              )}
+                </View>
+
+                {groupThreads.length === 0 ? (
+                  <Text style={styles.emptyText}>No group chats yet.</Text>
+                ) : (
+                  groupThreads.map((thread) => (
+                    <Pressable
+                      key={thread.thread_id}
+                      style={styles.threadCard}
+                      onPress={() => setActiveThreadId(thread.thread_id)}
+                    >
+                      <View style={styles.threadAvatar}>
+                        {thread.group_photo ? (
+                          <Image
+                            source={{
+                              uri: `data:image/jpeg;base64,${thread.group_photo}`,
+                            }}
+                            style={styles.threadAvatarImage}
+                          />
+                        ) : (
+                          <Ionicons
+                            name="people"
+                            size={18}
+                            color={COLORS.textMuted}
+                          />
+                        )}
+                      </View>
+                      <View style={styles.threadInfo}>
+                        <Text style={styles.threadTitle}>
+                          {thread.title || "Group chat"}
+                        </Text>
+                        <Text style={styles.threadPreview}>
+                          {thread.members_count ?? 0} members
+                        </Text>
+                      </View>
+                    </Pressable>
+                  ))
+                )}
+              </View>
             </ScrollView>
           </View>
         )}
@@ -1295,7 +1319,8 @@ export default function ChatScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (COLORS: ThemeColors, isDark: boolean) =>
+  StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: COLORS.background,
@@ -1306,7 +1331,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: "100%",
-    backgroundColor: "#0B1220",
+    backgroundColor: COLORS.background,
   },
   backgroundBottom: {
     position: "absolute",
@@ -1314,8 +1339,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: "100%",
-    backgroundColor: "#0F1A2B",
-    opacity: 0.45,
+    backgroundColor: isDark ? "#0F1A2B" : COLORS.backgroundAlt,
+    opacity: isDark ? 0.45 : 1,
   },
   glow: {
     position: "absolute",
@@ -1324,7 +1349,7 @@ const styles = StyleSheet.create({
     right: -60,
     height: 260,
     borderRadius: 260,
-    backgroundColor: "rgba(109,94,247,0.18)",
+    backgroundColor: "rgba(77,163,255,0.18)",
     opacity: 0.25,
   },
   wrapper: {
@@ -1345,10 +1370,10 @@ const styles = StyleSheet.create({
   },
   chatSurface: {
     flex: 1,
-    backgroundColor: "rgba(9,16,28,0.85)",
+    backgroundColor: isDark ? "rgba(9,16,28,0.85)" : COLORS.backgroundAlt,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.2)",
+    borderColor: COLORS.borderSoft,
     paddingHorizontal: SPACING.md,
     paddingTop: SPACING.sm,
     paddingBottom: SPACING.md,
@@ -1428,7 +1453,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(15,23,42,0.8)",
+    backgroundColor: isDark ? "rgba(15,23,42,0.8)" : "rgba(77,163,255,0.14)",
     marginRight: SPACING.sm,
   },
   threadAvatarImage: {
@@ -1476,7 +1501,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(15,23,42,0.8)",
+    backgroundColor: isDark ? "rgba(15,23,42,0.8)" : "rgba(77,163,255,0.12)",
   },
   chatHeaderAvatar: {
     width: 32,
@@ -1484,7 +1509,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(15,23,42,0.8)",
+    backgroundColor: isDark ? "rgba(15,23,42,0.8)" : "rgba(77,163,255,0.14)",
     borderWidth: 1,
     borderColor: COLORS.borderSoft,
   },
@@ -1504,7 +1529,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(15,23,42,0.8)",
+    backgroundColor: isDark ? "rgba(15,23,42,0.8)" : "rgba(77,163,255,0.12)",
   },
   deleteButton: {
     width: 32,
@@ -1512,7 +1537,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(15,23,42,0.8)",
+    backgroundColor: isDark ? "rgba(15,23,42,0.8)" : "rgba(77,163,255,0.12)",
   },
   messagesScroll: {
     flex: 1,
@@ -1538,7 +1563,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(15,23,42,0.8)",
+    backgroundColor: isDark ? "rgba(15,23,42,0.8)" : "rgba(77,163,255,0.12)",
     borderWidth: 1,
     borderColor: COLORS.borderSoft,
   },
@@ -1562,7 +1587,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.accent,
   },
   messageBubbleOther: {
-    backgroundColor: "rgba(15,23,42,0.9)",
+    backgroundColor: isDark ? "rgba(15,23,42,0.9)" : "rgba(77,163,255,0.10)",
     borderWidth: 1,
     borderColor: COLORS.borderSoft,
   },
@@ -1591,7 +1616,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "rgba(15,23,42,0.8)",
+    backgroundColor: isDark ? "rgba(15,23,42,0.8)" : "rgba(77,163,255,0.12)",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1605,7 +1630,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     paddingVertical: 10,
     color: COLORS.textPrimary,
-    backgroundColor: "#020617",
+    backgroundColor: isDark ? "#020617" : "rgba(77,163,255,0.08)",
   },
   sendButton: {
     width: 40,
@@ -1625,7 +1650,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: "rgba(15,23,42,0.8)",
+    backgroundColor: isDark ? "rgba(15,23,42,0.8)" : "rgba(77,163,255,0.10)",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1640,7 +1665,7 @@ const styles = StyleSheet.create({
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(2,6,23,0.6)",
+    backgroundColor: isDark ? "rgba(2,6,23,0.6)" : "rgba(2,6,23,0.12)",
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: SPACING.lg,
@@ -1672,7 +1697,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(15,23,42,0.7)",
+    backgroundColor: isDark ? "rgba(15,23,42,0.7)" : "rgba(77,163,255,0.10)",
   },
   modalList: {
     gap: SPACING.sm,
@@ -1690,7 +1715,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(15,23,42,0.8)",
+    backgroundColor: isDark ? "rgba(15,23,42,0.8)" : "rgba(77,163,255,0.10)",
     borderWidth: 1,
     borderColor: COLORS.borderSoft,
   },
@@ -1709,7 +1734,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: COLORS.borderSubtle,
-    backgroundColor: "#020617",
+    backgroundColor: isDark ? "#020617" : "rgba(77,163,255,0.08)",
   },
   groupPhotoButtonText: {
     fontSize: 13,
@@ -1732,7 +1757,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.borderSubtle,
     paddingHorizontal: SPACING.md,
     color: COLORS.textPrimary,
-    backgroundColor: "#020617",
+    backgroundColor: isDark ? "#020617" : "rgba(77,163,255,0.08)",
     marginBottom: SPACING.sm,
   },
   memberRow: {
@@ -1757,7 +1782,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.borderSoft,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(15,23,42,0.6)",
+    backgroundColor: isDark ? "rgba(15,23,42,0.6)" : "rgba(77,163,255,0.10)",
   },
   checkBadgeActive: {
     backgroundColor: COLORS.accent,
@@ -1794,7 +1819,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(15,23,42,0.8)",
+    backgroundColor: isDark ? "rgba(15,23,42,0.8)" : "rgba(77,163,255,0.12)",
     marginRight: SPACING.sm,
   },
   friendAvatarImage: {

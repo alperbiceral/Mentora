@@ -1,15 +1,18 @@
 import React from "react";
 import { Platform, StyleSheet, View } from "react-native";
+import { useTheme } from "../context/ThemeContext";
 
 type Props = {
   children: React.ReactNode;
 };
 
 export function AppContainer({ children }: Props) {
+  const { colors } = useTheme();
   return (
     <View
       style={[
         styles.base,
+        { backgroundColor: colors.background },
         Platform.OS === "web" && styles.webConstraints,
       ]}
     >

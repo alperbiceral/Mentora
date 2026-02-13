@@ -10,20 +10,7 @@ import {
   View,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
-const COLORS = {
-  background: "#0B1220",
-  backgroundAlt: "#101B2E",
-  card: "rgba(15,23,42,0.85)",
-  accent: "#6D5EF7",
-  accentSoft: "#7C6CF9",
-  textPrimary: "#EAF0FF",
-  textSecondary: "#9CA3AF",
-  textMuted: "#6B7280",
-  borderSoft: "rgba(148,163,184,0.22)",
-  inputBg: "rgba(2,6,23,0.65)",
-  danger: "#F87171",
-};
+import { useTheme, type ThemeColors } from "../../context/ThemeContext";
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -31,6 +18,8 @@ type Mode = "login" | "register";
 
 export default function AuthScreen() {
   const router = useRouter();
+  const { colors: COLORS, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(COLORS, isDark), [COLORS, isDark]);
   const [mode, setMode] = useState<Mode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -216,7 +205,8 @@ export default function AuthScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (COLORS: ThemeColors, isDark: boolean) =>
+  StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: COLORS.background,
@@ -244,7 +234,7 @@ const styles = StyleSheet.create({
     width: 220,
     height: 220,
     borderRadius: 110,
-    backgroundColor: "rgba(109,94,247,0.35)",
+    backgroundColor: "rgba(77,163,255,0.35)",
   },
   container: {
     flex: 1,
@@ -274,7 +264,7 @@ const styles = StyleSheet.create({
   },
   toggleRow: {
     flexDirection: "row",
-    backgroundColor: "rgba(2,6,23,0.6)",
+    backgroundColor: isDark ? "rgba(2,6,23,0.6)" : "rgba(77,163,255,0.06)",
     borderRadius: 999,
     padding: 6,
     marginBottom: 18,
@@ -313,7 +303,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
   },
   input: {
-    backgroundColor: COLORS.inputBg,
+    backgroundColor: isDark ? "rgba(2,6,23,0.65)" : "rgba(77,163,255,0.08)",
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
