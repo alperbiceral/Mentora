@@ -322,16 +322,6 @@ export default function ProfileScreen() {
               ))}
             </View>
           </View>
-
-          <Pressable
-            hitSlop={10}
-            onPress={() => {
-              console.log("View focus details");
-            }}
-            style={styles.viewDetailsRow}
-          >
-            <Text style={styles.viewDetailsText}>View details &gt;</Text>
-          </Pressable>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -340,8 +330,11 @@ export default function ProfileScreen() {
 
 const formatStudyHours = (hours: number) => {
   const totalSeconds = Math.round(hours * 3600);
+  if (totalSeconds <= 0) {
+    return "0 sec";
+  }
   if (totalSeconds < 60) {
-    return `${Math.max(1, totalSeconds)} sec`;
+    return `${totalSeconds} sec`;
   }
   if (totalSeconds < 3600) {
     const minutes = Math.round(totalSeconds / 60);
@@ -824,14 +817,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: SPACING.lg,
     marginBottom: SPACING.sm,
-  },
-  viewDetailsRow: {
-    marginTop: SPACING.sm,
-    alignItems: "flex-end",
-  },
-  viewDetailsText: {
-    fontSize: 12,
-    color: COLORS.accentSoft,
-    fontWeight: "500",
   },
 });

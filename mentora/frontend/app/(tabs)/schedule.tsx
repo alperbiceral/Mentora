@@ -142,6 +142,7 @@ export default function ScheduleScreen() {
   const [courses, setCourses] = useState<Course[]>(INITIAL_COURSES);
   const [blocks, setBlocks] = useState<CourseBlock[]>(INITIAL_BLOCKS);
   const [isCourseModalOpen, setIsCourseModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<"add" | "edit">("add");
   const [editingCourseId, setEditingCourseId] = useState<string | null>(null);
   const [loadingCourses, setLoadingCourses] = useState(false);
@@ -516,18 +517,30 @@ export default function ScheduleScreen() {
               <View style={styles.coursesHeader}>
                 <View style={styles.coursesTitleRow}>
                   <Text style={styles.sectionTitle}>Courses</Text>
-                  <Pressable
-                    style={styles.addCourseButton}
-                    onPress={handleOpenCourseModal}
-                  >
-                    <Ionicons name="add" size={18} color="#FFFFFF" />
-                    <Text style={styles.addCourseText}>Add Course</Text>
-                  </Pressable>
+                  <View style={styles.coursesActionRow}>
+                    <Pressable
+                      style={styles.importButton}
+                      onPress={() => setIsImportModalOpen(true)}
+                    >
+                      <Ionicons
+                        name="cloud-upload-outline"
+                        size={16}
+                        color={COLORS.textPrimary}
+                      />
+                      <Text style={styles.importButtonText}>Import</Text>
+                    </Pressable>
+                    <Pressable
+                      style={styles.addCourseButton}
+                      onPress={handleOpenCourseModal}
+                    >
+                      <Ionicons name="add" size={18} color="#FFFFFF" />
+                      <Text style={styles.addCourseText}>Add Course</Text>
+                    </Pressable>
+                  </View>
                 </View>
                 <Text style={styles.sectionSubtitle}>
                   Build a weekly timetable in 30-minute blocks.
                 </Text>
-                <InfoCard />
               </View>
 
               <ScheduleCard title="Weekly Schedule">
@@ -565,6 +578,33 @@ export default function ScheduleScreen() {
                 message={modalMessage}
                 onClose={() => setIsCourseModalOpen(false)}
               />
+
+              <Modal
+                animationType="fade"
+                transparent
+                visible={isImportModalOpen}
+              >
+                <View style={styles.importModalBackdrop}>
+                  <View style={styles.importModalCard}>
+                    <View style={styles.importModalHeader}>
+                      <Text style={styles.importModalTitle}>
+                        Syllabus import
+                      </Text>
+                      <Pressable
+                        onPress={() => setIsImportModalOpen(false)}
+                        hitSlop={8}
+                      >
+                        <Ionicons
+                          name="close"
+                          size={18}
+                          color={COLORS.textSecondary}
+                        />
+                      </Pressable>
+                    </View>
+                    <Text style={styles.importModalText}>TO:DO</Text>
+                  </View>
+                </View>
+              </Modal>
             </View>
           ) : (
             <View style={styles.section}>
@@ -582,6 +622,8 @@ export default function ScheduleScreen() {
                 <StudyPlanGrid
                   day={selectedPlanDay}
                   blocks={STUDY_PLAN[selectedPlanDay] || []}
+                  courseBlocks={blocks}
+                  courseLookup={courseLookup}
                 />
               </ScheduleCard>
             </View>
@@ -647,27 +689,6 @@ const SectionHeader: React.FC<SectionHeaderProps> = ({ title, subtitle }) => (
   <View style={styles.sectionHeader}>
     <Text style={styles.sectionTitle}>{title}</Text>
     <Text style={styles.sectionSubtitle}>{subtitle}</Text>
-  </View>
-);
-
-const InfoCard = () => (
-  <View style={styles.infoCard}>
-    <View style={styles.infoHeader}>
-      <Ionicons name="cloud-upload-outline" size={20} color={COLORS.accent} />
-      <Text style={styles.infoTitle}>Syllabus import (coming soon)</Text>
-    </View>
-    <Text style={styles.infoText}>
-      Upload PDF or a weekly plan image and we will extract blocks
-      automatically. For now, use the Add Course button to enter them.
-    </Text>
-    <View style={styles.infoActions}>
-      <Pressable style={[styles.ghostButton, styles.buttonDisabled]} disabled>
-        <Text style={styles.ghostButtonText}>Upload PDF</Text>
-      </Pressable>
-      <Pressable style={[styles.ghostButton, styles.buttonDisabled]} disabled>
-        <Text style={styles.ghostButtonText}>Scan Image</Text>
-      </Pressable>
-    </View>
   </View>
 );
 
@@ -1217,10 +1238,18 @@ const CourseCardList: React.FC<CourseCardListProps> = ({
 type StudyPlanGridProps = {
   day: WeekdayKey;
   blocks: StudyBlock[];
+  courseBlocks: CourseBlock[];
+  courseLookup: Map<string, Course>;
 };
 
-const StudyPlanGrid: React.FC<StudyPlanGridProps> = ({ day, blocks }) => {
+const StudyPlanGrid: React.FC<StudyPlanGridProps> = ({
+  day,
+  blocks,
+  courseBlocks,
+  courseLookup,
+}) => {
   const gridHeight = TIME_SLOTS.length * SLOT_HEIGHT;
+  const dayCourseBlocks = courseBlocks.filter((block) => block.day === day);
 
   return (
     <View style={styles.planGridWrapper}>
@@ -1241,6 +1270,40 @@ const StudyPlanGrid: React.FC<StudyPlanGridProps> = ({ day, blocks }) => {
             {TIME_SLOTS.map((slot) => (
               <View key={`${day}-${slot}`} style={styles.gridSlot} />
             ))}
+
+            {dayCourseBlocks.map((block) => {
+              const course = courseLookup.get(block.courseId);
+              if (!course) {
+                return null;
+              }
+              const startIndex = timeToIndex(block.start);
+              const endIndex = timeToIndex(block.end);
+              if (startIndex < 0 || endIndex <= startIndex) {
+                return null;
+              }
+              const blockHeight = (endIndex - startIndex) * SLOT_HEIGHT;
+              return (
+                <View
+                  key={`plan-course-${block.id}`}
+                  style={[
+                    styles.courseBlock,
+                    styles.planCourseBlock,
+                    {
+                      top: startIndex * SLOT_HEIGHT,
+                      height: blockHeight,
+                      backgroundColor: course.color,
+                    },
+                  ]}
+                >
+                  <Text style={styles.courseBlockCode} numberOfLines={1}>
+                    {course.name}
+                  </Text>
+                  <Text style={styles.courseBlockName} numberOfLines={1}>
+                    {course.location}
+                  </Text>
+                </View>
+              );
+            })}
 
             {blocks.map((block) => {
               const startIndex = timeToIndex(block.start);
@@ -1407,6 +1470,11 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: SPACING.sm,
   },
+  coursesActionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.sm,
+  },
   title: {
     fontSize: 22,
     fontWeight: "800",
@@ -1456,32 +1524,21 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontWeight: "700",
   },
-  infoTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-  },
-  infoCard: {
-    backgroundColor: "rgba(2,6,23,0.5)",
-    borderRadius: 16,
-    padding: SPACING.md,
-    borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
-    gap: SPACING.sm,
-  },
-  infoHeader: {
+  importButton: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    backgroundColor: "rgba(2,6,23,0.6)",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.borderSubtle,
   },
-  infoText: {
+  importButtonText: {
     fontSize: 12,
-    color: COLORS.textSecondary,
-    lineHeight: 17,
-  },
-  infoActions: {
-    flexDirection: "row",
-    gap: SPACING.sm,
+    color: COLORS.textPrimary,
+    fontWeight: "600",
   },
   addCourseButton: {
     flexDirection: "row",
@@ -1751,6 +1808,9 @@ const styles = StyleSheet.create({
     padding: 8,
     gap: 4,
   },
+  planCourseBlock: {
+    opacity: 0.9,
+  },
   planBlockTitle: {
     fontSize: 11,
     fontWeight: "700",
@@ -1819,6 +1879,37 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "flex-end",
     gap: SPACING.sm,
+  },
+  importModalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(2,6,23,0.7)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: SPACING.lg,
+  },
+  importModalCard: {
+    width: "100%",
+    maxWidth: 420,
+    backgroundColor: "rgba(15,23,42,0.95)",
+    borderRadius: 20,
+    padding: SPACING.lg,
+    borderWidth: 1,
+    borderColor: COLORS.borderSubtle,
+    gap: SPACING.md,
+  },
+  importModalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  importModalTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: COLORS.textPrimary,
+  },
+  importModalText: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
   },
   courseCardList: {
     gap: SPACING.sm,

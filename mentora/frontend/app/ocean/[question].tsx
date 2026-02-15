@@ -73,13 +73,27 @@ export default function OceanQuestionScreen() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let active = true;
+    const checkSkipped = async () => {
+      const skipped = await AsyncStorage.getItem("mentora.personalitySkipped");
+      if (active && skipped) {
+        router.replace("/(tabs)");
+      }
+    };
+    checkSkipped();
+    return () => {
+      active = false;
+    };
+  }, [router]);
+
+  useEffect(() => {
     setSelected(null);
     setStatus("idle");
     setError(null);
   }, [questionNumber]);
 
-  const handleSubmit = async () => {
-    if (!selected || status === "saving") {
+  const submitAnswer = async (value: number) => {
+    if (status === "saving") {
       return;
     }
 
@@ -98,7 +112,7 @@ export default function OceanQuestionScreen() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ value: selected }),
+        body: JSON.stringify({ value }),
       });
 
       if (!response.ok) {
@@ -149,6 +163,22 @@ export default function OceanQuestionScreen() {
     }
   };
   const isLast = questionNumber >= TOTAL_QUESTIONS;
+
+  const handleSubmit = async () => {
+    if (!selected) {
+      return;
+    }
+    await submitAnswer(selected);
+  };
+
+  const handleSkipQuestion = async () => {
+    await submitAnswer(3);
+  };
+
+  const handleSkipTest = async () => {
+    await AsyncStorage.setItem("mentora.personalitySkipped", "1");
+    router.replace("/(tabs)");
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -235,6 +265,23 @@ export default function OceanQuestionScreen() {
                   {isLast ? "Submit" : "Submit & next"}
                 </Text>
               )}
+            </Pressable>
+            <Pressable
+              style={[
+                styles.secondaryButton,
+                status === "saving" && styles.buttonDisabled,
+              ]}
+              onPress={handleSkipQuestion}
+              disabled={status === "saving"}
+            >
+              <Text style={styles.secondaryButtonText}>Skip question</Text>
+            </Pressable>
+            <Pressable
+              style={styles.skipLink}
+              onPress={handleSkipTest}
+              disabled={status === "saving"}
+            >
+              <Text style={styles.skipLinkText}>Skip test</Text>
             </Pressable>
           </View>
         </View>
@@ -379,6 +426,26 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     color: COLORS.textPrimary,
     fontSize: 16,
+  },
+  secondaryButton: {
+    borderRadius: 18,
+    alignItems: "center",
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: COLORS.borderSoft,
+    backgroundColor: "rgba(2,6,23,0.5)",
+  },
+  secondaryButtonText: {
+    color: COLORS.textSecondary,
+    fontSize: 14,
+  },
+  skipLink: {
+    alignItems: "center",
+  },
+  skipLinkText: {
+    color: COLORS.textMuted,
+    fontSize: 13,
+    textDecorationLine: "underline",
   },
   buttonDisabled: {
     opacity: 0.5,

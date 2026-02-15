@@ -149,6 +149,7 @@ async def create_group(payload: GroupCreate, db: Session = Depends(get_db)):
 
     _add_member(db, group.group_id, payload.username, role="owner")
     _add_chat_participant(db, thread.thread_id, payload.username)
+    db.commit()
 
     invitees = list({u for u in (payload.invitees or []) if u != payload.username})
     for invitee in invitees:

@@ -45,6 +45,10 @@ const SPACING = {
   xl: 24,
 };
 
+const FRIENDS_LIST_HEIGHT = 250;
+const GROUPS_LIST_HEIGHT = 240;
+const LEADERBOARD_LIST_HEIGHT = 240;
+
 type LeaderboardMetric = "hours" | "streak";
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -774,61 +778,67 @@ export default function SocialScreen() {
                 </Pressable>
               </View>
             </View>
-            <ScrollView
-              style={styles.listScroll}
-              contentContainerStyle={styles.friendsList}
-              nestedScrollEnabled
-              showsVerticalScrollIndicator={false}
-            >
-              {friends.length === 0 ? (
-                <Text style={styles.emptyText}>No friends yet</Text>
-              ) : (
-                friends.map((friend) => (
-                  <View key={friend.username} style={styles.friendItem}>
-                    <View style={styles.friendAvatar}>
-                      {friend.profile_photo ? (
-                        <Image
-                          source={{
-                            uri: `data:image/jpeg;base64,${friend.profile_photo}`,
-                          }}
-                          style={styles.friendAvatarImage}
-                        />
-                      ) : (
+            <View style={styles.listPanel}>
+              <ScrollView
+                style={styles.listScrollFriends}
+                contentContainerStyle={
+                  friends.length === 0
+                    ? [styles.friendsList, styles.listEmptyContent]
+                    : styles.friendsList
+                }
+                nestedScrollEnabled
+                showsVerticalScrollIndicator={false}
+              >
+                {friends.length === 0 ? (
+                  <Text style={styles.emptyText}>No friends yet</Text>
+                ) : (
+                  friends.map((friend) => (
+                    <View key={friend.username} style={styles.friendItem}>
+                      <View style={styles.friendAvatar}>
+                        {friend.profile_photo ? (
+                          <Image
+                            source={{
+                              uri: `data:image/jpeg;base64,${friend.profile_photo}`,
+                            }}
+                            style={styles.friendAvatarImage}
+                          />
+                        ) : (
+                          <Ionicons
+                            name="person"
+                            size={18}
+                            color={COLORS.textMuted}
+                          />
+                        )}
+                      </View>
+                      <View style={styles.friendInfo}>
+                        <Text style={styles.friendName}>
+                          {friend.full_name || friend.username}
+                        </Text>
+                        <Text style={styles.friendStats}>
+                          {friend.university ?? `@${friend.username}`} •{" "}
+                          {friend.streak_count} day streak
+                        </Text>
+                      </View>
+                      <Pressable
+                        style={styles.messageButton}
+                        onPress={() =>
+                          router.push({
+                            pathname: "/(tabs)/chat",
+                            params: { friend: friend.username },
+                          })
+                        }
+                      >
                         <Ionicons
-                          name="person"
-                          size={18}
-                          color={COLORS.textMuted}
+                          name="chatbubble-ellipses-outline"
+                          size={16}
+                          color={COLORS.accent}
                         />
-                      )}
+                      </Pressable>
                     </View>
-                    <View style={styles.friendInfo}>
-                      <Text style={styles.friendName}>
-                        {friend.full_name || friend.username}
-                      </Text>
-                      <Text style={styles.friendStats}>
-                        {friend.university ?? `@${friend.username}`} •{" "}
-                        {friend.streak_count} day streak
-                      </Text>
-                    </View>
-                    <Pressable
-                      style={styles.messageButton}
-                      onPress={() =>
-                        router.push({
-                          pathname: "/(tabs)/chat",
-                          params: { friend: friend.username },
-                        })
-                      }
-                    >
-                      <Ionicons
-                        name="chatbubble-ellipses-outline"
-                        size={16}
-                        color={COLORS.accent}
-                      />
-                    </Pressable>
-                  </View>
-                ))
-              )}
-            </ScrollView>
+                  ))
+                )}
+              </ScrollView>
+            </View>
           </View>
 
           {/* Study Groups Section */}
@@ -848,119 +858,144 @@ export default function SocialScreen() {
                 </Pressable>
               </View>
             </View>
-            <ScrollView
-              style={styles.listScroll}
-              contentContainerStyle={styles.groupsList}
-              nestedScrollEnabled
-              showsVerticalScrollIndicator={false}
-            >
-              {groups.length === 0 ? (
-                <Text style={styles.emptyText}>No groups yet</Text>
-              ) : (
-                groups.map((group) => {
-                  const hasInvite = incomingInviteGroupIds.has(group.group_id);
-                  const hasRequest = outgoingJoinGroupIds.has(group.group_id);
-                  return (
-                    <Pressable
-                      key={group.group_id}
-                      style={styles.groupCard}
-                      onPress={() =>
-                        group.is_member
-                          ? handleOpenGroupChat(group.chat_thread_id)
-                          : null
-                      }
-                    >
-                      <View style={styles.groupHeader}>
-                        <View style={styles.groupAvatar}>
-                          {group.group_photo ? (
-                            <Image
-                              source={{
-                                uri: `data:image/jpeg;base64,${group.group_photo}`,
-                              }}
-                              style={styles.groupAvatarImage}
-                            />
-                          ) : (
-                            <Ionicons
-                              name="people-outline"
-                              size={18}
-                              color={COLORS.textMuted}
-                            />
-                          )}
-                        </View>
-                        <View style={styles.groupInfo}>
-                          <View style={styles.groupTitleRow}>
-                            <Text style={styles.groupName}>{group.name}</Text>
-                            <View
-                              style={
-                                group.is_public
-                                  ? styles.groupBadgePublic
-                                  : styles.groupBadgePrivate
-                              }
-                            >
-                              <Text style={styles.groupBadgeText}>
-                                {group.is_public ? "Public" : "Private"}
-                              </Text>
-                            </View>
+            <View style={styles.listPanel}>
+              <ScrollView
+                style={styles.listScrollGroups}
+                contentContainerStyle={
+                  groups.length === 0
+                    ? [styles.groupsList, styles.listEmptyContent]
+                    : styles.groupsList
+                }
+                nestedScrollEnabled
+                showsVerticalScrollIndicator={false}
+              >
+                {groups.length === 0 ? (
+                  <Text style={styles.emptyText}>No groups yet</Text>
+                ) : (
+                  groups.map((group) => {
+                    const hasInvite = incomingInviteGroupIds.has(
+                      group.group_id,
+                    );
+                    const hasRequest = outgoingJoinGroupIds.has(group.group_id);
+                    return (
+                      <Pressable
+                        key={group.group_id}
+                        style={styles.groupCard}
+                        onPress={() =>
+                          group.is_member
+                            ? handleOpenGroupChat(group.chat_thread_id)
+                            : null
+                        }
+                      >
+                        <View style={styles.groupHeader}>
+                          <View style={styles.groupAvatar}>
+                            {group.group_photo ? (
+                              <Image
+                                source={{
+                                  uri: `data:image/jpeg;base64,${group.group_photo}`,
+                                }}
+                                style={styles.groupAvatarImage}
+                              />
+                            ) : (
+                              <Ionicons
+                                name="people-outline"
+                                size={18}
+                                color={COLORS.textMuted}
+                              />
+                            )}
                           </View>
-                          <Text style={styles.groupMembers}>
-                            {group.members_count} members
-                          </Text>
-                        </View>
-                        {group.is_member ? (
-                          <Pressable
-                            hitSlop={8}
-                            style={styles.groupSettingsButton}
-                            onPress={() => openGroupSettings(group)}
-                          >
-                            <Ionicons
-                              name="settings-outline"
-                              size={18}
-                              color={COLORS.textSecondary}
-                            />
-                          </Pressable>
-                        ) : null}
-                      </View>
-                      {group.description ? (
-                        <Text style={styles.groupDescription}>
-                          {group.description}
-                        </Text>
-                      ) : null}
-                      <View style={styles.groupActionsRow}>
-                        {group.is_member ? (
-                          <View style={styles.groupActionButtons}>
+                          <View style={styles.groupInfo}>
+                            <View style={styles.groupTitleRow}>
+                              <Text style={styles.groupName}>{group.name}</Text>
+                              <View
+                                style={
+                                  group.is_public
+                                    ? styles.groupBadgePublic
+                                    : styles.groupBadgePrivate
+                                }
+                              >
+                                <Text style={styles.groupBadgeText}>
+                                  {group.is_public ? "Public" : "Private"}
+                                </Text>
+                              </View>
+                            </View>
+                            <Text style={styles.groupMembers}>
+                              {group.members_count} members
+                            </Text>
+                          </View>
+                          {group.is_member ? (
                             <Pressable
-                              style={styles.groupActionPrimary}
-                              onPress={() =>
-                                handleOpenGroupChat(group.chat_thread_id)
-                              }
-                            >
-                              <Text style={styles.groupActionPrimaryText}>
-                                Chat
-                              </Text>
-                            </Pressable>
-                            <Pressable
-                              style={styles.groupActionSecondary}
-                              onPress={() =>
-                                openGroupLeaderboard(group.group_id)
-                              }
+                              hitSlop={8}
+                              style={styles.groupSettingsButton}
+                              onPress={() => openGroupSettings(group)}
                             >
                               <Ionicons
-                                name="podium-outline"
-                                size={14}
-                                color={COLORS.accent}
+                                name="settings-outline"
+                                size={18}
+                                color={COLORS.textSecondary}
                               />
-                              <Text style={styles.groupActionSecondaryText}>
-                                Leaderboard
-                              </Text>
                             </Pressable>
-                          </View>
-                        ) : group.is_public ? (
-                          hasRequest ? (
-                            <View style={styles.groupActionMuted}>
-                              <Text style={styles.groupActionMutedText}>
-                                Requested
-                              </Text>
+                          ) : null}
+                        </View>
+                        {group.description ? (
+                          <Text style={styles.groupDescription}>
+                            {group.description}
+                          </Text>
+                        ) : null}
+                        <View style={styles.groupActionsRow}>
+                          {group.is_member ? (
+                            <View style={styles.groupActionButtons}>
+                              <Pressable
+                                style={styles.groupActionPrimary}
+                                onPress={() =>
+                                  handleOpenGroupChat(group.chat_thread_id)
+                                }
+                              >
+                                <Text style={styles.groupActionPrimaryText}>
+                                  Chat
+                                </Text>
+                              </Pressable>
+                              <Pressable
+                                style={styles.groupActionSecondary}
+                                onPress={() =>
+                                  openGroupLeaderboard(group.group_id)
+                                }
+                              >
+                                <Ionicons
+                                  name="podium-outline"
+                                  size={14}
+                                  color={COLORS.accent}
+                                />
+                                <Text style={styles.groupActionSecondaryText}>
+                                  Leaderboard
+                                </Text>
+                              </Pressable>
                             </View>
+                          ) : group.is_public ? (
+                            hasRequest ? (
+                              <View style={styles.groupActionMuted}>
+                                <Text style={styles.groupActionMutedText}>
+                                  Requested
+                                </Text>
+                              </View>
+                            ) : hasInvite ? (
+                              <View style={styles.groupActionMuted}>
+                                <Text style={styles.groupActionMutedText}>
+                                  Invited
+                                </Text>
+                              </View>
+                            ) : (
+                              <Pressable
+                                style={styles.groupActionPrimary}
+                                onPress={() =>
+                                  handleRequestJoin(group.group_id)
+                                }
+                              >
+                                <Text style={styles.groupActionPrimaryText}>
+                                  Request to join
+                                </Text>
+                              </Pressable>
+                            )
                           ) : hasInvite ? (
                             <View style={styles.groupActionMuted}>
                               <Text style={styles.groupActionMutedText}>
@@ -968,37 +1003,22 @@ export default function SocialScreen() {
                               </Text>
                             </View>
                           ) : (
-                            <Pressable
-                              style={styles.groupActionPrimary}
-                              onPress={() => handleRequestJoin(group.group_id)}
-                            >
-                              <Text style={styles.groupActionPrimaryText}>
-                                Request to join
+                            <View style={styles.groupActionMuted}>
+                              <Text style={styles.groupActionMutedText}>
+                                Invite only
                               </Text>
-                            </Pressable>
-                          )
-                        ) : hasInvite ? (
-                          <View style={styles.groupActionMuted}>
-                            <Text style={styles.groupActionMutedText}>
-                              Invited
-                            </Text>
-                          </View>
-                        ) : (
-                          <View style={styles.groupActionMuted}>
-                            <Text style={styles.groupActionMutedText}>
-                              Invite only
-                            </Text>
-                          </View>
-                        )}
-                        {group.is_owner ? (
-                          <Text style={styles.groupOwnerTag}>Owner</Text>
-                        ) : null}
-                      </View>
-                    </Pressable>
-                  );
-                })
-              )}
-            </ScrollView>
+                            </View>
+                          )}
+                          {group.is_owner ? (
+                            <Text style={styles.groupOwnerTag}>Owner</Text>
+                          ) : null}
+                        </View>
+                      </Pressable>
+                    );
+                  })
+                )}
+              </ScrollView>
+            </View>
           </View>
 
           {/* Leaderboards Section */}
@@ -1040,89 +1060,94 @@ export default function SocialScreen() {
                 </Pressable>
               </View>
             </View>
-
-            <ScrollView
-              style={styles.listScroll}
-              contentContainerStyle={styles.leaderboardList}
-              nestedScrollEnabled
-              showsVerticalScrollIndicator={false}
-            >
-              {leaderboardLoading ? (
-                <Text style={styles.emptyText}>Loading...</Text>
-              ) : leaderboardEntries.length === 0 ? (
-                <Text style={styles.emptyText}>No leaderboard data yet</Text>
-              ) : (
-                leaderboardEntries.map((entry) => (
-                  <View
-                    key={`${entry.username}-${entry.rank}`}
-                    style={styles.leaderboardItem}
-                  >
-                    <View style={styles.rankContainer}>
-                      <Text style={styles.rankNumber}>{entry.rank}</Text>
-                      {entry.rank <= 3 && (
-                        <Ionicons
-                          name={
-                            entry.rank === 1
-                              ? "trophy"
-                              : entry.rank === 2
-                                ? "medal-outline"
-                                : "medal"
-                          }
-                          size={18}
-                          color={
-                            entry.rank === 1
-                              ? "#FBBF24"
-                              : entry.rank === 2
-                                ? "#9CA3AF"
-                                : "#A0744F"
-                          }
-                        />
-                      )}
-                    </View>
-                    <View style={styles.friendAvatar}>
-                      {entry.profile_photo ? (
-                        <Image
-                          source={{
-                            uri: `data:image/jpeg;base64,${entry.profile_photo}`,
-                          }}
-                          style={styles.friendAvatarImage}
-                        />
-                      ) : (
-                        <Ionicons
-                          name="person"
-                          size={18}
-                          color={COLORS.textMuted}
-                        />
-                      )}
-                    </View>
-                    <View style={styles.leaderboardInfo}>
-                      <Text style={styles.leaderboardName}>
-                        {entry.full_name || entry.username}
-                      </Text>
-                      <Text style={styles.leaderboardStats}>
-                        {entry.university ?? `@${entry.username}`}
-                      </Text>
-                    </View>
-                    {leaderboardMetric === "hours" ? (
-                      <Text style={styles.leaderboardValue}>
-                        {formatLeaderboardHours(entry.study_hours ?? 0)}
-                      </Text>
-                    ) : (
-                      <View style={styles.leaderboardStreak}>
-                        <Ionicons
-                          name="flame"
-                          size={16}
-                          color={COLORS.accent}
-                        />
-                        <Text style={styles.leaderboardStreakValue}>
-                          {entry.streak_count ?? 0}
+            <View style={styles.listPanel}>
+              <ScrollView
+                style={styles.listScrollLeaderboard}
+                contentContainerStyle={
+                  leaderboardEntries.length === 0
+                    ? [styles.leaderboardList, styles.listEmptyContent]
+                    : styles.leaderboardList
+                }
+                nestedScrollEnabled
+                showsVerticalScrollIndicator={false}
+              >
+                {leaderboardLoading ? (
+                  <Text style={styles.emptyText}>Loading...</Text>
+                ) : leaderboardEntries.length === 0 ? (
+                  <Text style={styles.emptyText}>No leaderboard data yet</Text>
+                ) : (
+                  leaderboardEntries.map((entry) => (
+                    <View
+                      key={`${entry.username}-${entry.rank}`}
+                      style={styles.leaderboardItem}
+                    >
+                      <View style={styles.rankContainer}>
+                        <Text style={styles.rankNumber}>{entry.rank}</Text>
+                        {entry.rank <= 3 && (
+                          <Ionicons
+                            name={
+                              entry.rank === 1
+                                ? "trophy"
+                                : entry.rank === 2
+                                  ? "medal-outline"
+                                  : "medal"
+                            }
+                            size={18}
+                            color={
+                              entry.rank === 1
+                                ? "#FBBF24"
+                                : entry.rank === 2
+                                  ? "#9CA3AF"
+                                  : "#A0744F"
+                            }
+                          />
+                        )}
+                      </View>
+                      <View style={styles.friendAvatar}>
+                        {entry.profile_photo ? (
+                          <Image
+                            source={{
+                              uri: `data:image/jpeg;base64,${entry.profile_photo}`,
+                            }}
+                            style={styles.friendAvatarImage}
+                          />
+                        ) : (
+                          <Ionicons
+                            name="person"
+                            size={18}
+                            color={COLORS.textMuted}
+                          />
+                        )}
+                      </View>
+                      <View style={styles.leaderboardInfo}>
+                        <Text style={styles.leaderboardName}>
+                          {entry.full_name || entry.username}
+                        </Text>
+                        <Text style={styles.leaderboardStats}>
+                          {entry.university ?? `@${entry.username}`}
                         </Text>
                       </View>
-                    )}
-                  </View>
-                ))
-              )}
-            </ScrollView>
+                      {leaderboardMetric === "hours" ? (
+                        <Text style={styles.leaderboardValue}>
+                          {formatLeaderboardHours(entry.study_hours ?? 0)}
+                        </Text>
+                      ) : (
+                        <View style={styles.leaderboardStreak}>
+                          <Ionicons
+                            name="flame"
+                            size={16}
+                            color={COLORS.accent}
+                          />
+                          <Text style={styles.leaderboardStreakValue}>
+                            {entry.streak_count ?? 0}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  ))
+                )}
+              </ScrollView>
+            </View>
           </View>
         </ScrollView>
       </View>
@@ -1941,7 +1966,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     backgroundColor: COLORS.card,
     borderRadius: 16,
-    paddingVertical: SPACING.md,
+    paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.md,
     borderWidth: 1,
     borderColor: COLORS.borderSoft,
@@ -1952,7 +1977,7 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: "800",
     color: COLORS.textPrimary,
   },
@@ -2027,8 +2052,25 @@ const styles = StyleSheet.create({
   friendsList: {
     gap: SPACING.sm,
   },
-  listScroll: {
-    maxHeight: 320,
+  listPanel: {
+    borderWidth: 1,
+    borderColor: COLORS.borderSoft,
+    borderRadius: 16,
+    backgroundColor: COLORS.card,
+    padding: SPACING.sm,
+  },
+  listScrollFriends: {
+    height: FRIENDS_LIST_HEIGHT,
+  },
+  listScrollGroups: {
+    height: GROUPS_LIST_HEIGHT,
+  },
+  listScrollLeaderboard: {
+    height: LEADERBOARD_LIST_HEIGHT,
+  },
+  listEmptyContent: {
+    flexGrow: 1,
+    justifyContent: "center",
   },
   searchInput: {
     height: 44,
@@ -2338,6 +2380,8 @@ const styles = StyleSheet.create({
   emptyText: {
     color: COLORS.textMuted,
     fontSize: 13,
+    textAlign: "center",
+    alignSelf: "center",
   },
   friendItem: {
     flexDirection: "row",
@@ -2382,6 +2426,7 @@ const styles = StyleSheet.create({
   },
   groupsList: {
     gap: SPACING.sm,
+    flexGrow: 1,
   },
   groupCard: {
     backgroundColor: COLORS.card,
@@ -2644,6 +2689,7 @@ const styles = StyleSheet.create({
   },
   leaderboardList: {
     gap: SPACING.sm,
+    flexGrow: 1,
   },
   leaderboardItem: {
     flexDirection: "row",

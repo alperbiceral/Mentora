@@ -92,8 +92,8 @@ export default function AuthScreen() {
         await AsyncStorage.setItem("mentora.token", data.access_token);
       }
       Alert.alert(isRegister ? "Registered" : "Logged in");
-      // Redirect to OCEAN testing after registration, otherwise to main app
-      router.replace(isRegister ? "/ocean/1" : "/(tabs)");
+      // Redirect to profile creation after registration, otherwise to main app
+      router.replace(isRegister ? "/profile/edit?onboarding=1" : "/(tabs)");
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Something went wrong";

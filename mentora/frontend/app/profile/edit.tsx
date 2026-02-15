@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import React, { useEffect, useState } from "react";
 import {
   Alert,
   SafeAreaView,
@@ -56,6 +56,9 @@ type Profile = {
 
 export default function EditProfileScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
+  const isOnboarding =
+    params.onboarding === "1" || params.onboarding === "true";
   const [profile, setProfile] = useState<Profile | null>(null);
   const [username, setUsername] = useState("");
   const [fullName, setFullName] = useState("");
@@ -65,11 +68,11 @@ export default function EditProfileScreen() {
   const [department, setDepartment] = useState("");
   const [profilePhoto, setProfilePhoto] = useState("");
   const [loading, setLoading] = useState(true);
-
-  const canSave = useMemo(
-    () => username.trim().length > 0 && fullName.trim().length > 0,
-    [username, fullName],
-  );
+  const [fieldErrors, setFieldErrors] = useState({
+    fullName: "",
+    university: "",
+    department: "",
+  });
 
   useEffect(() => {
     let active = true;
@@ -126,8 +129,13 @@ export default function EditProfileScreen() {
   }, []);
 
   const handleSave = async () => {
-    if (!canSave) {
-      Alert.alert("Missing info", "Username and full name are required.");
+    const nextErrors = {
+      fullName: fullName.trim() ? "" : "Required",
+      university: university.trim() ? "" : "Required",
+      department: department.trim() ? "" : "Required",
+    };
+    setFieldErrors(nextErrors);
+    if (Object.values(nextErrors).some((value) => value.length > 0)) {
       return;
     }
 
@@ -171,6 +179,13 @@ export default function EditProfileScreen() {
       const data = (await response.json()) as Profile;
       setProfile(data);
       Alert.alert("Saved", "Profile updated.");
+      if (isOnboarding) {
+        const skipped = await AsyncStorage.getItem(
+          "mentora.personalitySkipped",
+        );
+        router.replace(skipped ? "/(tabs)" : "/ocean/1");
+        return;
+      }
       router.back();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Save failed";
@@ -217,7 +232,13 @@ export default function EditProfileScreen() {
           <Field
             label="Full Name"
             value={fullName}
-            onChangeText={setFullName}
+            onChangeText={(text) => {
+              setFullName(text);
+              if (fieldErrors.fullName) {
+                setFieldErrors((prev) => ({ ...prev, fullName: "" }));
+              }
+            }}
+            error={fieldErrors.fullName}
           />
 
           <Field
@@ -239,13 +260,25 @@ export default function EditProfileScreen() {
           <Field
             label="University"
             value={university}
-            onChangeText={setUniversity}
+            onChangeText={(text) => {
+              setUniversity(text);
+              if (fieldErrors.university) {
+                setFieldErrors((prev) => ({ ...prev, university: "" }));
+              }
+            }}
+            error={fieldErrors.university}
           />
 
           <Field
             label="Department"
             value={department}
-            onChangeText={setDepartment}
+            onChangeText={(text) => {
+              setDepartment(text);
+              if (fieldErrors.department) {
+                setFieldErrors((prev) => ({ ...prev, department: "" }));
+              }
+            }}
+            error={fieldErrors.department}
           />
 
           <View style={styles.photoRow}>
@@ -315,6 +348,7 @@ type FieldProps = {
   label: string;
   value: string;
   onChangeText: (text: string) => void;
+  error?: string;
   autoCapitalize?: "none" | "sentences" | "words" | "characters";
   keyboardType?:
     | "default"
@@ -330,6 +364,7 @@ const Field: React.FC<FieldProps> = ({
   label,
   value,
   onChangeText,
+  error,
   autoCapitalize = "sentences",
   keyboardType = "default",
   editable = true,
@@ -347,6 +382,7 @@ const Field: React.FC<FieldProps> = ({
       editable={editable}
       multiline={multiline}
     />
+    {error ? <Text style={styles.fieldErrorText}>{error}</Text> : null}
   </View>
 );
 
@@ -403,6 +439,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textMuted,
     marginBottom: 6,
+  },
+  fieldErrorText: {
+    color: COLORS.danger,
+    fontSize: 12,
+    marginTop: 6,
   },
   textInput: {
     minHeight: 44,

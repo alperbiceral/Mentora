@@ -47,6 +47,9 @@ const SPACING = {
   xl: 24,
 };
 
+const PRIVATE_PANEL_HEIGHT = 405;
+const GROUP_PANEL_HEIGHT = 320;
+
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
 const CHAT_LAST_SEEN_KEY = "mentora.chatLastSeenByThread";
 
@@ -872,122 +875,144 @@ export default function ChatScreen() {
             <View style={styles.headerCard}>
               <Text style={styles.headerTitle}>Chat</Text>
             </View>
-
-            <ScrollView
-              contentContainerStyle={styles.listContent}
-              showsVerticalScrollIndicator={false}
-            >
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Private chats</Text>
-                <Pressable
-                  hitSlop={8}
-                  style={styles.sectionAction}
-                  onPress={() => setNewChatOpen(true)}
+            <View style={styles.listPanels}>
+              <View style={[styles.listPanel, styles.listPanelPrivate]}>
+                <View
+                  style={[styles.sectionHeader, styles.sectionHeaderCompact]}
                 >
-                  <Ionicons name="add" size={16} color="#0B1020" />
-                  <Text style={styles.sectionActionText}>New</Text>
-                </Pressable>
+                  <Text style={styles.sectionTitle}>Private chats</Text>
+                  <Pressable
+                    hitSlop={8}
+                    style={styles.sectionAction}
+                    onPress={() => setNewChatOpen(true)}
+                  >
+                    <Ionicons name="add" size={16} color="#0B1020" />
+                    <Text style={styles.sectionActionText}>New</Text>
+                  </Pressable>
+                </View>
+
+                <ScrollView
+                  style={styles.listScroll}
+                  contentContainerStyle={styles.listScrollContent}
+                  showsVerticalScrollIndicator={false}
+                >
+                  {loadingThreads ? (
+                    <Text style={styles.emptyText}>Loading chats...</Text>
+                  ) : privateThreads.length === 0 ? (
+                    <Text style={styles.emptyText}>No private chats yet.</Text>
+                  ) : (
+                    privateThreads.map((thread) => (
+                      <Pressable
+                        key={thread.thread_id}
+                        style={styles.threadCard}
+                        onPress={() => setActiveThreadId(thread.thread_id)}
+                      >
+                        <View style={styles.threadAvatar}>
+                          {thread.friend_username &&
+                          friendMap.get(thread.friend_username)
+                            ?.profile_photo ? (
+                            <Image
+                              source={{
+                                uri: `data:image/jpeg;base64,${friendMap.get(thread.friend_username)?.profile_photo}`,
+                              }}
+                              style={styles.threadAvatarImage}
+                            />
+                          ) : (
+                            <Ionicons
+                              name="person"
+                              size={18}
+                              color={COLORS.textMuted}
+                            />
+                          )}
+                        </View>
+                        <View style={styles.threadInfo}>
+                          <Text style={styles.threadTitle}>
+                            {(thread.friend_username &&
+                              friendMap.get(thread.friend_username)
+                                ?.full_name) ||
+                              thread.friend_username ||
+                              "Private chat"}
+                          </Text>
+                          <Text style={styles.threadPreview}>
+                            {thread.last_message ?? "New conversation"}
+                          </Text>
+                        </View>
+                        <Pressable
+                          hitSlop={8}
+                          style={styles.threadDelete}
+                          onPress={() => handleDeleteThread(thread.thread_id)}
+                        >
+                          <Ionicons
+                            name="trash"
+                            size={16}
+                            color={COLORS.danger}
+                          />
+                        </Pressable>
+                      </Pressable>
+                    ))
+                  )}
+                </ScrollView>
               </View>
 
-              {loadingThreads ? (
-                <Text style={styles.emptyText}>Loading chats...</Text>
-              ) : privateThreads.length === 0 ? (
-                <Text style={styles.emptyText}>No private chats yet.</Text>
-              ) : (
-                privateThreads.map((thread) => (
-                  <Pressable
-                    key={thread.thread_id}
-                    style={styles.threadCard}
-                    onPress={() => setActiveThreadId(thread.thread_id)}
-                  >
-                    <View style={styles.threadAvatar}>
-                      {thread.friend_username &&
-                      friendMap.get(thread.friend_username)?.profile_photo ? (
-                        <Image
-                          source={{
-                            uri: `data:image/jpeg;base64,${friendMap.get(thread.friend_username)?.profile_photo}`,
-                          }}
-                          style={styles.threadAvatarImage}
-                        />
-                      ) : (
-                        <Ionicons
-                          name="person"
-                          size={18}
-                          color={COLORS.textMuted}
-                        />
-                      )}
-                    </View>
-                    <View style={styles.threadInfo}>
-                      <Text style={styles.threadTitle}>
-                        {(thread.friend_username &&
-                          friendMap.get(thread.friend_username)?.full_name) ||
-                          thread.friend_username ||
-                          "Private chat"}
-                      </Text>
-                      <Text style={styles.threadPreview}>
-                        {thread.last_message ?? "New conversation"}
-                      </Text>
-                    </View>
-                    <Pressable
-                      hitSlop={8}
-                      style={styles.threadDelete}
-                      onPress={() => handleDeleteThread(thread.thread_id)}
-                    >
-                      <Ionicons name="trash" size={16} color={COLORS.danger} />
-                    </Pressable>
-                  </Pressable>
-                ))
-              )}
-
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Group chats</Text>
-                <Pressable
-                  hitSlop={8}
-                  style={styles.sectionAction}
-                  onPress={() => setGroupCreateOpen(true)}
+              <View style={[styles.listPanel, styles.listPanelGroup]}>
+                <View
+                  style={[styles.sectionHeader, styles.sectionHeaderCompact]}
                 >
-                  <Ionicons name="add" size={16} color="#0B1020" />
-                  <Text style={styles.sectionActionText}>New</Text>
-                </Pressable>
-              </View>
-
-              {groupThreads.length === 0 ? (
-                <Text style={styles.emptyText}>No group chats yet.</Text>
-              ) : (
-                groupThreads.map((thread) => (
+                  <Text style={styles.sectionTitle}>Group chats</Text>
                   <Pressable
-                    key={thread.thread_id}
-                    style={styles.threadCard}
-                    onPress={() => setActiveThreadId(thread.thread_id)}
+                    hitSlop={8}
+                    style={styles.sectionAction}
+                    onPress={() => setGroupCreateOpen(true)}
                   >
-                    <View style={styles.threadAvatar}>
-                      {thread.group_photo ? (
-                        <Image
-                          source={{
-                            uri: `data:image/jpeg;base64,${thread.group_photo}`,
-                          }}
-                          style={styles.threadAvatarImage}
-                        />
-                      ) : (
-                        <Ionicons
-                          name="people"
-                          size={18}
-                          color={COLORS.textMuted}
-                        />
-                      )}
-                    </View>
-                    <View style={styles.threadInfo}>
-                      <Text style={styles.threadTitle}>
-                        {thread.title || "Group chat"}
-                      </Text>
-                      <Text style={styles.threadPreview}>
-                        {thread.members_count ?? 0} members
-                      </Text>
-                    </View>
+                    <Ionicons name="add" size={16} color="#0B1020" />
+                    <Text style={styles.sectionActionText}>New</Text>
                   </Pressable>
-                ))
-              )}
-            </ScrollView>
+                </View>
+
+                <ScrollView
+                  style={styles.listScroll}
+                  contentContainerStyle={styles.listScrollContent}
+                  showsVerticalScrollIndicator={false}
+                >
+                  {groupThreads.length === 0 ? (
+                    <Text style={styles.emptyText}>No group chats yet.</Text>
+                  ) : (
+                    groupThreads.map((thread) => (
+                      <Pressable
+                        key={thread.thread_id}
+                        style={styles.threadCard}
+                        onPress={() => setActiveThreadId(thread.thread_id)}
+                      >
+                        <View style={styles.threadAvatar}>
+                          {thread.group_photo ? (
+                            <Image
+                              source={{
+                                uri: `data:image/jpeg;base64,${thread.group_photo}`,
+                              }}
+                              style={styles.threadAvatarImage}
+                            />
+                          ) : (
+                            <Ionicons
+                              name="people"
+                              size={18}
+                              color={COLORS.textMuted}
+                            />
+                          )}
+                        </View>
+                        <View style={styles.threadInfo}>
+                          <Text style={styles.threadTitle}>
+                            {thread.title || "Group chat"}
+                          </Text>
+                          <Text style={styles.threadPreview}>
+                            {thread.members_count ?? 0} members
+                          </Text>
+                        </View>
+                      </Pressable>
+                    ))
+                  )}
+                </ScrollView>
+              </View>
+            </View>
           </View>
         )}
       </View>
@@ -1351,6 +1376,32 @@ const styles = StyleSheet.create({
   },
   listPane: {
     flex: 1,
+    gap: SPACING.lg,
+  },
+  listPanels: {
+    gap: SPACING.md,
+  },
+  listPanel: {
+    backgroundColor: COLORS.card,
+    borderRadius: 18,
+    paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.sm,
+    paddingBottom: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.borderSoft,
+  },
+  listPanelPrivate: {
+    height: PRIVATE_PANEL_HEIGHT,
+  },
+  listPanelGroup: {
+    height: GROUP_PANEL_HEIGHT,
+  },
+  listScroll: {
+    flex: 1,
+  },
+  listScrollContent: {
+    gap: SPACING.sm,
+    paddingBottom: SPACING.sm,
   },
   chatPane: {
     flex: 1,
@@ -1372,13 +1423,13 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     backgroundColor: COLORS.card,
     borderRadius: 16,
-    paddingVertical: SPACING.md,
+    paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.md,
     borderWidth: 1,
     borderColor: COLORS.borderSoft,
   },
   headerTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: "800",
     color: COLORS.textPrimary,
   },
@@ -1388,6 +1439,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+  },
+  sectionHeaderCompact: {
+    marginTop: 0,
   },
   sectionTitle: {
     fontSize: 14,
