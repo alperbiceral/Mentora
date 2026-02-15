@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+import logging
 
 from database import engine
 from routers.auth_router import router as auth_router
@@ -16,6 +17,7 @@ import models
 # Create tables
 models.Base.metadata.create_all(bind=engine)
 
+logging.basicConfig(level=logging.INFO)
 app = FastAPI(title="Mentora API")
 
 # CORS Configuration

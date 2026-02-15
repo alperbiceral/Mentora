@@ -1,6 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useMemo, useState } from "react";
+import * as ImagePicker from "expo-image-picker";
 import {
+  Alert,
   LayoutAnimation,
   Modal,
   Platform,
@@ -116,11 +118,12 @@ type CourseApi = {
 
 const DAYS: WeekdayKey[] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-const START_HOUR = 8;
-const END_HOUR = 22;
+const START_HOUR = 6;
+const END_HOUR = 24;
 const SLOT_MINUTES = 30;
-const SLOT_HEIGHT = 22;
-const GRID_MAX_HEIGHT = 460;
+const SLOT_HEIGHT = 16;
+const GRID_MAX_HEIGHT = 580;
+const DRAFT_GRID_MAX_HEIGHT = 420;
 
 const TIME_SLOTS = buildTimeSlots(START_HOUR, END_HOUR, SLOT_MINUTES);
 
@@ -143,6 +146,10 @@ export default function ScheduleScreen() {
   const [blocks, setBlocks] = useState<CourseBlock[]>(INITIAL_BLOCKS);
   const [isCourseModalOpen, setIsCourseModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [isClearingSchedule, setIsClearingSchedule] = useState(false);
+  const [importMessage, setImportMessage] = useState<string | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
   const [modalMode, setModalMode] = useState<"add" | "edit">("add");
   const [editingCourseId, setEditingCourseId] = useState<string | null>(null);
   const [loadingCourses, setLoadingCourses] = useState(false);
@@ -301,6 +308,134 @@ export default function ScheduleScreen() {
       active = false;
     };
   }, []);
+
+  async function handleImportSchedule() {
+    if (isImporting) {
+      return;
+    }
+    setImportError(null);
+    setImportMessage(null);
+    try {
+      const username = await AsyncStorage.getItem("mentora.username");
+      if (!username) {
+        setImportError("Login required to import a schedule.");
+        return;
+      }
+
+      const permission =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        setImportError("Media library permission is required.");
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 1,
+      });
+      if (result.canceled || !result.assets?.length) {
+        return;
+      }
+
+      setIsImporting(true);
+      setImportMessage("Uploading schedule image...");
+
+      const asset = result.assets[0];
+      const formData = new FormData();
+      formData.append("username", username);
+      formData.append("replace_existing", "false");
+
+      const fileName =
+        asset.fileName ?? `schedule.${asset.uri.split(".").pop() ?? "jpg"}`;
+      const mimeType = asset.mimeType ?? "image/jpeg";
+      let file: File | { uri: string; name: string; type: string };
+
+      if (Platform.OS === "web") {
+        const blob = await (await fetch(asset.uri)).blob();
+        file = new File([blob], fileName, { type: mimeType });
+      } else {
+        file = { uri: asset.uri, name: fileName, type: mimeType };
+      }
+
+      formData.append("file", file as unknown as Blob);
+
+      const response = await fetch(`${API_BASE_URL}/courses/import-schedule`, {
+        method: "POST",
+        headers: { Accept: "application/json" },
+        body: formData,
+      });
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => null);
+        const detail =
+          typeof errorBody?.detail === "string"
+            ? errorBody.detail
+            : "Import failed";
+        throw new Error(detail);
+      }
+
+      const data = (await response.json()) as CourseApi[];
+      const mappedCourses: Course[] = data.map((course) => ({
+        id: String(course.course_id),
+        name: course.name,
+        description: course.description ?? "",
+        instructor: course.instructor ?? "",
+        location: course.location ?? "",
+        color: course.color ?? COURSE_COLORS[0],
+        details: [],
+      }));
+      const mappedBlocks: CourseBlock[] = data.flatMap((course) =>
+        course.blocks.map((block) => ({
+          id: `block-${block.block_id}`,
+          courseId: String(course.course_id),
+          day: block.day,
+          start: block.start,
+          end: block.end,
+        })),
+      );
+
+      setCourses((prev) => [...prev, ...mappedCourses]);
+      setBlocks((prev) => [...prev, ...mappedBlocks]);
+      setImportMessage("Schedule imported.");
+      setIsImportModalOpen(false);
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Import failed. Please try again.";
+      setImportError(message);
+    } finally {
+      setIsImporting(false);
+    }
+  }
+
+  async function handleClearSchedule() {
+    if (isClearingSchedule) {
+      return;
+    }
+    setIsClearingSchedule(true);
+    try {
+      const username = await AsyncStorage.getItem("mentora.username");
+      if (!username) {
+        Alert.alert("Login required", "Please sign in to clear the schedule.");
+        return;
+      }
+
+      const response = await fetch(
+        `${API_BASE_URL}/courses/${encodeURIComponent(username)}`,
+        { method: "DELETE" },
+      );
+      if (!response.ok) {
+        throw new Error("Failed to clear schedule");
+      }
+
+      setCourses([]);
+      setBlocks([]);
+    } catch (error) {
+      Alert.alert("Clear failed", "Please try again.");
+    } finally {
+      setIsClearingSchedule(false);
+    }
+  }
 
   async function handleSaveCourse() {
     if (savingCourse) {
@@ -516,8 +651,27 @@ export default function ScheduleScreen() {
             <View style={styles.section}>
               <View style={styles.coursesHeader}>
                 <View style={styles.coursesTitleRow}>
-                  <Text style={styles.sectionTitle}>Courses</Text>
+                  <Text
+                    style={styles.sectionTitleInline}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.9}
+                  >
+                    Weekly Schedule
+                  </Text>
                   <View style={styles.coursesActionRow}>
+                    <Pressable
+                      style={styles.clearScheduleButton}
+                      onPress={handleClearSchedule}
+                      disabled={isClearingSchedule}
+                      hitSlop={6}
+                    >
+                      <Ionicons
+                        name="trash-outline"
+                        size={18}
+                        color={COLORS.danger}
+                      />
+                    </Pressable>
                     <Pressable
                       style={styles.importButton}
                       onPress={() => setIsImportModalOpen(true)}
@@ -533,17 +687,21 @@ export default function ScheduleScreen() {
                       style={styles.addCourseButton}
                       onPress={handleOpenCourseModal}
                     >
-                      <Ionicons name="add" size={18} color="#FFFFFF" />
-                      <Text style={styles.addCourseText}>Add Course</Text>
+                      <Ionicons name="add" size={16} color="#FFFFFF" />
+                      <Text
+                        style={styles.addCourseText}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.85}
+                      >
+                        Add Course
+                      </Text>
                     </Pressable>
                   </View>
                 </View>
-                <Text style={styles.sectionSubtitle}>
-                  Build a weekly timetable in 30-minute blocks.
-                </Text>
               </View>
 
-              <ScheduleCard title="Weekly Schedule">
+              <ScheduleCard>
                 <CourseLegend courses={courses} loading={loadingCourses} />
                 <CourseScheduleGrid
                   blocks={blocks}
@@ -601,7 +759,29 @@ export default function ScheduleScreen() {
                         />
                       </Pressable>
                     </View>
-                    <Text style={styles.importModalText}>TO:DO</Text>
+                    <Text style={styles.importModalText}>
+                      Upload a timetable image to auto-create courses.
+                    </Text>
+                    {importError ? (
+                      <Text style={styles.importModalError}>{importError}</Text>
+                    ) : null}
+                    {importMessage ? (
+                      <Text style={styles.importModalMessage}>
+                        {importMessage}
+                      </Text>
+                    ) : null}
+                    <Pressable
+                      style={[
+                        styles.primaryButton,
+                        isImporting && styles.buttonDisabled,
+                      ]}
+                      onPress={handleImportSchedule}
+                      disabled={isImporting}
+                    >
+                      <Text style={styles.primaryButtonText}>
+                        {isImporting ? "Importing..." : "Choose image"}
+                      </Text>
+                    </Pressable>
                   </View>
                 </View>
               </Modal>
@@ -864,13 +1044,13 @@ const CourseModal: React.FC<CourseModalProps> = ({
 );
 
 type ScheduleCardProps = {
-  title: string;
+  title?: string;
   children: React.ReactNode;
 };
 
 const ScheduleCard: React.FC<ScheduleCardProps> = ({ title, children }) => (
   <View style={styles.panelCard}>
-    <Text style={styles.panelTitle}>{title}</Text>
+    {title ? <Text style={styles.panelTitle}>{title}</Text> : null}
     {children}
   </View>
 );
@@ -1077,7 +1257,7 @@ const DraftScheduleGrid: React.FC<DraftScheduleGridProps> = ({
             ))}
           </View>
           <ScrollView
-            style={[styles.gridBody, { maxHeight: GRID_MAX_HEIGHT }]}
+            style={[styles.gridBody, { maxHeight: DRAFT_GRID_MAX_HEIGHT }]}
             nestedScrollEnabled
             showsVerticalScrollIndicator={false}
           >
@@ -1490,6 +1670,12 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: COLORS.textPrimary,
   },
+  sectionTitleInline: {
+    flexShrink: 1,
+    fontSize: 18,
+    fontWeight: "700",
+    color: COLORS.textPrimary,
+  },
   sectionSubtitle: {
     fontSize: 12,
     color: COLORS.textSecondary,
@@ -1535,6 +1721,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.borderSubtle,
   },
+  clearScheduleButton: {
+    alignItems: "center",
+    justifyContent: "center",
+    width: 32,
+    height: 32,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(239,68,68,0.45)",
+    backgroundColor: "rgba(239,68,68,0.08)",
+  },
   importButtonText: {
     fontSize: 12,
     color: COLORS.textPrimary,
@@ -1544,13 +1740,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
     backgroundColor: COLORS.accent,
     borderRadius: 12,
   },
   addCourseText: {
-    fontSize: 12,
+    fontSize: 11,
     color: "#FFFFFF",
     fontWeight: "700",
   },
@@ -1688,10 +1884,10 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(15,23,42,0.9)",
   },
   timeHeaderSpacer: {
-    width: 52,
+    width: 35,
   },
   dayHeaderCell: {
-    width: 92,
+    width: 57,
     paddingVertical: 10,
     borderLeftWidth: 1,
     borderLeftColor: "rgba(148,163,184,0.15)",
@@ -1705,7 +1901,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   dayHeaderText: {
-    fontSize: 12,
+    fontSize: 11,
     color: COLORS.textSecondary,
     fontWeight: "600",
   },
@@ -1716,22 +1912,22 @@ const styles = StyleSheet.create({
     flexDirection: "row",
   },
   timeColumn: {
-    width: 52,
+    width: 35,
     backgroundColor: "rgba(15,23,42,0.9)",
   },
   timeSlot: {
     height: SLOT_HEIGHT,
     justifyContent: "center",
-    paddingLeft: 8,
+    paddingLeft: 6,
     borderBottomWidth: 1,
     borderBottomColor: "rgba(148,163,184,0.08)",
   },
   timeText: {
-    fontSize: 9,
+    fontSize: 8,
     color: COLORS.textMuted,
   },
   dayColumn: {
-    width: 92,
+    width: 57,
     borderLeftWidth: 1,
     borderLeftColor: "rgba(148,163,184,0.15)",
     position: "relative",
@@ -1752,8 +1948,8 @@ const styles = StyleSheet.create({
   },
   selectionBlock: {
     position: "absolute",
-    left: 4,
-    right: 4,
+    left: 3,
+    right: 3,
     borderRadius: 10,
     backgroundColor: "rgba(109,94,247,0.35)",
     borderWidth: 1,
@@ -1761,8 +1957,8 @@ const styles = StyleSheet.create({
   },
   selectionStart: {
     position: "absolute",
-    left: 4,
-    right: 4,
+    left: 3,
+    right: 3,
     borderRadius: 10,
     backgroundColor: "rgba(109,94,247,0.2)",
     borderWidth: 1,
@@ -1770,17 +1966,17 @@ const styles = StyleSheet.create({
   },
   blockedBlock: {
     position: "absolute",
-    left: 6,
-    right: 6,
+    left: 4,
+    right: 4,
     borderRadius: 10,
     opacity: 0.45,
   },
   courseBlock: {
     position: "absolute",
-    left: 6,
-    right: 6,
+    left: 4,
+    right: 4,
     borderRadius: 12,
-    padding: 8,
+    padding: 6,
     gap: 4,
     alignItems: "center",
     justifyContent: "center",
@@ -1802,10 +1998,10 @@ const styles = StyleSheet.create({
   },
   planBlock: {
     position: "absolute",
-    left: 6,
-    right: 6,
+    left: 4,
+    right: 4,
     borderRadius: 12,
-    padding: 8,
+    padding: 6,
     gap: 4,
   },
   planCourseBlock: {
@@ -1910,6 +2106,14 @@ const styles = StyleSheet.create({
   importModalText: {
     fontSize: 14,
     color: COLORS.textSecondary,
+  },
+  importModalMessage: {
+    fontSize: 12,
+    color: COLORS.accentSoft,
+  },
+  importModalError: {
+    fontSize: 12,
+    color: COLORS.danger,
   },
   courseCardList: {
     gap: SPACING.sm,
