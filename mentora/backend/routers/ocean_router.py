@@ -152,7 +152,7 @@ async def save_personality_profile(
         )
     
     profile = calculate_ocean_profile(current_user.user_id)
-    
+
     # Check if user already has a personality profile
     existing_personality = (
         db.query(Personality)
@@ -160,7 +160,7 @@ async def save_personality_profile(
         .order_by(Personality.test_date.desc())
         .first()
     )
-    
+
     # Create personality scores dictionary
     personality_scores = {
         "openness": profile.openness,
@@ -169,18 +169,33 @@ async def save_personality_profile(
         "agreeableness": profile.agreeableness,
         "neuroticism": profile.neuroticism,
     }
-    
-    # Create new personality record
+
+    if existing_personality:
+        # Update the most recent existing personality record
+        existing_personality.personality_scores = personality_scores
+        existing_personality.test_date = date.today()
+        db.add(existing_personality)
+        db.commit()
+        db.refresh(existing_personality)
+
+        return {
+            "message": "Personality profile updated successfully",
+            "personality_id": existing_personality.personality_id,
+            "profile": profile,
+            "test_date": existing_personality.test_date,
+        }
+
+    # Create new personality record if none exist
     new_personality = Personality(
         user_id=current_user.user_id,
         personality_scores=personality_scores,
         test_date=date.today(),
     )
-    
+
     db.add(new_personality)
     db.commit()
     db.refresh(new_personality)
-    
+
     return {
         "message": "Personality profile saved successfully",
         "personality_id": new_personality.personality_id,

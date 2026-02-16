@@ -212,20 +212,38 @@ export default function ProfileScreen() {
             </View>
           </View>
 
-          <Pressable
-            style={styles.editProfileButton}
-            onPress={() => router.push("/profile/edit")}
-          >
-            <Ionicons
-              name="create-outline"
-              size={16}
-              color="#FFFFFF"
-              style={{ marginRight: 6 }}
-            />
-            <Text style={styles.editProfileButtonText}>
-              {profile ? "Edit Profile" : "Create Profile"}
-            </Text>
-          </Pressable>
+          <View style={styles.profileActionsRow}>
+            <Pressable
+              style={styles.editProfileButton}
+              onPress={() => router.push("/profile/edit")}
+            >
+              <Ionicons
+                name="create-outline"
+                size={16}
+                color="#FFFFFF"
+                style={{ marginRight: 6 }}
+              />
+              <Text style={styles.editProfileButtonText}>
+                {profile ? "Edit Profile" : "Create Profile"}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={[styles.editProfileButton, styles.retakeButton]}
+              onPress={async () => {
+                await AsyncStorage.removeItem("mentora.personalitySkipped");
+                router.push("/ocean/1");
+              }}
+            >
+              <Ionicons
+                name="refresh"
+                size={16}
+                color="#FFFFFF"
+                style={{ marginRight: 6 }}
+              />
+              <Text style={styles.editProfileButtonText}>Retake OCEAN</Text>
+            </Pressable>
+          </View>
         </View>
 
         {/* My Profile card */}
@@ -817,5 +835,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: SPACING.lg,
     marginBottom: SPACING.sm,
+  },
+  profileActionsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: SPACING.sm,
+  },
+  retakeButton: {
+    marginLeft: 12,
+    backgroundColor: "rgba(109,94,247,0.85)",
   },
 });
