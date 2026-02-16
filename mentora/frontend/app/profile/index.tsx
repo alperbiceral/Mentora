@@ -140,12 +140,21 @@ export default function ProfileScreen() {
         try {
           const token = await AsyncStorage.getItem("mentora.token");
           if (token) {
-            const oceanResp = await fetch(`${API_BASE_URL}/ocean/profile/calculate`, {
+            // First try to fetch the most recently saved profile from the DB
+            let oceanResp = await fetch(`${API_BASE_URL}/ocean/profile/latest`, {
               headers: { Authorization: `Bearer ${token}` },
             });
+
+            // If there is no saved profile, fall back to the calculated in-memory profile
+            if (!oceanResp.ok) {
+              oceanResp = await fetch(`${API_BASE_URL}/ocean/profile/calculate`, {
+                headers: { Authorization: `Bearer ${token}` },
+              });
+            }
+
             if (oceanResp.ok) {
               const body = await oceanResp.json();
-              // API returns { profile, completed, total, is_complete }
+              // Both endpoints return an object with a `profile` field
               if (active && body?.profile) {
                 setOceanProfile(body.profile);
               }

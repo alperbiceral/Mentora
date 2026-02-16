@@ -136,6 +136,31 @@ async def get_personality_profile(current_user: User = Depends(get_current_user)
     }
 
 
+@router.get("/profile/latest")
+async def get_latest_personality(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return the most recently saved personality profile from the DB.
+
+    If no saved profile exists, fall back to the calculated in-memory profile.
+    """
+    existing = (
+        db.query(Personality)
+        .filter(Personality.user_id == current_user.user_id)
+        .order_by(Personality.test_date.desc())
+        .first()
+    )
+    if existing:
+        return {"profile": existing.personality_scores, "test_date": existing.test_date}
+
+    # fallback to calculated profile (may be default 50s)
+    profile = calculate_ocean_profile(current_user.user_id)
+    answers = get_user_answers(current_user.user_id)
+    completed = sum(1 for answer in answers if answer is not None)
+    return {"profile": profile, "completed": completed, "total": 20, "is_complete": completed == 20}
+
+
 @router.post("/profile/save")
 async def save_personality_profile(
     current_user: User = Depends(get_current_user),
