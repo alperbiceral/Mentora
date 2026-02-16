@@ -62,6 +62,14 @@ type StudySession = {
   ended_at: string;
 };
 
+type OceanProfile = {
+  openness: number;
+  conscientiousness: number;
+  extraversion: number;
+  agreeableness: number;
+  neuroticism: number;
+};
+
 export default function ProfileScreen() {
   const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -71,6 +79,7 @@ export default function ProfileScreen() {
   >("daily");
   const [sessions, setSessions] = useState<StudySession[]>([]);
   const [focusLoading, setFocusLoading] = useState(false);
+  const [oceanProfile, setOceanProfile] = useState<OceanProfile | null>(null);
 
   const avatarSource = useMemo(() => {
     if (!profile?.profile_photo) {
@@ -125,6 +134,25 @@ export default function ProfileScreen() {
           if (active) {
             setSessions([]);
           }
+        }
+
+        // Fetch OCEAN personality profile (calculated or saved) if authenticated
+        try {
+          const token = await AsyncStorage.getItem("mentora.token");
+          if (token) {
+            const oceanResp = await fetch(`${API_BASE_URL}/ocean/profile/calculate`, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            if (oceanResp.ok) {
+              const body = await oceanResp.json();
+              // API returns { profile, completed, total, is_complete }
+              if (active && body?.profile) {
+                setOceanProfile(body.profile);
+              }
+            }
+          }
+        } catch (err) {
+          // ignore
         }
       } catch (error) {
         if (active) {
@@ -256,7 +284,18 @@ export default function ProfileScreen() {
           <ProfileRow label="USERNAME" value={profile?.username ?? "-"} />
           <ProfileRow label="E-MAIL" value={profile?.email ?? "-"} />
           <ProfileRow label="UNIVERSITY" value={profile?.university ?? "-"} />
-          <ProfileRow label="PERSONALITY" value={profile?.personality ?? "-"} />
+          <ProfileRow
+            label="PERSONALITY"
+            value={
+              oceanProfile
+                ? `O:${Math.round(oceanProfile.openness)} C:${Math.round(
+                    oceanProfile.conscientiousness,
+                  )} E:${Math.round(oceanProfile.extraversion)} A:${Math.round(
+                    oceanProfile.agreeableness,
+                  )} N:${Math.round(oceanProfile.neuroticism)}`
+                : profile?.personality ?? "-"
+            }
+          />
         </View>
 
         {/* Study Insights card */}
