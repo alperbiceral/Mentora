@@ -601,7 +601,12 @@ export default function HomeScreen() {
           "Content-Type": "application/json",
         },
       });
-      await AsyncStorage.multiRemove(["mentora.username", "mentora.email"]);
+      await AsyncStorage.multiRemove([
+        "mentora.username",
+        "mentora.email",
+        "mentora.token",
+        "mentora.personalitySkipped",
+      ]);
     } catch (error) {
       Alert.alert("Logout failed", "Please try again.");
       return;

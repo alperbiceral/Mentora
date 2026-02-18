@@ -10,7 +10,8 @@ from config import GEMINI_API_KEY, GEMINI_MODEL
 from deps import get_db
 from models import Course, CourseBlock, Profile
 from schemas import CourseCreate, CourseResponse, CourseUpdate
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 router = APIRouter(prefix="/courses", tags=["courses"])
 
@@ -642,24 +643,32 @@ async def import_schedule(
             detail="Empty image upload",
         )
 
-    genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel(GEMINI_MODEL)
+    client = genai.Client(api_key=GEMINI_API_KEY)
     prompt = (
-        "You are given a university timetable image. Extract courses and return "
+        "You are given a university timetable/schedule image. Extract ALL courses and return "
         "ONLY valid JSON with this exact schema: "
         "[{\"name\": string, \"location\": string, \"description\": string, "
         "\"blocks\": [{\"day\": \"Mon|Tue|Wed|Thu|Fri|Sat|Sun\", "
         "\"start\": \"HH:MM\", \"end\": \"HH:MM\"}]}]. "
-        "Use 24h time, pad with 0. Normalize short breaks by merging adjacent blocks "
-        "if they are the same course with <=15 minutes gap. "
-        "Do NOT include extra fields. If uncertain, best-effort guess." 
+        "IMPORTANT: "
+        "1. Each course should appear ONLY ONCE in the array. "
+        "2. If a course has multiple time slots (e.g., Tuesday and Friday), include ALL blocks in the same course object. "
+        "3. Use 24-hour time format, always pad hours and minutes with 0 (e.g., 09:30, not 9:30). "
+        "4. Read time intervals carefully from the schedule grid. "
+        "5. Days must be one of: Mon, Tue, Wed, Thu, Fri, Sat, Sun. "
+        "6. Merge adjacent blocks if they are the same course with <=15 minutes gap. "
+        "7. Extract course codes (e.g., CS464, MATH101) as the name field. "
+        "Do NOT include extra fields. Return ONLY the JSON array, no markdown formatting."
     )
 
-    image_part = {
-        "mime_type": file.content_type or "image/jpeg",
-        "data": image_bytes,
-    }
-    response = model.generate_content([prompt, image_part])
+    image_part = types.Part.from_bytes(
+        data=image_bytes,
+        mime_type=file.content_type or "image/jpeg"
+    )
+    response = client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=[prompt, image_part]
+    )
     parsed_courses = _extract_json_payload(response.text or "")
     if OCR_DEBUG:
         logger.info(f"Parsed courses from Gemini: {json.dumps(parsed_courses, indent=2)}")
@@ -676,27 +685,58 @@ async def import_schedule(
             db.delete(course)
         db.commit()
 
-    created_courses = []
-    for index, payload in enumerate(parsed_courses):
-        course = Course(
-            username=username,
-            name=str(payload.get("name", "")).strip(),
-            description=str(payload.get("description", "")).strip(),
-            instructor="",
-            location=str(payload.get("location", "")).strip(),
-            color=COURSE_COLORS[index % len(COURSE_COLORS)],
-        )
+    # Merge courses with the same name
+    merged_courses: dict[str, dict[str, Any]] = {}
+    for payload in parsed_courses:
+        name = str(payload.get("name", "")).strip()
+        if not name:
+            continue
+        
         raw_blocks = payload.get("blocks") or []
         blocks = _clean_blocks(raw_blocks)
-        if OCR_DEBUG:
-            logger.info(f"Course '{course.name}' - Raw blocks: {raw_blocks}, Cleaned blocks: {blocks}")
-        if not course.name or not blocks:
-            if OCR_DEBUG:
-                logger.info(f"Skipping course: name={bool(course.name)}, blocks={bool(blocks)}")
+        if not blocks:
             continue
+        
+        if name in merged_courses:
+            # Merge blocks for the same course
+            merged_courses[name]["blocks"].extend(blocks)
+            if OCR_DEBUG:
+                logger.info(f"Merging course '{name}' - Added {len(blocks)} blocks")
+        else:
+            merged_courses[name] = {
+                "name": name,
+                "description": str(payload.get("description", "")).strip(),
+                "location": str(payload.get("location", "")).strip(),
+                "blocks": blocks,
+            }
+    
+    # Create Course objects from merged data
+    created_courses = []
+    for index, (course_name, course_data) in enumerate(merged_courses.items()):
+        course = Course(
+            username=username,
+            name=course_data["name"],
+            description=course_data["description"],
+            instructor="",
+            location=course_data["location"],
+            color=COURSE_COLORS[index % len(COURSE_COLORS)],
+        )
+        
+        # Remove duplicate blocks (same day, start, end)
+        unique_blocks = []
+        seen = set()
+        for block in course_data["blocks"]:
+            key = (block["day"], block["start"], block["end"])
+            if key not in seen:
+                seen.add(key)
+                unique_blocks.append(block)
+        
+        if OCR_DEBUG:
+            logger.info(f"Course '{course.name}' - Total blocks: {len(course_data['blocks'])}, Unique blocks: {len(unique_blocks)}")
+        
         course.blocks = [
             CourseBlock(day=block["day"], start=block["start"], end=block["end"])
-            for block in blocks
+            for block in unique_blocks
         ]
         db.add(course)
         created_courses.append(course)

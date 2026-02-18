@@ -91,6 +91,10 @@ export default function AuthScreen() {
       if (data?.access_token) {
         await AsyncStorage.setItem("mentora.token", data.access_token);
       }
+      // Clear personality test skip flag on new registration
+      if (isRegister) {
+        await AsyncStorage.removeItem("mentora.personalitySkipped");
+      }
       Alert.alert(isRegister ? "Registered" : "Logged in");
       // Redirect to profile creation after registration, otherwise to main app
       router.replace(isRegister ? "/profile/edit?onboarding=1" : "/(tabs)");

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Body, Depends, HTTPException, status
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from deps import get_db
@@ -863,9 +863,8 @@ async def list_group_requests(username: str, db: Session = Depends(get_db)):
     )
 
     owner_groups = (
-        db.query(Group.group_id)
+        select(Group.group_id)
         .filter(Group.owner_username == username)
-        .subquery()
     )
     incoming_join_requests = (
         db.query(GroupJoinRequest)
