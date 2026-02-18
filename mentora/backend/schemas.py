@@ -376,3 +376,21 @@ class GroupRequestsList(BaseModel):
     outgoing_invites: list[GroupInviteItem]
     incoming_join_requests: list[GroupJoinRequestItem]
     outgoing_join_requests: list[GroupJoinRequestItem]
+
+
+class DailyQuestionResponse(BaseModel):
+    question_id: int
+    question_text: str
+    option_a: str
+    option_b: str
+    option_c: str
+    option_d: str
+    answered: bool
+    is_correct: Optional[bool] = None
+    selected_answer: Optional[str] = None
+
+
+class AnswerQuestionRequest(BaseModel):
+    selected_answer: str
+    response_time_seconds: float
+

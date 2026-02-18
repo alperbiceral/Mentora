@@ -65,7 +65,20 @@ export default function StudyScreen() {
   const [sessions, setSessions] = useState<StudySession[]>([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
 
+  // Streak Question state
+  const [dailyQuestion, setDailyQuestion] = useState<DailyQuestion | null>(
+    null,
+  );
+  const [loadingQuestion, setLoadingQuestion] = useState(false);
+  const [showQuestionUI, setShowQuestionUI] = useState(false);
+  const [questionTimer, setQuestionTimer] = useState(15);
+  const [selectedOption, setSelectedOption] = useState<string | null>(null);
+  const [isAnswering, setIsAnswering] = useState(false);
+  const [answerResult, setAnswerResult] = useState<AnswerResult | null>(null);
+  const [streakCount, setStreakCount] = useState(0);
+
   const studySecondsRef = useRef(0);
+  const questionStartTimeRef = useRef<number | null>(null);
 
   useEffect(() => {
     AsyncStorage.getItem("mentora.username")
@@ -97,6 +110,13 @@ export default function StudyScreen() {
   useEffect(() => {
     loadSessions();
   }, [loadSessions]);
+
+  useEffect(() => {
+    if (activeTab === "streak" && currentUsername) {
+      loadDailyQuestion();
+      loadStreak();
+    }
+  }, [activeTab, currentUsername]);
 
   const focusMinutes = useMemo(
     () => parsePositiveInt(pomodoroFocusInput, 25),
@@ -176,6 +196,24 @@ export default function StudyScreen() {
     normalMode,
     totalCycles,
   ]);
+
+  // Timer for streak question
+  useEffect(() => {
+    if (showQuestionUI && questionTimer > 0 && !answerResult) {
+      const timer = setInterval(() => {
+        setQuestionTimer((prev) => {
+          if (prev <= 1) {
+            // Time's up - auto submit wrong answer
+            handleTimeUp();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      return () => clearInterval(timer);
+    }
+  }, [showQuestionUI, questionTimer, answerResult]);
 
   const displaySeconds =
     activeTab === "normal" && normalMode === "countup"
@@ -300,6 +338,159 @@ export default function StudyScreen() {
   const secondaryActionLabel =
     studySeconds > 0 || elapsedSeconds > 0 ? "Finish" : "Reset";
 
+  // Streak Question Functions
+  const loadDailyQuestion = async () => {
+    if (!currentUsername) return;
+
+    setLoadingQuestion(true);
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/daily-question/${encodeURIComponent(currentUsername)}`,
+      );
+      if (!response.ok) {
+        throw new Error("Failed to load question");
+      }
+      const data = (await response.json()) as DailyQuestion;
+      setDailyQuestion(data);
+
+      // If already answered, show result immediately
+      if (data.answered) {
+        setAnswerResult({
+          correct: data.is_correct ?? false,
+          correct_answer: "",
+          streak_updated: false,
+          new_streak: streakCount,
+          response_time: 0,
+        });
+      }
+    } catch (error) {
+      Alert.alert("Error", "Failed to load daily question");
+    } finally {
+      setLoadingQuestion(false);
+    }
+  };
+
+  const loadStreak = async () => {
+    if (!currentUsername) return;
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/daily-question/streak/${encodeURIComponent(currentUsername)}`,
+      );
+      if (!response.ok) {
+        throw new Error("Failed to load streak");
+      }
+      const data = await response.json();
+      setStreakCount(data.streak_count);
+    } catch (error) {
+      // Silent fail
+    }
+  };
+
+  const handleStartQuestion = () => {
+    if (!dailyQuestion || dailyQuestion.answered) return;
+
+    setShowQuestionUI(true);
+    setQuestionTimer(15);
+    setSelectedOption(null);
+    setAnswerResult(null);
+    questionStartTimeRef.current = Date.now();
+  };
+
+  const handleSelectOption = (option: string) => {
+    if (answerResult) return; // Already answered
+    setSelectedOption(option);
+  };
+
+  const handleSubmitAnswer = async () => {
+    if (!selectedOption || !dailyQuestion || !questionStartTimeRef.current)
+      return;
+
+    const responseTime = (Date.now() - questionStartTimeRef.current) / 1000;
+
+    setIsAnswering(true);
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/daily-question/${dailyQuestion.question_id}/answer`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            selected_answer: selectedOption,
+            response_time_seconds: responseTime,
+          }),
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to submit answer");
+      }
+
+      const result = (await response.json()) as AnswerResult;
+      setAnswerResult(result);
+      setStreakCount(result.new_streak);
+
+      // Show result message
+      if (result.correct && responseTime <= 15) {
+        Alert.alert("🎉 Correct!", `Great job! Streak: ${result.new_streak}`);
+      } else if (result.correct) {
+        Alert.alert(
+          "⏱️ Too Slow",
+          "Correct answer, but time's up! Streak reset.",
+        );
+      } else {
+        Alert.alert(
+          "❌ Wrong Answer",
+          `Correct answer was ${result.correct_answer}. Streak reset.`,
+        );
+      }
+    } catch (error) {
+      Alert.alert("Error", "Failed to submit answer");
+    } finally {
+      setIsAnswering(false);
+    }
+  };
+
+  const handleTimeUp = () => {
+    if (!dailyQuestion || answerResult) return;
+
+    // Auto-select wrong answer to reset streak
+    const wrongAnswer = selectedOption || "A";
+    const responseTime = 16; // Over time limit
+
+    setIsAnswering(true);
+    fetch(
+      `${API_BASE_URL}/daily-question/${dailyQuestion.question_id}/answer`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          selected_answer: wrongAnswer,
+          response_time_seconds: responseTime,
+        }),
+      },
+    )
+      .then((response) => response.json())
+      .then((result: AnswerResult) => {
+        setAnswerResult(result);
+        setStreakCount(result.new_streak);
+        Alert.alert(
+          "⏱️ Time's Up!",
+          `Streak reset. Correct answer was ${result.correct_answer}`,
+        );
+      })
+      .catch(() => {
+        Alert.alert("Error", "Failed to submit answer");
+      })
+      .finally(() => {
+        setIsAnswering(false);
+      });
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.backgroundTop} />
@@ -372,36 +563,175 @@ export default function StudyScreen() {
           </View>
 
           <View style={styles.timerCard}>
-            <Text style={styles.sessionTitle}>
-              {activeTab === "normal"
-                ? "Focus"
-                : activeTab === "pomodoro"
-                  ? "Pomodoro"
-                  : "Streak Question"}
-            </Text>
-            <Text style={styles.sessionSubtitle}>
-              {activeTab === "normal"
-                ? "Count up or set a countdown."
-                : activeTab === "pomodoro"
-                  ? "Auto-switch between focus and break."
-                  : "TO DO"}
-            </Text>
+            {activeTab !== "streak" && (
+              <>
+                <Text style={styles.sessionTitle}>
+                  {activeTab === "normal" ? "Focus" : "Pomodoro"}
+                </Text>
+                <Text style={styles.sessionSubtitle}>
+                  {activeTab === "normal"
+                    ? "Count up or set a countdown."
+                    : "Auto-switch between focus and break."}
+                </Text>
 
-            <View style={styles.timerCluster}>
-              <View style={styles.timerAura} />
-              <View style={styles.timerRingOuter}>
-                <View style={styles.timerRingGradient} />
-                <View style={styles.timerRingInner}>
-                  <Text style={styles.timerLabel}>{timerLabel}</Text>
-                  <Text style={styles.timerText}>
-                    {formatTime(displaySeconds)}
-                  </Text>
-                  <Text style={styles.timerHint}>{timerHint}</Text>
+                <View style={styles.timerCluster}>
+                  <View style={styles.timerAura} />
+                  <View style={styles.timerRingOuter}>
+                    <View style={styles.timerRingGradient} />
+                    <View style={styles.timerRingInner}>
+                      <Text style={styles.timerLabel}>{timerLabel}</Text>
+                      <Text style={styles.timerText}>
+                        {formatTime(displaySeconds)}
+                      </Text>
+                      <Text style={styles.timerHint}>{timerHint}</Text>
+                    </View>
+                  </View>
                 </View>
-              </View>
-            </View>
+              </>
+            )}
 
-            {activeTab === "normal" ? (
+            {activeTab === "streak" && (
+              <>
+                <Text style={styles.sessionTitle}>Daily Question</Text>
+                <Text style={styles.sessionSubtitle}>
+                  Answer correctly in 15 seconds to keep your streak!
+                </Text>
+              </>
+            )}
+
+            {activeTab === "streak" ? (
+              loadingQuestion ? (
+                <View style={styles.questionLoadingContainer}>
+                  <Text style={styles.questionLoadingText}>Loading...</Text>
+                </View>
+              ) : !dailyQuestion ? (
+                <View style={styles.questionLoadingContainer}>
+                  <Text style={styles.questionLoadingText}>
+                    No question available
+                  </Text>
+                </View>
+              ) : dailyQuestion.answered ? (
+                <View style={styles.questionResultContainer}>
+                  <Ionicons
+                    name={
+                      dailyQuestion.is_correct
+                        ? "checkmark-circle"
+                        : "close-circle"
+                    }
+                    size={48}
+                    color={dailyQuestion.is_correct ? "#10B981" : "#EF4444"}
+                  />
+                  <Text style={styles.questionResultTitle}>
+                    {dailyQuestion.is_correct
+                      ? "Correct! ✅"
+                      : "Wrong Answer ❌"}
+                  </Text>
+                  <Text style={styles.questionResultSubtitle}>
+                    Come back tomorrow for next question! 🌟
+                  </Text>
+                  <View style={styles.streakBadge}>
+                    <Ionicons name="flame" size={20} color="#F59E0B" />
+                    <Text style={styles.streakText}>Streak: {streakCount}</Text>
+                  </View>
+                </View>
+              ) : !showQuestionUI ? (
+                <View style={styles.streakMainContainer}>
+                  <View style={styles.streakBadge}>
+                    <Ionicons name="flame" size={20} color="#F59E0B" />
+                    <Text style={styles.streakText}>Streak: {streakCount}</Text>
+                  </View>
+                  <Pressable
+                    style={[
+                      styles.bigAnswerButton,
+                      loadingQuestion && styles.bigAnswerButtonDisabled,
+                    ]}
+                    onPress={handleStartQuestion}
+                    disabled={loadingQuestion}
+                  >
+                    <Text style={styles.bigAnswerButtonText}>
+                      {loadingQuestion ? "Loading..." : "Answer"}
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <View style={styles.questionContainer}>
+                  <View style={styles.streakBadge}>
+                    <Ionicons name="flame" size={16} color="#F59E0B" />
+                    <Text style={styles.streakText}>Streak: {streakCount}</Text>
+                  </View>
+
+                  <View style={styles.timerBadge}>
+                    <Ionicons
+                      name="time-outline"
+                      size={16}
+                      color={
+                        questionTimer <= 5 ? "#EF4444" : COLORS.textPrimary
+                      }
+                    />
+                    <Text
+                      style={[
+                        styles.questionTimerText,
+                        questionTimer <= 5 && styles.timerTextUrgent,
+                      ]}
+                    >
+                      {questionTimer}s
+                    </Text>
+                  </View>
+
+                  <Text style={styles.questionText}>
+                    {dailyQuestion.question_text}
+                  </Text>
+
+                  <View style={styles.optionsContainer}>
+                    {[
+                      { key: "A", label: dailyQuestion.option_a },
+                      { key: "B", label: dailyQuestion.option_b },
+                      { key: "C", label: dailyQuestion.option_c },
+                      { key: "D", label: dailyQuestion.option_d },
+                    ].map((option) => (
+                      <Pressable
+                        key={option.key}
+                        style={[
+                          styles.optionButton,
+                          selectedOption === option.key &&
+                            styles.optionButtonSelected,
+                          answerResult &&
+                            answerResult.correct_answer === option.key &&
+                            styles.optionButtonCorrect,
+                          answerResult &&
+                            selectedOption === option.key &&
+                            !answerResult.correct &&
+                            styles.optionButtonWrong,
+                        ]}
+                        onPress={() => handleSelectOption(option.key)}
+                        disabled={!!answerResult}
+                      >
+                        <View style={styles.optionKeyCircle}>
+                          <Text style={styles.optionKeyText}>{option.key}</Text>
+                        </View>
+                        <Text style={styles.optionLabel}>{option.label}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+
+                  {!answerResult && (
+                    <Pressable
+                      style={[
+                        styles.submitButton,
+                        (!selectedOption || isAnswering) &&
+                          styles.submitButtonDisabled,
+                      ]}
+                      onPress={handleSubmitAnswer}
+                      disabled={!selectedOption || isAnswering}
+                    >
+                      <Text style={styles.submitButtonText}>
+                        {isAnswering ? "Submitting..." : "Submit Answer"}
+                      </Text>
+                    </Pressable>
+                  )}
+                </View>
+              )
+            ) : activeTab === "normal" ? (
               <View style={styles.settingsBlock}>
                 <View style={styles.toggleRow}>
                   <Pressable
@@ -507,14 +837,7 @@ export default function StudyScreen() {
               </View>
             ) : null}
 
-            {activeTab === "streak" ? (
-              <View style={styles.todoCard}>
-                <Ionicons name="sparkles" size={18} color={COLORS.accentSoft} />
-                <Text style={styles.todoText}>
-                  Streak Question is on the roadmap.
-                </Text>
-              </View>
-            ) : (
+            {activeTab === "streak" ? null : (
               <View style={styles.timerButtonsRow}>
                 <Pressable
                   style={styles.primaryButton}
@@ -537,41 +860,43 @@ export default function StudyScreen() {
             )}
           </View>
 
-          <View style={styles.statsSection}>
-            <Text style={styles.statsTitle}>Recent sessions</Text>
-            {loadingSessions ? (
-              <Text style={styles.emptyText}>Loading...</Text>
-            ) : sessions.length === 0 ? (
-              <Text style={styles.emptyText}>No sessions yet</Text>
-            ) : (
-              <View style={styles.sessionList}>
-                {sessions.map((session) => (
-                  <View key={session.session_id} style={styles.sessionItem}>
-                    <View style={styles.sessionIcon}>
-                      <Ionicons
-                        name={
-                          session.mode === "pomodoro"
-                            ? "timer-outline"
-                            : "hourglass-outline"
-                        }
-                        size={16}
-                        color={COLORS.textPrimary}
-                      />
+          {activeTab !== "streak" && (
+            <View style={styles.statsSection}>
+              <Text style={styles.statsTitle}>Recent sessions</Text>
+              {loadingSessions ? (
+                <Text style={styles.emptyText}>Loading...</Text>
+              ) : sessions.length === 0 ? (
+                <Text style={styles.emptyText}>No sessions yet</Text>
+              ) : (
+                <View style={styles.sessionList}>
+                  {sessions.map((session) => (
+                    <View key={session.session_id} style={styles.sessionItem}>
+                      <View style={styles.sessionIcon}>
+                        <Ionicons
+                          name={
+                            session.mode === "pomodoro"
+                              ? "timer-outline"
+                              : "hourglass-outline"
+                          }
+                          size={16}
+                          color={COLORS.textPrimary}
+                        />
+                      </View>
+                      <View style={styles.sessionInfo}>
+                        <Text style={styles.sessionName}>
+                          {session.mode === "pomodoro" ? "Pomodoro" : "Focus"}
+                        </Text>
+                        <Text style={styles.sessionMeta}>
+                          {formatDuration(session.duration_minutes)} •{" "}
+                          {formatDateTime(session.started_at)}
+                        </Text>
+                      </View>
                     </View>
-                    <View style={styles.sessionInfo}>
-                      <Text style={styles.sessionName}>
-                        {session.mode === "pomodoro" ? "Pomodoro" : "Focus"}
-                      </Text>
-                      <Text style={styles.sessionMeta}>
-                        {formatDuration(session.duration_minutes)} •{" "}
-                        {formatDateTime(session.started_at)}
-                      </Text>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            )}
-          </View>
+                  ))}
+                </View>
+              )}
+            </View>
+          )}
         </ScrollView>
       </View>
     </SafeAreaView>
@@ -602,6 +927,26 @@ type StudySessionCreate = {
   cycles?: number;
   started_at: string;
   ended_at: string;
+};
+
+type DailyQuestion = {
+  question_id: number;
+  question_text: string;
+  option_a: string;
+  option_b: string;
+  option_c: string;
+  option_d: string;
+  answered: boolean;
+  is_correct: boolean | null;
+  selected_answer: string | null;
+};
+
+type AnswerResult = {
+  correct: boolean;
+  correct_answer: string;
+  streak_updated: boolean;
+  new_streak: number;
+  response_time: number;
 };
 
 const formatTime = (totalSeconds: number) => {
@@ -1041,5 +1386,198 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textSecondary,
     marginTop: 2,
+  },
+  questionLoadingContainer: {
+    marginTop: SPACING.lg,
+    padding: SPACING.xl,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  questionLoadingText: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    fontWeight: "600",
+  },
+  questionResultContainer: {
+    marginTop: SPACING.lg,
+    padding: SPACING.xl,
+    alignItems: "center",
+    gap: SPACING.sm,
+  },
+  questionResultTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: COLORS.textPrimary,
+    marginTop: SPACING.sm,
+  },
+  questionResultSubtitle: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    textAlign: "center",
+  },
+  streakMainContainer: {
+    marginTop: SPACING.xl,
+    marginBottom: SPACING.xl,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: SPACING.lg,
+  },
+  bigAnswerButton: {
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: COLORS.accent,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.5,
+    shadowRadius: 24,
+    elevation: 12,
+    borderWidth: 8,
+    borderColor: "rgba(109,94,247,0.3)",
+  },
+  bigAnswerButtonText: {
+    fontSize: 28,
+    fontWeight: "900",
+    color: "#FFFFFF",
+    letterSpacing: 1,
+  },
+  bigAnswerButtonDisabled: {
+    opacity: 0.6,
+  },
+  answerButton: {
+    marginTop: SPACING.lg,
+    height: 56,
+    borderRadius: 999,
+    backgroundColor: COLORS.accent,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  answerButtonText: {
+    fontSize: 18,
+    fontWeight: "900",
+    color: "#FFFFFF",
+    letterSpacing: 0.5,
+  },
+  questionContainer: {
+    marginTop: SPACING.lg,
+    gap: SPACING.md,
+  },
+  streakBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    alignSelf: "center",
+    backgroundColor: "rgba(245,158,11,0.15)",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(245,158,11,0.3)",
+  },
+  streakText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#F59E0B",
+  },
+  timerBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    alignSelf: "center",
+    backgroundColor: "rgba(109,94,247,0.15)",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: COLORS.borderSubtle,
+  },
+  questionTimerText: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: COLORS.textPrimary,
+  },
+  timerTextUrgent: {
+    color: "#EF4444",
+  },
+  questionText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: COLORS.textPrimary,
+    lineHeight: 22,
+    marginTop: SPACING.sm,
+    marginBottom: SPACING.sm,
+  },
+  optionsContainer: {
+    gap: SPACING.sm,
+  },
+  optionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.sm,
+    padding: SPACING.md,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: COLORS.borderSubtle,
+    backgroundColor: "rgba(15,23,42,0.7)",
+  },
+  optionButtonSelected: {
+    borderColor: COLORS.accent,
+    backgroundColor: "rgba(109,94,247,0.15)",
+  },
+  optionButtonCorrect: {
+    borderColor: "#10B981",
+    backgroundColor: "rgba(16,185,129,0.15)",
+  },
+  optionButtonWrong: {
+    borderColor: "#EF4444",
+    backgroundColor: "rgba(239,68,68,0.15)",
+  },
+  optionKeyCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: COLORS.accent,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  optionKeyText: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  optionLabel: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "600",
+    color: COLORS.textPrimary,
+    lineHeight: 20,
+  },
+  submitButton: {
+    marginTop: SPACING.sm,
+    height: 48,
+    borderRadius: 999,
+    backgroundColor: COLORS.accent,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 5,
+  },
+  submitButtonDisabled: {
+    opacity: 0.5,
+  },
+  submitButtonText: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#FFFFFF",
   },
 });

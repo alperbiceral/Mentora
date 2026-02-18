@@ -99,6 +99,29 @@ class StudySession(Base):
     )
 
 
+class DailyQuestion(Base):
+    __tablename__ = "daily_questions"
+
+    question_id: Mapped[int] = mapped_column(primary_key=True)
+    username: Mapped[str] = mapped_column(String(50), nullable=False)
+    question_date: Mapped[date] = mapped_column(Date, nullable=False)
+    question_text: Mapped[str] = mapped_column(Text, nullable=False)
+    correct_answer: Mapped[str] = mapped_column(String(1), nullable=False)
+    option_a: Mapped[str] = mapped_column(Text, nullable=False)
+    option_b: Mapped[str] = mapped_column(Text, nullable=False)
+    option_c: Mapped[str] = mapped_column(Text, nullable=False)
+    option_d: Mapped[str] = mapped_column(Text, nullable=False)
+    answered_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    selected_answer: Mapped[Optional[str]] = mapped_column(String(1))
+    response_time_seconds: Mapped[Optional[float]] = mapped_column(Float)
+    is_correct: Mapped[Optional[bool]] = mapped_column(Boolean)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+    )
+
+
 class FriendRequest(Base):
     __tablename__ = "friend_requests"
 
