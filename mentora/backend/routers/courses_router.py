@@ -745,3 +745,72 @@ async def import_schedule(
     for course in created_courses:
         db.refresh(course)
     return created_courses
+
+
+@router.post("/import-syllabus", response_model=CourseResponse)
+async def import_syllabus(
+    course_id: int = Form(...),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    """Import syllabus and extract course description using Gemini AI."""
+    if not GEMINI_API_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Gemini API key not configured",
+        )
+
+    course = db.query(Course).filter(Course.course_id == course_id).first()
+    if not course:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Course not found",
+        )
+
+    image_bytes = await file.read()
+    if not image_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Empty file upload",
+        )
+
+    client = genai.Client(api_key=GEMINI_API_KEY)
+    prompt = (
+        "You are given a university course syllabus. Extract and create a detailed course description. "
+        "Focus on:\n"
+        "1. Course Objectives - What students will learn\n"
+        "2. Topics/Schedule - List all topics and subjects that will be covered in detail\n"
+        "3. Key concepts and learning outcomes\n\n"
+        "IMPORTANT:\n"
+        "- DO NOT include recommended textbooks\n"
+        "- DO NOT include grading information or policies\n"
+        "- DO NOT include generative AI policies or academic integrity rules\n"
+        "- Focus ONLY on course objectives and the topics/schedule section\n\n"
+        "Format the output as a clear, detailed description with:\n"
+        "- A brief overview of the course\n"
+        "- Course objectives (bullet points)\n"
+        "- Detailed list of topics to be covered (organized by weeks if available)\n\n"
+        "Return ONLY the description text, no extra formatting or markdown."
+    )
+
+    image_part = types.Part.from_bytes(
+        data=image_bytes,
+        mime_type=file.content_type or "image/jpeg"
+    )
+    
+    response = client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=[prompt, image_part]
+    )
+    
+    description = (response.text or "").strip()
+    if not description:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Could not extract syllabus content",
+        )
+
+    course.description = description
+    db.commit()
+    db.refresh(course)
+    return course

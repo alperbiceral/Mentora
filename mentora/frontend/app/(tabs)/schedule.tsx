@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useMemo, useState } from "react";
 import * as ImagePicker from "expo-image-picker";
+import * as DocumentPicker from "expo-document-picker";
 import {
   Alert,
   LayoutAnimation,
@@ -154,6 +155,9 @@ export default function ScheduleScreen() {
   const [editingCourseId, setEditingCourseId] = useState<string | null>(null);
   const [loadingCourses, setLoadingCourses] = useState(false);
   const [savingCourse, setSavingCourse] = useState(false);
+  const [importingSyllabusId, setImportingSyllabusId] = useState<string | null>(
+    null,
+  );
   const [modalCourseForm, setModalCourseForm] = useState({
     name: "",
     description: "",
@@ -182,56 +186,6 @@ export default function ScheduleScreen() {
       modalSelection.endIndex === null
     ) {
       return false;
-
-      type CourseCardListProps = {
-        courses: Course[];
-        loading: boolean;
-        onPress: (course: Course) => void;
-      };
-
-      const CourseCardList: React.FC<CourseCardListProps> = ({
-        courses,
-        loading,
-        onPress,
-      }) => {
-        if (loading) {
-          return <Text style={styles.emptyText}>Loading courses...</Text>;
-        }
-        if (courses.length === 0) {
-          return <Text style={styles.emptyText}>No courses yet.</Text>;
-        }
-
-        return (
-          <View style={styles.courseCardList}>
-            {courses.map((course) => (
-              <Pressable
-                key={course.id}
-                style={styles.courseCard}
-                onPress={() => onPress(course)}
-              >
-                <View style={styles.courseCardHeader}>
-                  <View
-                    style={[
-                      styles.courseCardDot,
-                      { backgroundColor: course.color },
-                    ]}
-                  />
-                  <Text style={styles.courseCardTitle} numberOfLines={1}>
-                    {course.name}
-                  </Text>
-                </View>
-                <Text style={styles.courseCardMeta} numberOfLines={1}>
-                  {course.location || "Location TBD"}
-                </Text>
-                <Text style={styles.courseCardMeta} numberOfLines={1}>
-                  {course.instructor || "Instructor TBD"}
-                </Text>
-                <Text style={styles.courseCardHint}>Tap to edit</Text>
-              </Pressable>
-            ))}
-          </View>
-        );
-      };
     }
     return modalSelection.endIndex > modalSelection.startIndex;
   }, [modalSelection]);
@@ -247,66 +201,53 @@ export default function ScheduleScreen() {
     return blocks;
   }, [blocks, modalMode, editingCourseId]);
 
-  useEffect(() => {
-    let active = true;
-    const loadCourses = async () => {
-      setLoadingCourses(true);
-      try {
-        const username = await AsyncStorage.getItem("mentora.username");
-        if (!username) {
-          if (active) {
-            setCourses([]);
-            setBlocks([]);
-          }
-          return;
-        }
-
-        const response = await fetch(
-          `${API_BASE_URL}/courses/${encodeURIComponent(username)}`,
-        );
-        if (!response.ok) {
-          throw new Error("Failed to load courses");
-        }
-        const data = (await response.json()) as CourseApi[];
-        if (!active) {
-          return;
-        }
-        const mappedCourses: Course[] = data.map((course) => ({
-          id: String(course.course_id),
-          name: course.name,
-          description: course.description ?? "",
-          instructor: course.instructor ?? "",
-          location: course.location ?? "",
-          color: course.color ?? COURSE_COLORS[0],
-          details: [],
-        }));
-        const mappedBlocks: CourseBlock[] = data.flatMap((course) =>
-          course.blocks.map((block) => ({
-            id: `block-${block.block_id}`,
-            courseId: String(course.course_id),
-            day: block.day,
-            start: block.start,
-            end: block.end,
-          })),
-        );
-        setCourses(mappedCourses);
-        setBlocks(mappedBlocks);
-      } catch (error) {
-        if (active) {
-          setCourses([]);
-          setBlocks([]);
-        }
-      } finally {
-        if (active) {
-          setLoadingCourses(false);
-        }
+  const loadCourses = async () => {
+    setLoadingCourses(true);
+    try {
+      const username = await AsyncStorage.getItem("mentora.username");
+      if (!username) {
+        setCourses([]);
+        setBlocks([]);
+        return;
       }
-    };
 
+      const response = await fetch(
+        `${API_BASE_URL}/courses/${encodeURIComponent(username)}`,
+      );
+      if (!response.ok) {
+        throw new Error("Failed to load courses");
+      }
+      const data = (await response.json()) as CourseApi[];
+      const mappedCourses: Course[] = data.map((course) => ({
+        id: String(course.course_id),
+        name: course.name,
+        description: course.description ?? "",
+        instructor: course.instructor ?? "",
+        location: course.location ?? "",
+        color: course.color ?? COURSE_COLORS[0],
+        details: [],
+      }));
+      const mappedBlocks: CourseBlock[] = data.flatMap((course) =>
+        course.blocks.map((block) => ({
+          id: `block-${block.block_id}`,
+          courseId: String(course.course_id),
+          day: block.day,
+          start: block.start,
+          end: block.end,
+        })),
+      );
+      setCourses(mappedCourses);
+      setBlocks(mappedBlocks);
+    } catch (error) {
+      setCourses([]);
+      setBlocks([]);
+    } finally {
+      setLoadingCourses(false);
+    }
+  };
+
+  useEffect(() => {
     loadCourses();
-    return () => {
-      active = false;
-    };
   }, []);
 
   async function handleImportSchedule() {
@@ -631,6 +572,71 @@ export default function ScheduleScreen() {
     setIsCourseModalOpen(true);
   }
 
+  async function handleImportSyllabus(courseId: string) {
+    try {
+      setImportingSyllabusId(courseId);
+
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ["image/*", "application/pdf"],
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) {
+        setImportingSyllabusId(null);
+        return;
+      }
+
+      const asset = result.assets[0];
+      const username = await AsyncStorage.getItem("mentora.username");
+      if (!username) {
+        Alert.alert("Error", "Not logged in");
+        setImportingSyllabusId(null);
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("course_id", courseId);
+
+      // For both web and mobile
+      let file: File | { uri: string; name: string; type: string };
+      const fileName = asset.name || "syllabus";
+      const mimeType = asset.mimeType || "application/octet-stream";
+
+      if (Platform.OS === "web") {
+        const blob = await (await fetch(asset.uri)).blob();
+        file = new File([blob], fileName, { type: mimeType });
+      } else {
+        file = {
+          uri: asset.uri,
+          name: fileName,
+          type: mimeType,
+        };
+      }
+
+      formData.append("file", file as any);
+
+      const response = await fetch(`${API_BASE_URL}/courses/import-syllabus`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        Alert.alert("Error", error.detail || "Failed to import syllabus");
+        setImportingSyllabusId(null);
+        return;
+      }
+
+      Alert.alert("Success", "Syllabus imported successfully!");
+      await loadCourses();
+    } catch (error) {
+      console.error("Import syllabus error:", error);
+      Alert.alert("Error", "Failed to import syllabus");
+    } finally {
+      setImportingSyllabusId(null);
+    }
+  }
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.backgroundTop} />
@@ -713,7 +719,9 @@ export default function ScheduleScreen() {
                 <CourseCardList
                   courses={courses}
                   onPress={handleEditCourse}
+                  onImportSyllabus={handleImportSyllabus}
                   loading={loadingCourses}
+                  importingSyllabusId={importingSyllabusId}
                 />
               </ScheduleCard>
 
@@ -971,8 +979,10 @@ const CourseModal: React.FC<CourseModalProps> = ({
             }
             placeholder="Description"
             placeholderTextColor={COLORS.textMuted}
-            style={styles.input}
+            style={[styles.input, styles.descriptionInput]}
             multiline
+            numberOfLines={6}
+            textAlignVertical="top"
           />
 
           <View style={styles.modalSectionHeader}>
@@ -1071,7 +1081,7 @@ const CourseLegend: React.FC<CourseLegendProps> = ({ courses, loading }) => (
         <View key={course.id} style={styles.legendItem}>
           <View style={[styles.legendDot, { backgroundColor: course.color }]} />
           <Text style={styles.legendLabel} numberOfLines={1}>
-            {course.name}
+            {course.name.split(" - ")[0]}
           </Text>
         </View>
       ))
@@ -1186,7 +1196,7 @@ const CourseDayColumn: React.FC<CourseDayColumnProps> = ({
             ]}
           >
             <Text style={styles.courseBlockCode} numberOfLines={1}>
-              {course.name}
+              {course.name.split(" - ")[0]}
             </Text>
             <Text style={styles.courseBlockName} numberOfLines={2}>
               {course.location}
@@ -1372,12 +1382,16 @@ type CourseCardListProps = {
   courses: Course[];
   loading: boolean;
   onPress: (course: Course) => void;
+  onImportSyllabus: (courseId: string) => void;
+  importingSyllabusId: string | null;
 };
 
 const CourseCardList: React.FC<CourseCardListProps> = ({
   courses,
   loading,
   onPress,
+  onImportSyllabus,
+  importingSyllabusId,
 }) => {
   if (loading) {
     return <Text style={styles.emptyText}>Loading courses...</Text>;
@@ -1388,29 +1402,58 @@ const CourseCardList: React.FC<CourseCardListProps> = ({
 
   return (
     <View style={styles.courseCardList}>
-      {courses.map((course) => (
-        <Pressable
-          key={course.id}
-          style={styles.courseCard}
-          onPress={() => onPress(course)}
-        >
-          <View style={styles.courseCardHeader}>
-            <View
-              style={[styles.courseCardDot, { backgroundColor: course.color }]}
-            />
-            <Text style={styles.courseCardTitle} numberOfLines={1}>
-              {course.name}
-            </Text>
-          </View>
-          <Text style={styles.courseCardMeta} numberOfLines={1}>
-            {course.location || "Location TBD"}
-          </Text>
-          <Text style={styles.courseCardMeta} numberOfLines={1}>
-            {course.instructor || "Instructor TBD"}
-          </Text>
-          <Text style={styles.courseCardHint}>Tap to edit</Text>
-        </Pressable>
-      ))}
+      {courses.map((course) => {
+        const isImporting = importingSyllabusId === course.id;
+        return (
+          <Pressable
+            key={course.id}
+            style={styles.courseCard}
+            onPress={() => onPress(course)}
+          >
+            <View style={styles.courseCardContent}>
+              <View style={styles.courseCardMain}>
+                <View style={styles.courseCardHeader}>
+                  <View
+                    style={[
+                      styles.courseCardDot,
+                      { backgroundColor: course.color },
+                    ]}
+                  />
+                  <Text style={styles.courseCardTitle} numberOfLines={1}>
+                    {course.name.split(" - ")[0]}
+                  </Text>
+                </View>
+                <Text style={styles.courseCardMeta} numberOfLines={1}>
+                  {course.location || "Location TBD"}
+                </Text>
+                <Text style={styles.courseCardMeta} numberOfLines={1}>
+                  {course.instructor || "Instructor TBD"}
+                </Text>
+                <Text style={styles.courseCardHint}>Tap to edit</Text>
+              </View>
+              <Pressable
+                style={[
+                  styles.syllabusButtonCompact,
+                  isImporting && styles.buttonDisabled,
+                ]}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  onImportSyllabus(course.id);
+                }}
+                disabled={isImporting}
+              >
+                <Ionicons
+                  name={
+                    isImporting ? "hourglass-outline" : "document-text-outline"
+                  }
+                  size={20}
+                  color={isImporting ? COLORS.textMuted : COLORS.accent}
+                />
+              </Pressable>
+            </View>
+          </Pressable>
+        );
+      })}
     </View>
   );
 };
@@ -1476,7 +1519,7 @@ const StudyPlanGrid: React.FC<StudyPlanGridProps> = ({
                   ]}
                 >
                   <Text style={styles.courseBlockCode} numberOfLines={1}>
-                    {course.name}
+                    {course.name.split(" - ")[0]}
                   </Text>
                   <Text style={styles.courseBlockName} numberOfLines={1}>
                     {course.location}
@@ -1641,6 +1684,9 @@ const styles = StyleSheet.create({
   section: {
     gap: SPACING.lg,
   },
+  sectionHeader: {
+    gap: SPACING.xs,
+  },
   coursesHeader: {
     gap: SPACING.sm,
   },
@@ -1793,6 +1839,10 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     color: COLORS.textPrimary,
     fontSize: 13,
+  },
+  descriptionInput: {
+    minHeight: 120,
+    maxHeight: 200,
   },
   primaryButton: {
     backgroundColor: COLORS.accent,
@@ -2124,6 +2174,14 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(2,6,23,0.5)",
     borderWidth: 1,
     borderColor: "rgba(148,163,184,0.25)",
+  },
+  courseCardContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.sm,
+  },
+  courseCardMain: {
+    flex: 1,
     gap: 6,
   },
   courseCardHeader: {
@@ -2149,5 +2207,15 @@ const styles = StyleSheet.create({
   courseCardHint: {
     fontSize: 11,
     color: COLORS.textMuted,
+  },
+  syllabusButtonCompact: {
+    alignItems: "center",
+    justifyContent: "center",
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: "rgba(109,94,247,0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(109,94,247,0.3)",
   },
 });
