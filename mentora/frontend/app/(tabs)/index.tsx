@@ -10,6 +10,7 @@ import React, {
 } from "react";
 import {
   Alert,
+  ActivityIndicator,
   Image,
   Modal,
   Pressable,
@@ -1290,6 +1291,7 @@ const ScheduleCard: React.FC<
 
 const QuickActions = ({ styles, colors }: { styles: any; colors: ThemeColors }) => {
   const router = useRouter();
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const handlePress = async (action: string) => {
     if (action === "Study") {
@@ -1304,6 +1306,8 @@ const QuickActions = ({ styles, colors }: { styles: any; colors: ThemeColors }) 
           Alert.alert("Not signed in", "Please sign in to generate a study plan.");
           return;
         }
+
+        setIsGenerating(true);
 
         const res = await fetch(
           `${API_BASE_URL}/scheduler/${encodeURIComponent(username)}`,
@@ -1321,6 +1325,8 @@ const QuickActions = ({ styles, colors }: { styles: any; colors: ThemeColors }) 
         router.push("/(tabs)/study");
       } catch (err: any) {
         Alert.alert("Error", err?.message || String(err));
+      } finally {
+        setIsGenerating(false);
       }
 
       return;
@@ -1342,6 +1348,7 @@ const QuickActions = ({ styles, colors }: { styles: any; colors: ThemeColors }) 
         <Pressable
           style={styles.quickActionCard}
           onPress={() => handlePress("Study plan")}
+          disabled={isGenerating}
         >
           <Ionicons
             name="list-outline"
@@ -1355,6 +1362,7 @@ const QuickActions = ({ styles, colors }: { styles: any; colors: ThemeColors }) 
         <Pressable
           style={styles.quickActionCard}
           onPress={() => handlePress("Study")}
+          disabled={isGenerating}
         >
           <Ionicons
             name="alarm-outline"
@@ -1368,6 +1376,7 @@ const QuickActions = ({ styles, colors }: { styles: any; colors: ThemeColors }) 
         <Pressable
           style={styles.quickActionCard}
           onPress={() => handlePress("Ask a question")}
+          disabled={isGenerating}
         >
           <Ionicons
             name="chatbubble-ellipses-outline"
@@ -1378,6 +1387,17 @@ const QuickActions = ({ styles, colors }: { styles: any; colors: ThemeColors }) 
           <Text style={styles.quickActionText}>Ask a question</Text>
         </Pressable>
       </View>
+
+      <Modal transparent animationType="fade" visible={isGenerating}>
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.card, { alignItems: "center", padding: 20 }]}>
+            <ActivityIndicator size="large" color={colors.accent} />
+            <Text style={{ marginTop: 12, color: colors.textSecondary }}>
+              Generating study plan...
+            </Text>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
