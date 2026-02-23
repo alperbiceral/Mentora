@@ -1291,9 +1291,38 @@ const ScheduleCard: React.FC<
 const QuickActions = ({ styles, colors }: { styles: any; colors: ThemeColors }) => {
   const router = useRouter();
 
-  const handlePress = (action: string) => {
+  const handlePress = async (action: string) => {
     if (action === "Study") {
       router.push("/(tabs)/study");
+      return;
+    }
+
+    if (action === "Study plan") {
+      try {
+        const username = await AsyncStorage.getItem("mentora.username");
+        if (!username) {
+          Alert.alert("Not signed in", "Please sign in to generate a study plan.");
+          return;
+        }
+
+        const res = await fetch(
+          `${API_BASE_URL}/scheduler/${encodeURIComponent(username)}`,
+          { method: "POST" },
+        );
+
+        if (!res.ok) {
+          const body = await res.json().catch(() => null);
+          throw new Error(body?.detail || "Failed to create study plan");
+        }
+
+        const data = await res.json().catch(() => null);
+        const created = data?.created ?? 0;
+        Alert.alert("Study plan created", `Created ${created} sessions.`);
+        router.push("/(tabs)/study");
+      } catch (err: any) {
+        Alert.alert("Error", err?.message || String(err));
+      }
+
       return;
     }
 

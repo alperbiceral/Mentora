@@ -109,9 +109,9 @@ const DAYS: WeekdayKey[] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const START_HOUR = 6;
 const END_HOUR = 24;
 const SLOT_MINUTES = 30;
-const SLOT_HEIGHT = 16;
-const GRID_MAX_HEIGHT = 580;
-const DRAFT_GRID_MAX_HEIGHT = 420;
+const SLOT_HEIGHT = 22;
+const GRID_MAX_HEIGHT = 820;
+const DRAFT_GRID_MAX_HEIGHT = 640;
 
 const TIME_SLOTS = buildTimeSlots(START_HOUR, END_HOUR, SLOT_MINUTES);
 
@@ -125,6 +125,19 @@ const STUDY_PLAN: Record<WeekdayKey, StudyBlock[]> = {
   Fri: [],
   Sat: [],
   Sun: [],
+};
+
+type StudySessionApi = {
+  session_id: number;
+  username: string;
+  course_id?: number | null;
+  title?: string | null;
+  timer_type?: string | null;
+  started_at?: string | null;
+  ended_at?: string | null;
+  session_date?: string | null;
+  duration_minutes?: number | null;
+  mode?: string | null;
 };
 
 function useScheduleTheme() {
@@ -166,6 +179,8 @@ export default function ScheduleScreen() {
     endIndex: null as number | null,
   });
   const [modalMessage, setModalMessage] = useState<string | null>(null);
+  const [studyPlan, setStudyPlan] = useState<Record<WeekdayKey, StudyBlock[]>>(STUDY_PLAN);
+  const [loadingStudyPlan, setLoadingStudyPlan] = useState(false);
   const draftColor = COURSE_COLORS[courses.length % COURSE_COLORS.length];
 
   useEffect(() => {
@@ -244,6 +259,146 @@ export default function ScheduleScreen() {
   useEffect(() => {
     loadCourses();
   }, []);
+
+  // helpers: parse DB timestamp/ISO to Date, then to HH:MM
+  const parseTimestampToDate = (s?: string | null) => {
+    if (!s) return null;
+    // try direct parse
+    let d = new Date(s);
+    if (!Number.isNaN(d.getTime())) return d;
+    // try to normalize SQL-style "YYYY-MM-DD HH:MM:SS" -> "YYYY-MM-DDTHH:MM:SSZ"
+    let t = s.replace(" ", "T");
+    if (!/[Zz]|[+-]\d{2}:?\d{2}$/.test(t)) {
+      t = `${t}Z`;
+    }
+    d = new Date(t);
+    if (!Number.isNaN(d.getTime())) return d;
+    return null;
+  };
+
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const timeFromDate = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
+  const addMinutesToTime = (time: string, minutes: number) => {
+    const [hh, mm] = time.split(":").map((v) => Number(v));
+    const date = new Date();
+    date.setHours(hh, mm + minutes, 0, 0);
+    return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  };
+
+  function roundTimeToSlot(time: string, mode: "floor" | "ceil") {
+    const [hh, mm] = time.split(":").map((v) => Number(v));
+    if (Number.isNaN(hh) || Number.isNaN(mm)) return null;
+    const total = hh * 60 + mm;
+    const factor = SLOT_MINUTES;
+    const rounded = mode === "floor" ? Math.floor(total / factor) * factor : Math.ceil(total / factor) * factor;
+    const rHour = Math.floor(rounded / 60);
+    const rMin = rounded % 60;
+    if (rHour < START_HOUR || rHour > END_HOUR) return null;
+    return `${String(rHour).padStart(2, "0")}:${String(rMin).padStart(2, "0")}`;
+  }
+
+  useEffect(() => {
+    async function loadStudySessions() {
+      setLoadingStudyPlan(true);
+      try {
+        const username = await AsyncStorage.getItem("mentora.username");
+        if (!username) {
+          setStudyPlan(STUDY_PLAN);
+          return;
+        }
+
+        const res = await fetch(`${API_BASE_URL}/study-sessions/${encodeURIComponent(username)}`);
+        if (!res.ok) {
+          setStudyPlan(STUDY_PLAN);
+          return;
+        }
+        const sessions = (await res.json()) as StudySessionApi[];
+
+        const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+
+        const newPlan: Record<WeekdayKey, StudyBlock[]> = {
+          Mon: [],
+          Tue: [],
+          Wed: [],
+          Thu: [],
+          Fri: [],
+          Sat: [],
+          Sun: [],
+        };
+
+        sessions.forEach((s) => {
+          const dStart = parseTimestampToDate(s.started_at ?? s.session_date ?? null);
+          const dEnd = parseTimestampToDate(s.ended_at ?? null);
+          if (!dStart) return;
+
+          const weekday = dayNames[dStart.getUTCDay()];
+          const dayKey = (weekday === "Sun" ? "Sun" : weekday) as WeekdayKey;
+
+          // Convert parsed Dates to slot indices by rounding to the nearest slot.
+          // This ensures a 60-minute session maps to exactly 2 slots (not 3).
+          const startTotal = dStart.getHours() * 60 + dStart.getMinutes();
+          let endTotal: number | null = null;
+          if (dEnd) {
+            endTotal = dEnd.getHours() * 60 + dEnd.getMinutes();
+          } else if (s.duration_minutes) {
+            endTotal = startTotal + Math.max(1, Math.round(s.duration_minutes));
+          }
+          if (endTotal === null) return;
+
+          const startIndex = Math.round((startTotal - START_HOUR * 60) / SLOT_MINUTES);
+          let endIndex = Math.round((endTotal - START_HOUR * 60) / SLOT_MINUTES);
+
+          // Ensure at least one slot and clamp to grid bounds
+          if (startIndex < 0) return;
+          if (endIndex <= startIndex) endIndex = startIndex + 1;
+          if (endIndex > TIME_SLOTS.length) endIndex = TIME_SLOTS.length;
+
+          const start = indexToTime(startIndex);
+          const end = indexToTime(endIndex);
+
+          const timer = (s.timer_type ?? s.title ?? "").trim();
+          let matchedCourse: Course | undefined = undefined;
+          if (timer) {
+            matchedCourse = courses.find((c) => c.name && (c.name.includes(timer) || timer.includes(c.name)));
+          }
+
+          const color = matchedCourse?.color ?? COURSE_COLORS[0];
+          const title = (s.title ?? timer ?? "Study").trim();
+
+          const block: StudyBlock = {
+            id: String(s.session_id),
+            day: dayKey,
+            title,
+            focus: s.mode ?? s.timer_type ?? "",
+            start,
+            end,
+            color,
+          };
+
+          newPlan[dayKey].push(block);
+        });
+
+        const toMinutes = (t: string) => {
+          const [H, M] = t.split(":").map((v) => Number(v));
+          return H * 60 + M;
+        };
+        (Object.keys(newPlan) as WeekdayKey[]).forEach((k) => {
+          newPlan[k].sort((a, b) => toMinutes(a.start) - toMinutes(b.start));
+        });
+
+        setStudyPlan(newPlan);
+      } catch (e) {
+        setStudyPlan(STUDY_PLAN);
+      } finally {
+        setLoadingStudyPlan(false);
+      }
+    }
+
+    if (!loadingCourses) {
+      loadStudySessions();
+    }
+  }, [loadingCourses, courses]);
 
   async function handleImportSchedule() {
     if (isImporting) {
@@ -707,6 +862,7 @@ export default function ScheduleScreen() {
                 <CourseScheduleGrid
                   blocks={blocks}
                   courseLookup={courseLookup}
+                  studyPlan={studyPlan}
                 />
               </ScheduleCard>
 
@@ -804,7 +960,7 @@ export default function ScheduleScreen() {
               <ScheduleCard title="Today plan">
                 <StudyPlanGrid
                   day={selectedPlanDay}
-                  blocks={STUDY_PLAN[selectedPlanDay] || []}
+                  blocks={studyPlan[selectedPlanDay] || []}
                   courseBlocks={blocks}
                   courseLookup={courseLookup}
                 />
@@ -1107,11 +1263,13 @@ const CourseLegend: React.FC<CourseLegendProps> = ({ courses, loading }) => {
 type CourseScheduleGridProps = {
   blocks: CourseBlock[];
   courseLookup: Map<string, Course>;
+  studyPlan?: Record<WeekdayKey, StudyBlock[]>;
 };
 
 const CourseScheduleGrid: React.FC<CourseScheduleGridProps> = ({
   blocks,
   courseLookup,
+  studyPlan,
 }) => {
   const { styles } = useScheduleTheme();
   const gridHeight = TIME_SLOTS.length * SLOT_HEIGHT;
@@ -1146,6 +1304,7 @@ const CourseScheduleGrid: React.FC<CourseScheduleGridProps> = ({
                   blocks={blocks}
                   courseLookup={courseLookup}
                   height={gridHeight}
+                  studyBlocks={studyPlan?.[day] ?? []}
                 />
               ))}
             </View>
@@ -1175,6 +1334,7 @@ type CourseDayColumnProps = {
   blocks: CourseBlock[];
   courseLookup: Map<string, Course>;
   height: number;
+  studyBlocks?: StudyBlock[];
 };
 
 const CourseDayColumn: React.FC<CourseDayColumnProps> = ({
@@ -1182,9 +1342,19 @@ const CourseDayColumn: React.FC<CourseDayColumnProps> = ({
   blocks,
   courseLookup,
   height,
+  studyBlocks = [],
 }) => {
   const { styles } = useScheduleTheme();
   const dayBlocks = blocks.filter((block) => block.day === day);
+  // No special overlap arrangement — render study blocks like plan blocks
+  const arrangedStudyBlocks = (studyBlocks || [])
+    .map((b) => {
+      const startIndex = timeToIndex(b.start);
+      const endIndex = timeToIndex(b.end);
+      return { ...b, startIndex, endIndex } as (StudyBlock & { startIndex: number; endIndex: number });
+    })
+    .filter((b) => b.startIndex >= 0 && b.endIndex > b.startIndex)
+    .sort((a, c) => a.startIndex - c.startIndex || a.endIndex - c.endIndex);
 
   return (
     <View style={[styles.dayColumn, { height }]}>
@@ -1221,6 +1391,72 @@ const CourseDayColumn: React.FC<CourseDayColumnProps> = ({
             </Text>
             <Text style={styles.courseBlockName} numberOfLines={2}>
               {course.location}
+            </Text>
+          </View>
+        );
+      })}
+
+      {arrangedStudyBlocks.map((block) => {
+        const { startIndex, endIndex } = block as any;
+        if (startIndex < 0 || endIndex <= startIndex) return null;
+        const blockHeight = (endIndex - startIndex) * SLOT_HEIGHT;
+
+        // If no column data (col/cols) exists, render full-width like plan blocks.
+        const maybeCol = (block as any).col;
+        const maybeCols = (block as any).cols;
+        const hasCols = typeof maybeCol === "number" && typeof maybeCols === "number" && maybeCols > 1;
+
+        if (!hasCols) {
+          return (
+            <View
+              key={`study-${block.id}`}
+              style={[
+                styles.planBlock,
+                {
+                  top: startIndex * SLOT_HEIGHT,
+                  height: blockHeight,
+                  backgroundColor: block.color,
+                },
+              ]}
+            >
+              <Text style={styles.planBlockTitle} numberOfLines={1}>
+                {block.title}
+              </Text>
+              <Text style={styles.planBlockFocus} numberOfLines={1}>
+                {block.focus}
+              </Text>
+            </View>
+          );
+        }
+
+        const col = maybeCol as number;
+        const cols = maybeCols as number;
+        const columnTotalPx = 57;
+        const sidePad = 4; // matches left/right padding used elsewhere
+        const innerWidth = Math.max(8, columnTotalPx - sidePad * 2);
+        const gap = 4; // gap between split columns
+        const colWidth = Math.max(24, Math.floor((innerWidth - gap * (cols - 1)) / cols));
+        const leftPx = sidePad + col * (colWidth + gap);
+
+        return (
+          <View
+            key={`study-${block.id}`}
+            style={[
+              styles.planBlock,
+              {
+                top: startIndex * SLOT_HEIGHT,
+                height: blockHeight,
+                left: leftPx,
+                width: colWidth,
+                backgroundColor: block.color,
+              },
+            ]}
+          >
+            <Text style={styles.planBlockTitle} numberOfLines={1}>
+              {block.title}
+            </Text>
+            <Text style={styles.planBlockFocus} numberOfLines={1}>
+              {block.focus}
             </Text>
           </View>
         );

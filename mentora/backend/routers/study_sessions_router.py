@@ -15,7 +15,7 @@ async def options_sessions():
 
 
 @router.get("/{username}", response_model=list[StudySessionResponse])
-async def list_sessions(username: str, limit: int = 20, db: Session = Depends(get_db)):
+async def list_sessions(username: str, limit: int = 100, db: Session = Depends(get_db)):
     sessions = (
         db.query(StudySession)
         .filter(StudySession.username == username)
