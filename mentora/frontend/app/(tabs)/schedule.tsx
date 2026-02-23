@@ -2319,6 +2319,8 @@ const createStyles = (COLORS: ThemeColors) =>
     borderRadius: 12,
     padding: 6,
     gap: 4,
+    alignItems: "center",
+    justifyContent: "center",
   },
   planCourseBlock: {
     opacity: 0.9,
@@ -2327,10 +2329,12 @@ const createStyles = (COLORS: ThemeColors) =>
     fontSize: 11,
     fontWeight: "700",
     color: "#0B1220",
+    textAlign: "center",
   },
   planBlockFocus: {
     fontSize: 10,
     color: "rgba(11,18,32,0.75)",
+    textAlign: "center",
   },
   daysRow: {
     marginTop: SPACING.sm,
