@@ -10,30 +10,22 @@ import {
   View,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
-const COLORS = {
-  background: "#0B1220",
-  backgroundAlt: "#101B2E",
-  card: "rgba(15,23,42,0.85)",
-  accent: "#6D5EF7",
-  accentSoft: "#7C6CF9",
-  textPrimary: "#EAF0FF",
-  textSecondary: "#9CA3AF",
-  textMuted: "#6B7280",
-  borderSoft: "rgba(148,163,184,0.22)",
-  inputBg: "rgba(2,6,23,0.65)",
-  danger: "#F87171",
-};
+import { useTheme } from "../../theme/ThemeProvider";
+import type { ThemeColors } from "../../theme/theme";
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
 
 type Mode = "login" | "register";
 
 export default function AuthScreen() {
+  const { colors: COLORS } = useTheme();
+  const styles = useMemo(() => createStyles(COLORS), [COLORS]);
+
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [username, setUsername] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,6 +35,8 @@ export default function AuthScreen() {
   const subtitle = isRegister
     ? "Use a unique username to stand out in Mentora."
     : "Log in to continue your study flow.";
+
+  const passwordsMatch = !isRegister || password === confirmPassword;
 
   const payload = useMemo(() => {
     if (isRegister) {
@@ -54,7 +48,8 @@ export default function AuthScreen() {
   const canSubmit =
     email.trim().length > 0 &&
     password.trim().length > 0 &&
-    (!isRegister || username.trim().length > 0);
+    (!isRegister || (username.trim().length > 0 && confirmPassword.length > 0)) &&
+    passwordsMatch;
 
   const handleSubmit = async () => {
     if (!canSubmit || loading) {
@@ -65,6 +60,12 @@ export default function AuthScreen() {
     setError(null);
 
     try {
+      if (isRegister && password !== confirmPassword) {
+        setError("Passwords do not match.");
+        setLoading(false);
+        return;
+      }
+
       const response = await fetch(
         `${API_BASE_URL}/auth/${isRegister ? "register" : "login"}`,
         {
@@ -126,7 +127,11 @@ export default function AuthScreen() {
               styles.togglePill,
               mode === "login" && styles.togglePillActive,
             ]}
-            onPress={() => setMode("login")}
+            onPress={() => {
+              setMode("login");
+              setError(null);
+              setConfirmPassword("");
+            }}
           >
             <Text
               style={[
@@ -142,7 +147,11 @@ export default function AuthScreen() {
               styles.togglePill,
               mode === "register" && styles.togglePillActive,
             ]}
-            onPress={() => setMode("register")}
+            onPress={() => {
+              setMode("register");
+              setError(null);
+              setConfirmPassword("");
+            }}
           >
             <Text
               style={[
@@ -188,7 +197,12 @@ export default function AuthScreen() {
             <Text style={styles.label}>Password</Text>
             <TextInput
               value={password}
-              onChangeText={setPassword}
+              onChangeText={(next) => {
+                setPassword(next);
+                if (error) {
+                  setError(null);
+                }
+              }}
               placeholder="••••••••"
               placeholderTextColor={COLORS.textMuted}
               style={styles.input}
@@ -197,6 +211,27 @@ export default function AuthScreen() {
               textContentType={isRegister ? "newPassword" : "password"}
             />
           </View>
+
+          {isRegister ? (
+            <View style={styles.fieldGroup}>
+              <Text style={styles.label}>Confirm Password</Text>
+              <TextInput
+                value={confirmPassword}
+                onChangeText={(next) => {
+                  setConfirmPassword(next);
+                  if (error) {
+                    setError(null);
+                  }
+                }}
+                placeholder="••••••••"
+                placeholderTextColor={COLORS.textMuted}
+                style={styles.input}
+                autoCapitalize="none"
+                secureTextEntry
+                textContentType="newPassword"
+              />
+            </View>
+          ) : null}
 
           {error && <Text style={styles.errorText}>{error}</Text>}
 
@@ -224,7 +259,8 @@ export default function AuthScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (COLORS: ThemeColors) =>
+  StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: COLORS.background,

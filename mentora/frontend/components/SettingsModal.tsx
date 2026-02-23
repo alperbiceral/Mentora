@@ -10,6 +10,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { useTheme } from "../theme/ThemeProvider";
 
 export type SettingsLanguage = "English" | "Turkish";
 
@@ -42,6 +43,8 @@ export function SettingsModal({
   onLogout,
   onChangePassword,
 }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [languageOpen, setLanguageOpen] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [oldPassword, setOldPassword] = useState("");
@@ -49,6 +52,38 @@ export function SettingsModal({
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordLoading, setPasswordLoading] = useState(false);
+
+  type SwitchRowProps = {
+    label: string;
+    value: boolean;
+    onValueChange: (v: boolean) => void;
+    trackOnColor: string;
+    trackOffColor: string;
+    thumbOnColor: string;
+    thumbOffColor: string;
+  };
+
+  function SettingSwitchRow({
+    label,
+    value,
+    onValueChange,
+    trackOnColor,
+    trackOffColor,
+    thumbOnColor,
+    thumbOffColor,
+  }: SwitchRowProps) {
+    return (
+      <View style={styles.row}>
+        <Text style={styles.rowLabel}>{label}</Text>
+        <Switch
+          value={value}
+          onValueChange={onValueChange}
+          trackColor={{ false: trackOffColor, true: trackOnColor }}
+          thumbColor={value ? thumbOnColor : thumbOffColor}
+        />
+      </View>
+    );
+  }
 
   const languageOptions = useMemo<SettingsLanguage[]>(
     () => ["English", "Turkish"],
@@ -75,7 +110,7 @@ export function SettingsModal({
               <View style={{ width: 28 }} />
               <Text style={styles.title}>Settings</Text>
               <Pressable hitSlop={10} onPress={onClose} style={styles.closeBtn}>
-                <Ionicons name="close" size={20} color="#111827" />
+                <Ionicons name="close" size={20} color={colors.textPrimary} />
               </Pressable>
             </View>
 
@@ -84,16 +119,28 @@ export function SettingsModal({
                 label="Dark Mode"
                 value={darkMode}
                 onValueChange={setDarkMode}
+                trackOnColor={colors.accentSoft}
+                trackOffColor={colors.borderSubtle}
+                thumbOnColor={colors.accent}
+                thumbOffColor="#FFFFFF"
               />
               <SettingSwitchRow
                 label="Vibration"
                 value={vibration}
                 onValueChange={setVibration}
+                trackOnColor={colors.accentSoft}
+                trackOffColor={colors.borderSubtle}
+                thumbOnColor={colors.accent}
+                thumbOffColor="#FFFFFF"
               />
               <SettingSwitchRow
                 label="Notifications"
                 value={notifications}
                 onValueChange={setNotifications}
+                trackOnColor={colors.accentSoft}
+                trackOffColor={colors.borderSubtle}
+                thumbOnColor={colors.accent}
+                thumbOffColor="#FFFFFF"
               />
 
               <View style={styles.row}>
@@ -107,7 +154,7 @@ export function SettingsModal({
                     <Ionicons
                       name={languageOpen ? "chevron-up" : "chevron-down"}
                       size={18}
-                      color="#6B7280"
+                      color={colors.textMuted}
                     />
                   </Pressable>
 
@@ -160,7 +207,7 @@ export function SettingsModal({
                   onChangeText={setOldPassword}
                   style={styles.passwordInput}
                   placeholder="Old password"
-                  placeholderTextColor="#6B7280"
+                  placeholderTextColor={colors.textMuted}
                   secureTextEntry
                 />
                 <TextInput
@@ -168,7 +215,7 @@ export function SettingsModal({
                   onChangeText={setNewPassword}
                   style={styles.passwordInput}
                   placeholder="New password"
-                  placeholderTextColor="#6B7280"
+                  placeholderTextColor={colors.textMuted}
                   secureTextEntry
                 />
                 <TextInput
@@ -176,7 +223,7 @@ export function SettingsModal({
                   onChangeText={setConfirmPassword}
                   style={styles.passwordInput}
                   placeholder="Confirm new password"
-                  placeholderTextColor="#6B7280"
+                  placeholderTextColor={colors.textMuted}
                   secureTextEntry
                 />
                 {passwordError ? (
@@ -233,29 +280,17 @@ export function SettingsModal({
   );
 }
 
-type SwitchRowProps = {
-  label: string;
-  value: boolean;
-  onValueChange: (v: boolean) => void;
-};
-
-function SettingSwitchRow({ label, value, onValueChange }: SwitchRowProps) {
-  return (
-    <View style={styles.row}>
-      <Text style={styles.rowLabel}>{label}</Text>
-      <Switch
-        value={value}
-        onValueChange={onValueChange}
-        trackColor={{ false: "#D1D5DB", true: "#A7B7F3" }}
-        thumbColor={value ? "#3B5BA9" : "#FFFFFF"}
-      />
-    </View>
-  );
-}
-
-const BORDER = "#3B5BA9";
-
-const styles = StyleSheet.create({
+const createStyles = (colors: {
+  accent: string;
+  card: string;
+  textPrimary: string;
+  textMuted: string;
+  borderSoft: string;
+  borderSubtle: string;
+  subtleCard: string;
+  danger: string;
+}) =>
+  StyleSheet.create({
   backdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.35)",
@@ -270,10 +305,10 @@ const styles = StyleSheet.create({
   card: {
     width: "85%",
     maxWidth: 340,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 24,
-    borderWidth: 6,
-    borderColor: BORDER,
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
     paddingHorizontal: 16,
     paddingTop: 14,
     paddingBottom: 16,
@@ -292,7 +327,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#111827",
+    color: colors.textPrimary,
     textAlign: "center",
     flex: 1,
   },
@@ -315,7 +350,7 @@ const styles = StyleSheet.create({
   rowLabel: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#111827",
+    color: colors.textPrimary,
   },
   languageWrap: {
     alignItems: "flex-end",
@@ -328,13 +363,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 14,
-    backgroundColor: "#F3F4F6",
+    backgroundColor: colors.subtleCard,
     borderWidth: 1,
-    borderColor: "rgba(17,24,39,0.10)",
+    borderColor: colors.borderSoft,
   },
   languageText: {
     fontSize: 14,
-    color: "#111827",
+    color: colors.textPrimary,
     fontWeight: "600",
     marginRight: 10,
   },
@@ -342,9 +377,9 @@ const styles = StyleSheet.create({
     marginTop: 8,
     width: 132,
     borderRadius: 14,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderWidth: 1,
-    borderColor: "rgba(17,24,39,0.12)",
+    borderColor: colors.borderSoft,
     overflow: "hidden",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 8 },
@@ -355,18 +390,18 @@ const styles = StyleSheet.create({
   dropdownItem: {
     paddingVertical: 10,
     paddingHorizontal: 12,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
   },
   dropdownItemSelected: {
-    backgroundColor: "rgba(59,91,169,0.10)",
+    backgroundColor: "rgba(109,94,247,0.12)",
   },
   dropdownItemText: {
     fontSize: 14,
-    color: "#111827",
+    color: colors.textPrimary,
     fontWeight: "600",
   },
   dropdownItemTextSelected: {
-    color: BORDER,
+    color: colors.accent,
   },
   logoutButton: {
     marginTop: 18,
@@ -374,7 +409,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     paddingVertical: 10,
     borderRadius: 999,
-    backgroundColor: "#E8EEFF",
+    backgroundColor: "rgba(109,94,247,0.14)",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.1,
@@ -384,7 +419,7 @@ const styles = StyleSheet.create({
   logoutText: {
     fontSize: 14,
     fontWeight: "800",
-    color: BORDER,
+    color: colors.accent,
   },
   changePasswordButton: {
     marginTop: 10,
@@ -392,7 +427,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     paddingVertical: 10,
     borderRadius: 999,
-    backgroundColor: "#E8EEFF",
+    backgroundColor: "rgba(109,94,247,0.14)",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.1,
@@ -402,7 +437,7 @@ const styles = StyleSheet.create({
   changePasswordText: {
     fontSize: 14,
     fontWeight: "800",
-    color: BORDER,
+    color: colors.accent,
   },
   passwordCard: {
     marginTop: 10,
@@ -413,24 +448,24 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: "rgba(17,24,39,0.15)",
-    backgroundColor: "#F9FAFB",
-    color: "#111827",
+    borderColor: colors.borderSoft,
+    backgroundColor: colors.subtleCard,
+    color: colors.textPrimary,
   },
   passwordErrorText: {
-    color: "#DC2626",
+    color: colors.danger,
     fontSize: 12,
   },
   passwordSubmitButton: {
     marginTop: 4,
     paddingVertical: 10,
     borderRadius: 12,
-    backgroundColor: "#E8EEFF",
+    backgroundColor: colors.accent,
     alignItems: "center",
   },
   passwordSubmitText: {
     fontSize: 14,
-    color: BORDER,
+    color: "#FFFFFF",
     fontWeight: "800",
   },
 });

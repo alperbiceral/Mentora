@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   SafeAreaView,
@@ -14,20 +14,8 @@ import {
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
-
-const COLORS = {
-  // Match Home dark theme
-  background: "#0B1220",
-  card: "rgba(15,23,42,0.85)",
-  textPrimary: "#EAF0FF",
-  textSecondary: "#9CA3AF",
-  textMuted: "#6B7280",
-  borderSubtle: "rgba(148,163,184,0.35)",
-  accent: "#6D5EF7",
-  accentSoft: "#6D5EF7",
-  shadow: "#000000",
-  danger: "#EF4444",
-};
+import { useTheme } from "../../theme/ThemeProvider";
+import type { ThemeColors } from "../../theme/theme";
 
 const SPACING = {
   sm: 12,
@@ -55,6 +43,9 @@ type Profile = {
 };
 
 export default function EditProfileScreen() {
+  const { colors: COLORS } = useTheme();
+  const styles = useMemo(() => createStyles(COLORS), [COLORS]);
+
   const router = useRouter();
   const params = useLocalSearchParams();
   const isOnboarding =
@@ -227,6 +218,8 @@ export default function EditProfileScreen() {
             onChangeText={setUsername}
             autoCapitalize="none"
             editable={false}
+            styles={styles}
+            colors={COLORS}
           />
 
           <Field
@@ -239,6 +232,8 @@ export default function EditProfileScreen() {
               }
             }}
             error={fieldErrors.fullName}
+            styles={styles}
+            colors={COLORS}
           />
 
           <Field
@@ -248,6 +243,8 @@ export default function EditProfileScreen() {
             autoCapitalize="none"
             keyboardType="email-address"
             editable={false}
+            styles={styles}
+            colors={COLORS}
           />
 
           <Field
@@ -255,6 +252,8 @@ export default function EditProfileScreen() {
             value={phone}
             onChangeText={setPhone}
             keyboardType="phone-pad"
+            styles={styles}
+            colors={COLORS}
           />
 
           <Field
@@ -267,6 +266,8 @@ export default function EditProfileScreen() {
               }
             }}
             error={fieldErrors.university}
+            styles={styles}
+            colors={COLORS}
           />
 
           <Field
@@ -279,6 +280,8 @@ export default function EditProfileScreen() {
               }
             }}
             error={fieldErrors.department}
+            styles={styles}
+            colors={COLORS}
           />
 
           <View style={styles.photoRow}>
@@ -358,6 +361,8 @@ type FieldProps = {
     | "number-pad";
   editable?: boolean;
   multiline?: boolean;
+  styles: any;
+  colors: ThemeColors;
 };
 
 const Field: React.FC<FieldProps> = ({
@@ -369,6 +374,8 @@ const Field: React.FC<FieldProps> = ({
   keyboardType = "default",
   editable = true,
   multiline = false,
+  styles,
+  colors,
 }) => (
   <View style={styles.fieldContainer}>
     <Text style={styles.fieldLabel}>{label}</Text>
@@ -376,7 +383,7 @@ const Field: React.FC<FieldProps> = ({
       value={value}
       onChangeText={onChangeText}
       style={styles.textInput}
-      placeholderTextColor={COLORS.textMuted}
+      placeholderTextColor={colors.textMuted}
       autoCapitalize={autoCapitalize}
       keyboardType={keyboardType}
       editable={editable}
@@ -386,7 +393,8 @@ const Field: React.FC<FieldProps> = ({
   </View>
 );
 
-const styles = StyleSheet.create({
+const createStyles = (COLORS: ThemeColors) =>
+  StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: COLORS.background,
@@ -453,7 +461,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     fontSize: 14,
     color: COLORS.textPrimary,
-    backgroundColor: "#020617",
+    backgroundColor: COLORS.inputBg,
     textAlignVertical: "top",
   },
   photoRow: {
@@ -466,7 +474,7 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: "#111827",
+    backgroundColor: COLORS.subtleCard,
     borderWidth: 1,
     borderColor: COLORS.borderSubtle,
     alignItems: "center",
@@ -483,7 +491,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: COLORS.borderSubtle,
-    backgroundColor: "#020617",
+    backgroundColor: COLORS.inputBg,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",

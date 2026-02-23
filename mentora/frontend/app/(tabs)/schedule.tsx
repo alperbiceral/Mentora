@@ -17,6 +17,8 @@ import {
   View,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useTheme } from "../../theme/ThemeProvider";
+import type { ThemeColors } from "../../theme/theme";
 
 if (
   Platform.OS === "android" &&
@@ -24,21 +26,6 @@ if (
 ) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
-
-const COLORS = {
-  background: "#0B1220",
-  backgroundAlt: "#101B2E",
-  card: "rgba(15,23,42,0.9)",
-  textPrimary: "#EAF0FF",
-  textSecondary: "#9CA3AF",
-  textMuted: "#6B7280",
-  accent: "#6D5EF7",
-  accentSoft: "#A7B7F3",
-  borderSubtle: "rgba(148,163,184,0.4)",
-  success: "#10B981",
-  warning: "#F59E0B",
-  danger: "#EF4444",
-};
 
 const SPACING = {
   xs: 8,
@@ -140,7 +127,15 @@ const STUDY_PLAN: Record<WeekdayKey, StudyBlock[]> = {
   Sun: [],
 };
 
+function useScheduleTheme() {
+  const { colors: COLORS } = useTheme();
+  const styles = useMemo(() => createStyles(COLORS), [COLORS]);
+  return { COLORS, styles };
+}
+
 export default function ScheduleScreen() {
+  const { COLORS, styles } = useScheduleTheme();
+
   const [mode, setMode] = useState<Mode>("courses");
   const [selectedPlanDay, setSelectedPlanDay] = useState<WeekdayKey>("Mon");
   const [courses, setCourses] = useState<Course[]>(INITIAL_COURSES);
@@ -827,58 +822,66 @@ type SegmentedProps = {
   setMode: (m: Mode) => void;
 };
 
-const SegmentedControl: React.FC<SegmentedProps> = ({ mode, setMode }) => (
-  <View style={styles.segmentContainer}>
-    <Pressable
-      style={[
-        styles.segmentItem,
-        mode === "courses" && styles.segmentItemActive,
-      ]}
-      onPress={() => setMode("courses")}
-    >
-      <Text
-        numberOfLines={1}
-        adjustsFontSizeToFit
-        minimumFontScale={0.8}
-        style={[
-          styles.segmentLabel,
-          mode === "courses" && styles.segmentLabelActive,
-        ]}
-      >
-        Courses
-      </Text>
-    </Pressable>
+const SegmentedControl: React.FC<SegmentedProps> = ({ mode, setMode }) => {
+  const { styles } = useScheduleTheme();
 
-    <Pressable
-      style={[styles.segmentItem, mode === "study" && styles.segmentItemActive]}
-      onPress={() => setMode("study")}
-    >
-      <Text
-        numberOfLines={1}
-        adjustsFontSizeToFit
-        minimumFontScale={0.8}
+  return (
+    <View style={styles.segmentContainer}>
+      <Pressable
         style={[
-          styles.segmentLabel,
-          mode === "study" && styles.segmentLabelActive,
+          styles.segmentItem,
+          mode === "courses" && styles.segmentItemActive,
         ]}
+        onPress={() => setMode("courses")}
       >
-        Study Plan
-      </Text>
-    </Pressable>
-  </View>
-);
+        <Text
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.8}
+          style={[
+            styles.segmentLabel,
+            mode === "courses" && styles.segmentLabelActive,
+          ]}
+        >
+          Courses
+        </Text>
+      </Pressable>
+
+      <Pressable
+        style={[styles.segmentItem, mode === "study" && styles.segmentItemActive]}
+        onPress={() => setMode("study")}
+      >
+        <Text
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.8}
+          style={[
+            styles.segmentLabel,
+            mode === "study" && styles.segmentLabelActive,
+          ]}
+        >
+          Study Plan
+        </Text>
+      </Pressable>
+    </View>
+  );
+};
 
 type SectionHeaderProps = {
   title: string;
   subtitle: string;
 };
 
-const SectionHeader: React.FC<SectionHeaderProps> = ({ title, subtitle }) => (
-  <View style={styles.sectionHeader}>
-    <Text style={styles.sectionTitle}>{title}</Text>
-    <Text style={styles.sectionSubtitle}>{subtitle}</Text>
-  </View>
-);
+const SectionHeader: React.FC<SectionHeaderProps> = ({ title, subtitle }) => {
+  const { styles } = useScheduleTheme();
+
+  return (
+    <View style={styles.sectionHeader}>
+      <Text style={styles.sectionTitle}>{title}</Text>
+      <Text style={styles.sectionSubtitle}>{subtitle}</Text>
+    </View>
+  );
+};
 
 type CourseModalProps = {
   visible: boolean;
@@ -927,7 +930,10 @@ const CourseModal: React.FC<CourseModalProps> = ({
   onSlotPress,
   message,
   onClose,
-}) => (
+}) => {
+  const { styles, COLORS } = useScheduleTheme();
+
+  return (
   <Modal animationType="slide" transparent visible={visible}>
     <View style={styles.modalBackdrop}>
       <View style={styles.modalCard}>
@@ -1051,43 +1057,52 @@ const CourseModal: React.FC<CourseModalProps> = ({
       </View>
     </View>
   </Modal>
-);
+  );
+};
 
 type ScheduleCardProps = {
   title?: string;
   children: React.ReactNode;
 };
 
-const ScheduleCard: React.FC<ScheduleCardProps> = ({ title, children }) => (
-  <View style={styles.panelCard}>
-    {title ? <Text style={styles.panelTitle}>{title}</Text> : null}
-    {children}
-  </View>
-);
+const ScheduleCard: React.FC<ScheduleCardProps> = ({ title, children }) => {
+  const { styles } = useScheduleTheme();
+
+  return (
+    <View style={styles.panelCard}>
+      {title ? <Text style={styles.panelTitle}>{title}</Text> : null}
+      {children}
+    </View>
+  );
+};
 
 type CourseLegendProps = {
   courses: Course[];
   loading: boolean;
 };
 
-const CourseLegend: React.FC<CourseLegendProps> = ({ courses, loading }) => (
-  <View style={styles.legendRow}>
-    {loading ? (
-      <Text style={styles.emptyText}>Loading courses...</Text>
-    ) : courses.length === 0 ? (
-      <Text style={styles.emptyText}>No courses yet.</Text>
-    ) : (
-      courses.map((course) => (
-        <View key={course.id} style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: course.color }]} />
-          <Text style={styles.legendLabel} numberOfLines={1}>
-            {course.name.split(" - ")[0]}
-          </Text>
-        </View>
-      ))
-    )}
-  </View>
-);
+const CourseLegend: React.FC<CourseLegendProps> = ({ courses, loading }) => {
+  const { styles } = useScheduleTheme();
+
+  return (
+    <View style={styles.legendRow}>
+      {loading ? (
+        <Text style={styles.emptyText}>Loading courses...</Text>
+      ) : courses.length === 0 ? (
+        <Text style={styles.emptyText}>No courses yet.</Text>
+      ) : (
+        courses.map((course) => (
+          <View key={course.id} style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: course.color }]} />
+            <Text style={styles.legendLabel} numberOfLines={1}>
+              {course.name.split(" - ")[0]}
+            </Text>
+          </View>
+        ))
+      )}
+    </View>
+  );
+};
 
 type CourseScheduleGridProps = {
   blocks: CourseBlock[];
@@ -1098,6 +1113,7 @@ const CourseScheduleGrid: React.FC<CourseScheduleGridProps> = ({
   blocks,
   courseLookup,
 }) => {
+  const { styles } = useScheduleTheme();
   const gridHeight = TIME_SLOTS.length * SLOT_HEIGHT;
 
   return (
@@ -1140,15 +1156,19 @@ const CourseScheduleGrid: React.FC<CourseScheduleGridProps> = ({
   );
 };
 
-const TimeColumn: React.FC<{ height: number }> = ({ height }) => (
-  <View style={[styles.timeColumn, { height }]}>
-    {TIME_SLOTS.map((slot) => (
-      <View key={`time-${slot}`} style={styles.timeSlot}>
-        <Text style={styles.timeText}>{slot}</Text>
-      </View>
-    ))}
-  </View>
-);
+const TimeColumn: React.FC<{ height: number }> = ({ height }) => {
+  const { styles } = useScheduleTheme();
+
+  return (
+    <View style={[styles.timeColumn, { height }]}>
+      {TIME_SLOTS.map((slot) => (
+        <View key={`time-${slot}`} style={styles.timeSlot}>
+          <Text style={styles.timeText}>{slot}</Text>
+        </View>
+      ))}
+    </View>
+  );
+};
 
 type CourseDayColumnProps = {
   day: WeekdayKey;
@@ -1163,6 +1183,7 @@ const CourseDayColumn: React.FC<CourseDayColumnProps> = ({
   courseLookup,
   height,
 }) => {
+  const { styles } = useScheduleTheme();
   const dayBlocks = blocks.filter((block) => block.day === day);
 
   return (
@@ -1229,6 +1250,7 @@ const DraftScheduleGrid: React.FC<DraftScheduleGridProps> = ({
   onSlotPress,
   color,
 }) => {
+  const { styles } = useScheduleTheme();
   const gridHeight = TIME_SLOTS.length * SLOT_HEIGHT;
   const selectionDay = selection.day;
   const showSelection =
@@ -1393,6 +1415,8 @@ const CourseCardList: React.FC<CourseCardListProps> = ({
   onImportSyllabus,
   importingSyllabusId,
 }) => {
+  const { styles, COLORS } = useScheduleTheme();
+
   if (loading) {
     return <Text style={styles.emptyText}>Loading courses...</Text>;
   }
@@ -1471,6 +1495,7 @@ const StudyPlanGrid: React.FC<StudyPlanGridProps> = ({
   courseBlocks,
   courseLookup,
 }) => {
+  const { styles } = useScheduleTheme();
   const gridHeight = TIME_SLOTS.length * SLOT_HEIGHT;
   const dayCourseBlocks = courseBlocks.filter((block) => block.day === day);
 
@@ -1564,28 +1589,32 @@ type DaySelectorProps = {
   onSelect: (d: WeekdayKey) => void;
 };
 
-const DaySelector: React.FC<DaySelectorProps> = ({ selectedDay, onSelect }) => (
-  <ScrollView
-    horizontal
-    showsHorizontalScrollIndicator={false}
-    contentContainerStyle={styles.daysRow}
-  >
-    {DAYS.map((d) => {
-      const active = d === selectedDay;
-      return (
-        <Pressable
-          key={d}
-          style={[styles.dayPill, active && styles.dayPillActive]}
-          onPress={() => onSelect(d)}
-        >
-          <Text style={[styles.dayLabel, active && styles.dayLabelActive]}>
-            {d}
-          </Text>
-        </Pressable>
-      );
-    })}
-  </ScrollView>
-);
+const DaySelector: React.FC<DaySelectorProps> = ({ selectedDay, onSelect }) => {
+  const { styles } = useScheduleTheme();
+
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.daysRow}
+    >
+      {DAYS.map((d) => {
+        const active = d === selectedDay;
+        return (
+          <Pressable
+            key={d}
+            style={[styles.dayPill, active && styles.dayPillActive]}
+            onPress={() => onSelect(d)}
+          >
+            <Text style={[styles.dayLabel, active && styles.dayLabelActive]}>
+              {d}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </ScrollView>
+  );
+};
 
 function buildTimeSlots(
   startHour: number,
@@ -1633,7 +1662,8 @@ function indexToTime(index: number) {
   return `${hh}:${mm}`;
 }
 
-const styles = StyleSheet.create({
+const createStyles = (COLORS: ThemeColors) =>
+  StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: COLORS.background,
@@ -1644,7 +1674,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: "100%",
-    backgroundColor: "#0B1220",
+    backgroundColor: COLORS.background,
   },
   backgroundBottom: {
     position: "absolute",
@@ -1652,7 +1682,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: "100%",
-    backgroundColor: "#0F1A2B",
+    backgroundColor: COLORS.backgroundAlt,
     opacity: 0.45,
   },
   glow: {
@@ -1728,7 +1758,7 @@ const styles = StyleSheet.create({
   },
   segmentContainer: {
     flexDirection: "row",
-    backgroundColor: "rgba(15,23,42,0.8)",
+    backgroundColor: COLORS.subtleCard,
     borderRadius: 999,
     padding: 4,
     borderWidth: 1,
@@ -1762,7 +1792,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 6,
     paddingHorizontal: 10,
-    backgroundColor: "rgba(2,6,23,0.6)",
+    backgroundColor: COLORS.subtleCard,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: COLORS.borderSubtle,
@@ -1831,10 +1861,10 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    backgroundColor: "rgba(2,6,23,0.6)",
+    backgroundColor: COLORS.inputBg,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.25)",
+    borderColor: COLORS.borderSubtle,
     paddingHorizontal: 12,
     paddingVertical: 10,
     color: COLORS.textPrimary,
@@ -1886,10 +1916,10 @@ const styles = StyleSheet.create({
   selectionChip: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.25)",
+    borderColor: COLORS.borderSoft,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    backgroundColor: "rgba(2,6,23,0.45)",
+    backgroundColor: COLORS.subtleCard,
   },
   selectionChipText: {
     fontSize: 11,
@@ -1918,20 +1948,20 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.25)",
+    borderColor: COLORS.borderSoft,
   },
   planGridWrapper: {
     borderRadius: 16,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.25)",
+    borderColor: COLORS.borderSoft,
   },
   gridScroll: {
     paddingBottom: 4,
   },
   gridHeaderRow: {
     flexDirection: "row",
-    backgroundColor: "rgba(15,23,42,0.9)",
+    backgroundColor: COLORS.subtleCard,
   },
   timeHeaderSpacer: {
     width: 35,
@@ -1940,14 +1970,14 @@ const styles = StyleSheet.create({
     width: 57,
     paddingVertical: 10,
     borderLeftWidth: 1,
-    borderLeftColor: "rgba(148,163,184,0.15)",
+    borderLeftColor: COLORS.borderSoft,
     alignItems: "center",
   },
   dayHeaderCellSingle: {
     flex: 1,
     paddingVertical: 10,
     borderLeftWidth: 1,
-    borderLeftColor: "rgba(148,163,184,0.15)",
+    borderLeftColor: COLORS.borderSoft,
     alignItems: "center",
   },
   dayHeaderText: {
@@ -1956,21 +1986,21 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   gridBody: {
-    backgroundColor: "rgba(2,6,23,0.5)",
+    backgroundColor: COLORS.inputBg,
   },
   gridRow: {
     flexDirection: "row",
   },
   timeColumn: {
     width: 35,
-    backgroundColor: "rgba(15,23,42,0.9)",
+    backgroundColor: COLORS.subtleCard,
   },
   timeSlot: {
     height: SLOT_HEIGHT,
     justifyContent: "center",
     paddingLeft: 6,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(148,163,184,0.08)",
+    borderBottomColor: COLORS.borderSoft,
   },
   timeText: {
     fontSize: 8,
@@ -1979,22 +2009,22 @@ const styles = StyleSheet.create({
   dayColumn: {
     width: 57,
     borderLeftWidth: 1,
-    borderLeftColor: "rgba(148,163,184,0.15)",
+    borderLeftColor: COLORS.borderSoft,
     position: "relative",
   },
   dayColumnSingle: {
     flex: 1,
     borderLeftWidth: 1,
-    borderLeftColor: "rgba(148,163,184,0.15)",
+    borderLeftColor: COLORS.borderSoft,
     position: "relative",
   },
   gridSlot: {
     height: SLOT_HEIGHT,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(148,163,184,0.08)",
+    borderBottomColor: COLORS.borderSoft,
   },
   gridSlotDisabled: {
-    backgroundColor: "rgba(148,163,184,0.08)",
+    backgroundColor: COLORS.subtleCard,
   },
   selectionBlock: {
     position: "absolute",
@@ -2075,7 +2105,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.sm,
     paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: "rgba(15,23,42,0.85)",
+    backgroundColor: COLORS.subtleCard,
     marginRight: SPACING.sm,
   },
   dayPillActive: {
@@ -2095,7 +2125,7 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   modalCard: {
-    backgroundColor: "rgba(15,23,42,0.95)",
+    backgroundColor: COLORS.card,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: SPACING.lg,
@@ -2136,7 +2166,7 @@ const styles = StyleSheet.create({
   importModalCard: {
     width: "100%",
     maxWidth: 420,
-    backgroundColor: "rgba(15,23,42,0.95)",
+    backgroundColor: COLORS.card,
     borderRadius: 20,
     padding: SPACING.lg,
     borderWidth: 1,
@@ -2171,9 +2201,9 @@ const styles = StyleSheet.create({
   courseCard: {
     borderRadius: 16,
     padding: SPACING.md,
-    backgroundColor: "rgba(2,6,23,0.5)",
+    backgroundColor: COLORS.card,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.25)",
+    borderColor: COLORS.borderSoft,
   },
   courseCardContent: {
     flexDirection: "row",

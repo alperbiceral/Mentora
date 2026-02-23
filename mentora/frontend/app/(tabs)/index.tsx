@@ -24,23 +24,8 @@ import {
   SettingsLanguage,
   SettingsModal,
 } from "../../components/SettingsModal";
-
-const COLORS = {
-  // Dark navy theme to match the login screen
-  background: "#0B1220",
-  backgroundAlt: "#101B2E",
-  card: "rgba(15,23,42,0.85)", // glassy dark card
-  subtleCard: "rgba(15,23,42,0.85)",
-  // Use the same lavender as "See history >" everywhere
-  accent: "#6D5EF7",
-  accentSoft: "#6D5EF7",
-  textPrimary: "#EAF0FF",
-  textSecondary: "#9CA3AF",
-  textMuted: "#6B7280",
-  borderSubtle: "rgba(148,163,184,0.35)",
-  borderSoft: "rgba(148,163,184,0.18)",
-  shadow: "#000000",
-};
+import { useTheme } from "../../theme/ThemeProvider";
+import type { ThemeColors } from "../../theme/theme";
 
 const SPACING = {
   xs: 8,
@@ -128,10 +113,12 @@ type NotificationTab = "friends" | "groups" | "chats";
 type Range = "today" | "week";
 
 export default function HomeScreen() {
+  const { colors: COLORS, mode, setMode } = useTheme();
+  const styles = useMemo(() => createStyles(COLORS), [COLORS]);
+
   const router = useRouter();
   const [selectedRange, setSelectedRange] = useState<Range>("today");
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [darkMode, setDarkMode] = useState(false);
   const [vibration, setVibration] = useState(true);
   const [notifications, setNotifications] = useState(true);
   const [language, setLanguage] = useState<SettingsLanguage>("English");
@@ -665,27 +652,37 @@ export default function HomeScreen() {
             onOpenNotifications={handleOpenNotifications}
             notificationCount={notificationBadgeCount}
             loading={profileLoading}
+            colors={COLORS}
+            styles={styles}
           />
 
-          <GreetingCard name={profile?.full_name ?? profile?.username} />
+          <GreetingCard
+            styles={styles}
+            onPress={() => router.push("/ai-agent")}
+          />
 
-          <ToggleTabs selected={selectedRange} onSelect={setSelectedRange} />
+          <ToggleTabs
+            selected={selectedRange}
+            onSelect={setSelectedRange}
+            colors={COLORS}
+            styles={styles}
+          />
 
-          <ScheduleCard range={selectedRange} />
+          <ScheduleCard range={selectedRange} colors={COLORS} styles={styles} />
 
-          <QuickActions />
+          <QuickActions styles={styles} colors={COLORS} />
 
-          <RecommendationCard />
+          <RecommendationCard styles={styles} colors={COLORS} />
 
-          <CarouselSection />
+          <CarouselSection styles={styles} colors={COLORS} />
         </ScrollView>
       </View>
 
       <SettingsModal
         visible={settingsOpen}
         onClose={() => setSettingsOpen(false)}
-        darkMode={darkMode}
-        setDarkMode={setDarkMode}
+        darkMode={mode === "dark"}
+        setDarkMode={(v) => setMode(v ? "dark" : "light")}
         vibration={vibration}
         setVibration={setVibration}
         notifications={notifications}
@@ -1064,6 +1061,8 @@ const HeaderCard: React.FC<{
   streakCount: number;
   profilePhoto: string | null;
   loading: boolean;
+  styles: any;
+  colors: ThemeColors;
 }> = ({
   onOpenSettings,
   onOpenNotifications,
@@ -1073,6 +1072,8 @@ const HeaderCard: React.FC<{
   streakCount,
   profilePhoto,
   loading,
+  styles,
+  colors,
 }) => {
   const router = useRouter();
 
@@ -1093,7 +1094,7 @@ const HeaderCard: React.FC<{
                 style={styles.avatarImage}
               />
             ) : (
-              <Ionicons name="person" size={26} color={COLORS.textMuted} />
+              <Ionicons name="person" size={26} color={colors.textMuted} />
             )}
           </View>
 
@@ -1110,7 +1111,7 @@ const HeaderCard: React.FC<{
             <Ionicons
               name="flame"
               size={16}
-              color={COLORS.accent}
+              color={colors.accent}
               style={{ marginRight: 4 }}
             />
             <Text style={styles.streakText}>{streakCount} day</Text>
@@ -1124,7 +1125,7 @@ const HeaderCard: React.FC<{
             <Ionicons
               name="notifications-outline"
               size={20}
-              color={COLORS.textSecondary}
+              color={colors.textSecondary}
             />
             {notificationCount > 0 ? (
               <View style={styles.notificationBadge}>
@@ -1145,7 +1146,7 @@ const HeaderCard: React.FC<{
             <Ionicons
               name="settings-outline"
               size={20}
-              color={COLORS.textSecondary}
+              color={colors.textSecondary}
             />
           </Pressable>
         </View>
@@ -1154,14 +1155,26 @@ const HeaderCard: React.FC<{
   );
 };
 
-const GreetingCard = ({ name }: { name?: string }) => {
+const GreetingCard = ({
+  styles,
+  onPress,
+}: {
+  styles: any;
+  onPress: () => void;
+}) => {
   return (
-    <View style={styles.card}>
-      <Text style={styles.greetingTitle}>Hi {name ?? "there"} !</Text>
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.card,
+        pressed && { opacity: 0.92, transform: [{ scale: 0.998 }] },
+      ]}
+    >
+      <Text style={styles.greetingTitle}>Hi Berfin Örtülü!</Text>
       <Text style={styles.greetingSubtitle}>
-        Ready to get some studying done? How can I assist you today?
+        Your AI study assistant is here. Ask anything about your studies.
       </Text>
-    </View>
+    </Pressable>
   );
 };
 
@@ -1170,7 +1183,9 @@ interface ToggleTabsProps {
   onSelect: (value: Range) => void;
 }
 
-const ToggleTabs: React.FC<ToggleTabsProps> = ({ selected, onSelect }) => {
+const ToggleTabs: React.FC<
+  ToggleTabsProps & { styles: any; colors: ThemeColors }
+> = ({ selected, onSelect, styles, colors }) => {
   return (
     <View style={styles.toggleContainer}>
       <Pressable
@@ -1183,7 +1198,7 @@ const ToggleTabs: React.FC<ToggleTabsProps> = ({ selected, onSelect }) => {
         <Ionicons
           name="calendar-outline"
           size={16}
-          color={selected === "today" ? COLORS.accent : COLORS.textSecondary}
+          color={selected === "today" ? colors.accent : colors.textSecondary}
           style={{ marginRight: 6 }}
         />
         <Text
@@ -1206,7 +1221,7 @@ const ToggleTabs: React.FC<ToggleTabsProps> = ({ selected, onSelect }) => {
         <Ionicons
           name="calendar"
           size={16}
-          color={selected === "week" ? COLORS.accent : COLORS.textSecondary}
+          color={selected === "week" ? colors.accent : colors.textSecondary}
           style={{ marginRight: 6 }}
         />
         <Text
@@ -1226,7 +1241,9 @@ interface ScheduleCardProps {
   range: Range;
 }
 
-const ScheduleCard: React.FC<ScheduleCardProps> = ({ range }) => {
+const ScheduleCard: React.FC<
+  ScheduleCardProps & { styles: any; colors: ThemeColors }
+> = ({ range, styles, colors }) => {
   const isToday = range === "today";
 
   return (
@@ -1236,7 +1253,7 @@ const ScheduleCard: React.FC<ScheduleCardProps> = ({ range }) => {
           <Ionicons
             name="calendar-clear-outline"
             size={18}
-            color={COLORS.accent}
+            color={colors.accent}
             style={{ marginRight: 6 }}
           />
           <Text style={styles.scheduleTitleText}>
@@ -1271,7 +1288,7 @@ const ScheduleCard: React.FC<ScheduleCardProps> = ({ range }) => {
   );
 };
 
-const QuickActions = () => {
+const QuickActions = ({ styles, colors }: { styles: any; colors: ThemeColors }) => {
   const router = useRouter();
 
   const handlePress = (action: string) => {
@@ -1300,7 +1317,7 @@ const QuickActions = () => {
           <Ionicons
             name="list-outline"
             size={22}
-            color={COLORS.accentSoft}
+            color={colors.accentSoft}
             style={{ marginBottom: 6 }}
           />
           <Text style={styles.quickActionText}>Study plan</Text>
@@ -1313,7 +1330,7 @@ const QuickActions = () => {
           <Ionicons
             name="alarm-outline"
             size={22}
-            color={COLORS.accentSoft}
+            color={colors.accentSoft}
             style={{ marginBottom: 6 }}
           />
           <Text style={styles.quickActionText}>Study</Text>
@@ -1326,7 +1343,7 @@ const QuickActions = () => {
           <Ionicons
             name="chatbubble-ellipses-outline"
             size={22}
-            color={COLORS.accentSoft}
+            color={colors.accentSoft}
             style={{ marginBottom: 6 }}
           />
           <Text style={styles.quickActionText}>Ask a question</Text>
@@ -1336,7 +1353,13 @@ const QuickActions = () => {
   );
 };
 
-const RecommendationCard = () => {
+const RecommendationCard = ({
+  styles,
+  colors,
+}: {
+  styles: any;
+  colors: ThemeColors;
+}) => {
   const router = useRouter();
 
   return (
@@ -1346,7 +1369,7 @@ const RecommendationCard = () => {
           <Ionicons
             name="notifications-outline"
             size={18}
-            color={COLORS.accent}
+            color={colors.accent}
           />
         </View>
         <View>
@@ -1367,7 +1390,7 @@ const RecommendationCard = () => {
   );
 };
 
-const CarouselSection = () => {
+const CarouselSection = ({ styles, colors }: { styles: any; colors: ThemeColors }) => {
   const router = useRouter();
 
   return (
@@ -1381,7 +1404,7 @@ const CarouselSection = () => {
             <Ionicons
               name="chevron-back-outline"
               size={18}
-              color={COLORS.textMuted}
+              color={colors.textMuted}
             />
             <Text style={styles.carouselTitle}>Daily emotion check</Text>
           </View>
@@ -1399,7 +1422,7 @@ const CarouselSection = () => {
             <Ionicons
               name="chevron-forward-outline"
               size={18}
-              color={COLORS.textMuted}
+              color={colors.textMuted}
             />
           </View>
           <Text style={styles.carouselSubtitle}>
@@ -1411,7 +1434,8 @@ const CarouselSection = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (COLORS: ThemeColors) =>
+  StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: COLORS.background,
@@ -1422,7 +1446,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: "100%",
-    backgroundColor: "#0B1220",
+    backgroundColor: COLORS.background,
   },
   backgroundBottom: {
     position: "absolute",
@@ -1430,7 +1454,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: "100%",
-    backgroundColor: "#0F1A2B",
+    backgroundColor: COLORS.backgroundAlt,
     opacity: 0.45,
   },
   glow: {
@@ -1485,7 +1509,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(15,23,42,0.7)",
+    backgroundColor: COLORS.subtleCard,
   },
   notificationTabsRow: {
     flexDirection: "row",
@@ -1499,7 +1523,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
     borderColor: COLORS.borderSoft,
-    backgroundColor: "rgba(15,23,42,0.4)",
+    backgroundColor: COLORS.subtleCard,
   },
   notificationTabActive: {
     backgroundColor: COLORS.accent,
@@ -1511,7 +1535,7 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
   notificationTabTextActive: {
-    color: "#0B1020",
+    color: "#FFFFFF",
   },
   notificationsScroll: {
     marginTop: SPACING.xs,
@@ -1530,7 +1554,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "rgba(30, 41, 59, 0.95)",
+    backgroundColor: COLORS.subtleCard,
     borderRadius: 12,
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.md,
@@ -1619,7 +1643,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: "rgba(15,23,42,0.9)",
+    backgroundColor: COLORS.subtleCard,
     alignItems: "center",
     justifyContent: "center",
     marginRight: SPACING.sm,
@@ -1642,8 +1666,7 @@ const styles = StyleSheet.create({
   streakBadge: {
     flexDirection: "row",
     alignItems: "center",
-    // match tile background for a consistent pill look
-    backgroundColor: "rgba(30, 41, 59, 0.95)",
+    backgroundColor: COLORS.subtleCard,
     paddingHorizontal: SPACING.sm,
     paddingVertical: 6,
     borderRadius: 14,
@@ -1660,7 +1683,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(15,23,42,0.8)",
+    backgroundColor: COLORS.subtleCard,
     marginRight: SPACING.xs,
     position: "relative",
   },
@@ -1687,7 +1710,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(15,23,42,0.8)",
+    backgroundColor: COLORS.subtleCard,
   },
   greetingTitle: {
     fontSize: 20,
@@ -1702,7 +1725,7 @@ const styles = StyleSheet.create({
   },
   toggleContainer: {
     flexDirection: "row",
-    backgroundColor: "rgba(15,23,42,0.65)",
+    backgroundColor: COLORS.subtleCard,
     borderRadius: 14,
     padding: 4,
     borderWidth: 1,
@@ -1759,8 +1782,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    // match Quick Actions tile background (slightly lighter navy)
-    backgroundColor: "rgba(30, 41, 59, 0.95)",
+    backgroundColor: COLORS.subtleCard,
     borderRadius: 12,
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.md,
@@ -1775,7 +1797,7 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
   schedulePlaceholder: {
-    backgroundColor: "rgba(15,23,42,0.9)",
+    backgroundColor: COLORS.subtleCard,
     borderRadius: 12,
     paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.md,
@@ -1811,8 +1833,7 @@ const styles = StyleSheet.create({
   },
   quickActionCard: {
     flex: 1,
-    // slightly lighter than main cards for more contrast
-    backgroundColor: "rgba(30, 41, 59, 0.95)",
+    backgroundColor: COLORS.subtleCard,
     borderRadius: 12,
     paddingVertical: SPACING.sm,
     alignItems: "center",
@@ -1823,7 +1844,7 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 3,
     borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
+    borderColor: COLORS.borderSoft,
   },
   quickActionText: {
     fontSize: 13,
@@ -1832,7 +1853,7 @@ const styles = StyleSheet.create({
   },
   recommendationCard: {
     marginTop: SPACING.md,
-    backgroundColor: "#111827",
+    backgroundColor: COLORS.subtleCard,
     borderRadius: 16,
     paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.md,

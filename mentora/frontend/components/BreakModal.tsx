@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import React from "react";
+import React, { useMemo } from "react";
 import {
   Modal,
   Pressable,
@@ -7,6 +7,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { useTheme } from "../theme/ThemeProvider";
 
 type Props = {
   visible: boolean;
@@ -14,6 +15,34 @@ type Props = {
 };
 
 export function BreakModal({ visible, onClose }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
+  function BreakRow({ icon, title, subtitle }: BreakRowProps) {
+    return (
+      <View style={styles.row}>
+        <View style={styles.rowLeft}>
+          <View style={styles.iconWrapper}>
+            <Ionicons name={icon} size={20} color={colors.accent} />
+          </View>
+          <View>
+            <Text style={styles.rowTitle}>{title}</Text>
+            <Text style={styles.rowSubtitle}>{subtitle}</Text>
+          </View>
+        </View>
+
+        <Pressable
+          style={styles.rowButton}
+          onPress={() => {
+            console.log(`Start break: ${title}`);
+          }}
+        >
+          <Text style={styles.rowButtonText}>Start</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
   return (
     <Modal
       visible={visible}
@@ -31,7 +60,7 @@ export function BreakModal({ visible, onClose }: Props) {
           <View style={styles.headerRow}>
             <Text style={styles.title}>Time for a break!</Text>
             <Pressable onPress={onClose} hitSlop={8} style={styles.closeBtn}>
-              <Ionicons name="close" size={20} color="#111827" />
+              <Ionicons name="close" size={20} color={colors.textPrimary} />
             </Pressable>
           </View>
 
@@ -72,32 +101,15 @@ type BreakRowProps = {
   subtitle: string;
 };
 
-function BreakRow({ icon, title, subtitle }: BreakRowProps) {
-  return (
-    <View style={styles.row}>
-      <View style={styles.rowLeft}>
-        <View style={styles.iconWrapper}>
-          <Ionicons name={icon} size={20} color="#6D5EF7" />
-        </View>
-        <View>
-          <Text style={styles.rowTitle}>{title}</Text>
-          <Text style={styles.rowSubtitle}>{subtitle}</Text>
-        </View>
-      </View>
-
-      <Pressable
-        style={styles.rowButton}
-        onPress={() => {
-          console.log(`Start break: ${title}`);
-        }}
-      >
-        <Text style={styles.rowButtonText}>Start</Text>
-      </Pressable>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
+const createStyles = (colors: {
+  card: string;
+  textPrimary: string;
+  textSecondary: string;
+  textMuted: string;
+  borderSoft: string;
+  accent: string;
+}) =>
+  StyleSheet.create({
   backdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.35)",
@@ -108,7 +120,7 @@ const styles = StyleSheet.create({
   card: {
     width: "90%",
     maxWidth: 360,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 22,
     paddingHorizontal: 18,
     paddingTop: 16,
@@ -118,6 +130,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.12,
     shadowRadius: 18,
     elevation: 6,
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
   },
   headerRow: {
     flexDirection: "row",
@@ -128,7 +142,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#111827",
+    color: colors.textPrimary,
   },
   closeBtn: {
     width: 28,
@@ -139,7 +153,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 13,
-    color: "#6B7280",
+    color: colors.textSecondary,
     marginBottom: 14,
   },
   list: {
@@ -168,22 +182,22 @@ const styles = StyleSheet.create({
   rowTitle: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#111827",
+    color: colors.textPrimary,
   },
   rowSubtitle: {
     fontSize: 12,
-    color: "#6B7280",
+    color: colors.textMuted,
   },
   rowButton: {
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: "#EEF2FF",
+    backgroundColor: "rgba(109,94,247,0.14)",
   },
   rowButtonText: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#3B5BA9",
+    color: colors.accent,
   },
   skipButton: {
     marginTop: 18,
@@ -191,12 +205,12 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F3F4F6",
+    backgroundColor: "rgba(148,163,184,0.18)",
   },
   skipText: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#374151",
+    color: colors.textPrimary,
   },
 });
 

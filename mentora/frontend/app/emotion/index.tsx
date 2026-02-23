@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -11,10 +11,15 @@ import {
   View,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useTheme } from "../../theme/ThemeProvider";
+import type { ThemeColors } from "../../theme/theme";
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export default function EmotionScreen() {
+  const { colors: COLORS } = useTheme();
+  const styles = useMemo(() => createStyles(COLORS), [COLORS]);
+
   const [text, setText] = useState("");
   const [username, setUsername] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -67,7 +72,7 @@ export default function EmotionScreen() {
           value={text}
           onChangeText={setText}
           placeholder="Type how you feel..."
-          placeholderTextColor="#9CA3AF"
+          placeholderTextColor={COLORS.textMuted}
           multiline
           style={styles.input}
         />
@@ -76,7 +81,7 @@ export default function EmotionScreen() {
 
         <Pressable style={styles.button} onPress={submit} disabled={loading}>
           {loading ? (
-            <ActivityIndicator color="#0B1220" />
+            <ActivityIndicator color={COLORS.background} />
           ) : (
             <Text style={styles.buttonText}>Analyze</Text>
           )}
@@ -97,37 +102,58 @@ export default function EmotionScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#0B1220" },
+const createStyles = (COLORS: ThemeColors) =>
+  StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: COLORS.background },
   container: { padding: 20 },
-  title: { color: "#EAF0FF", fontSize: 24, fontWeight: "700", marginBottom: 12 },
-  label: { color: "#9CA3AF", marginBottom: 6, textTransform: "uppercase", fontSize: 12 },
+  title: {
+    color: COLORS.textPrimary,
+    fontSize: 24,
+    fontWeight: "700",
+    marginBottom: 12,
+  },
+  label: {
+    color: COLORS.textSecondary,
+    marginBottom: 6,
+    textTransform: "uppercase",
+    fontSize: 12,
+  },
   input: {
     minHeight: 120,
-    backgroundColor: "rgba(2,6,23,0.65)",
-    color: "#EAF0FF",
+    backgroundColor: COLORS.inputBg,
+    color: COLORS.textPrimary,
     borderRadius: 12,
     padding: 12,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.12)",
+    borderColor: COLORS.borderSoft,
     marginBottom: 8,
   },
-  helper: { color: "#9CA3AF", marginBottom: 12 },
+  helper: { color: COLORS.textSecondary, marginBottom: 12 },
   button: {
-    backgroundColor: "#6D5EF7",
+    backgroundColor: COLORS.accent,
     paddingVertical: 12,
     borderRadius: 12,
     alignItems: "center",
     marginBottom: 16,
   },
-  buttonText: { color: "#0B1020", fontWeight: "700" },
+  buttonText: { color: COLORS.background, fontWeight: "700" },
   resultsCard: {
-    backgroundColor: "rgba(15,23,42,0.85)",
+    backgroundColor: COLORS.card,
     padding: 12,
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.borderSoft,
   },
-  resultsTitle: { color: "#EAF0FF", fontWeight: "700", marginBottom: 8 },
-  scoreRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 6 },
-  scoreLabel: { color: "#EAF0FF" },
-  scoreValue: { color: "#9CA3AF" },
+  resultsTitle: {
+    color: COLORS.textPrimary,
+    fontWeight: "700",
+    marginBottom: 8,
+  },
+  scoreRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 6,
+  },
+  scoreLabel: { color: COLORS.textPrimary },
+  scoreValue: { color: COLORS.textSecondary },
 });

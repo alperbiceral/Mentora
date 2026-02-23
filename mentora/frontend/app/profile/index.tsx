@@ -12,19 +12,8 @@ import {
   Image,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
-const COLORS = {
-  // Match Home dark theme
-  background: "#0B1220",
-  card: "rgba(15,23,42,0.85)",
-  textPrimary: "#EAF0FF",
-  textSecondary: "#9CA3AF",
-  textMuted: "#6B7280",
-  borderSubtle: "rgba(148,163,184,0.35)",
-  accent: "#6D5EF7",
-  accentSoft: "#6D5EF7",
-  shadow: "#000000",
-};
+import { useTheme } from "../../theme/ThemeProvider";
+import type { ThemeColors } from "../../theme/theme";
 
 const SPACING = {
   sm: 12,
@@ -71,6 +60,9 @@ type OceanProfile = {
 };
 
 export default function ProfileScreen() {
+  const { colors: COLORS } = useTheme();
+  const styles = useMemo(() => createStyles(COLORS), [COLORS]);
+
   const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -289,10 +281,26 @@ export default function ProfileScreen() {
 
           <View style={styles.divider} />
 
-          <ProfileRow label="NAME" value={profile?.full_name ?? "-"} />
-          <ProfileRow label="USERNAME" value={profile?.username ?? "-"} />
-          <ProfileRow label="E-MAIL" value={profile?.email ?? "-"} />
-          <ProfileRow label="UNIVERSITY" value={profile?.university ?? "-"} />
+          <ProfileRow
+            label="NAME"
+            value={profile?.full_name ?? "-"}
+            styles={styles}
+          />
+          <ProfileRow
+            label="USERNAME"
+            value={profile?.username ?? "-"}
+            styles={styles}
+          />
+          <ProfileRow
+            label="E-MAIL"
+            value={profile?.email ?? "-"}
+            styles={styles}
+          />
+          <ProfileRow
+            label="UNIVERSITY"
+            value={profile?.university ?? "-"}
+            styles={styles}
+          />
           <ProfileRow
             label="PERSONALITY"
             value={
@@ -304,6 +312,7 @@ export default function ProfileScreen() {
                   )} N:${Math.round(oceanProfile.neuroticism)}`
                 : profile?.personality ?? "-"
             }
+            styles={styles}
           />
         </View>
 
@@ -316,11 +325,15 @@ export default function ProfileScreen() {
             icon="speedometer-outline"
             label="Study Hours"
             value={formatStudyHours(profile?.study_hours ?? 0)}
+            styles={styles}
+            colors={COLORS}
           />
           <InsightRow
             icon="repeat-outline"
             label="Streak"
             value={`${profile?.streak_count ?? 0} days`}
+            styles={styles}
+            colors={COLORS}
           />
         </View>
 
@@ -595,9 +608,10 @@ const parseSessionDate = (value: string) => {
 type ProfileRowProps = {
   label: string;
   value: string;
+  styles: any;
 };
 
-const ProfileRow: React.FC<ProfileRowProps> = ({ label, value }) => (
+const ProfileRow: React.FC<ProfileRowProps> = ({ label, value, styles }) => (
   <View style={styles.profileRow}>
     <Text style={styles.profileRowLabel}>{label}</Text>
     <Text style={styles.profileRowValue}>{value}</Text>
@@ -608,13 +622,21 @@ type InsightRowProps = {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   value: string;
+  styles: any;
+  colors: ThemeColors;
 };
 
-const InsightRow: React.FC<InsightRowProps> = ({ icon, label, value }) => (
+const InsightRow: React.FC<InsightRowProps> = ({
+  icon,
+  label,
+  value,
+  styles,
+  colors,
+}) => (
   <View style={styles.insightRow}>
     <View style={styles.insightLeft}>
       <View style={styles.insightIconWrapper}>
-        <Ionicons name={icon} size={18} color={COLORS.accentSoft} />
+        <Ionicons name={icon} size={18} color={colors.accentSoft} />
       </View>
       <Text style={styles.insightLabel}>{label}</Text>
     </View>
@@ -622,7 +644,8 @@ const InsightRow: React.FC<InsightRowProps> = ({ icon, label, value }) => (
   </View>
 );
 
-const styles = StyleSheet.create({
+const createStyles = (COLORS: ThemeColors) =>
+  StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: COLORS.background,
@@ -648,7 +671,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(15,23,42,0.8)",
+    backgroundColor: COLORS.subtleCard,
   },
   topBarSpacer: {
     flex: 1,
@@ -656,7 +679,7 @@ const styles = StyleSheet.create({
   streakPill: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(30,41,59,0.95)",
+    backgroundColor: COLORS.subtleCard,
     paddingHorizontal: SPACING.sm,
     paddingVertical: 6,
     borderRadius: 999,
@@ -688,8 +711,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    // lighter so the avatar circle stands out on dark background
-    backgroundColor: "#E5E7EB",
+    backgroundColor: COLORS.subtleCard,
     alignItems: "center",
     justifyContent: "center",
     marginRight: SPACING.md,
@@ -783,7 +805,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: "rgba(15,23,42,0.9)",
+    backgroundColor: COLORS.subtleCard,
     alignItems: "center",
     justifyContent: "center",
     marginRight: SPACING.sm,
@@ -810,7 +832,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
     borderColor: COLORS.borderSubtle,
-    backgroundColor: "rgba(15,23,42,0.75)",
+    backgroundColor: COLORS.subtleCard,
   },
   focusToggleItem: {
     paddingHorizontal: 10,
@@ -835,7 +857,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.borderSubtle,
     paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.md,
-    backgroundColor: "#020617",
+    backgroundColor: COLORS.inputBg,
     minHeight: 160,
   },
   focusChartGrid: {
@@ -846,7 +868,7 @@ const styles = StyleSheet.create({
     bottom: SPACING.lg,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(148,163,184,0.35)",
+    borderColor: COLORS.borderSubtle,
   },
   focusChartBars: {
     flexDirection: "row",

@@ -17,21 +17,10 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { useTheme } from "../../theme/ThemeProvider";
+import type { ThemeColors } from "../../theme/theme";
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
-
-const COLORS = {
-  background: "#0B1220",
-  backgroundAlt: "#101B2E",
-  card: "rgba(15,23,42,0.9)",
-  textPrimary: "#EAF0FF",
-  textSecondary: "#9CA3AF",
-  textMuted: "#6B7280",
-  accent: "#6D5EF7",
-  accentSoft: "#A7B7F3",
-  borderSubtle: "rgba(148,163,184,0.35)",
-  shadow: "#000000",
-};
 
 const SPACING = {
   sm: 12,
@@ -41,6 +30,9 @@ const SPACING = {
 };
 
 export default function StudyScreen() {
+  const { colors: COLORS } = useTheme();
+  const styles = useMemo(() => createStyles(COLORS), [COLORS]);
+
   const [activeTab, setActiveTab] = useState<"normal" | "pomodoro" | "streak">(
     "normal",
   );
@@ -1058,7 +1050,8 @@ const recordSession = async (
   }
 };
 
-const styles = StyleSheet.create({
+const createStyles = (COLORS: ThemeColors) =>
+  StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: COLORS.background,
@@ -1069,7 +1062,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: "100%",
-    backgroundColor: "#0B1220",
+    backgroundColor: COLORS.background,
   },
   backgroundBottom: {
     position: "absolute",
@@ -1077,7 +1070,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: "100%",
-    backgroundColor: "#0F1A2B",
+    backgroundColor: COLORS.backgroundAlt,
     opacity: 0.45,
   },
   glow: {
@@ -1163,7 +1156,7 @@ const styles = StyleSheet.create({
     borderRadius: 105,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(15,23,42,0.95)",
+    backgroundColor: COLORS.card,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 14 },
     shadowOpacity: 0.55,
@@ -1187,7 +1180,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.accent,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#020617",
+    backgroundColor: COLORS.subtleCard,
   },
   timerLabel: {
     fontSize: 12,
@@ -1236,7 +1229,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.borderSubtle,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(15,23,42,0.85)",
+    backgroundColor: COLORS.subtleCard,
   },
   secondaryButtonText: {
     fontSize: 14,
@@ -1262,7 +1255,7 @@ const styles = StyleSheet.create({
   },
   segmentedControl: {
     flexDirection: "row",
-    backgroundColor: "rgba(15,23,42,0.75)",
+    backgroundColor: COLORS.subtleCard,
     borderRadius: 999,
     padding: 6,
     borderWidth: 1,
@@ -1301,7 +1294,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.borderSubtle,
     alignItems: "center",
-    backgroundColor: "rgba(15,23,42,0.75)",
+    backgroundColor: COLORS.subtleCard,
   },
   toggleButtonActive: {
     borderColor: COLORS.accent,
@@ -1334,7 +1327,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.borderSubtle,
     paddingHorizontal: 12,
     color: COLORS.textPrimary,
-    backgroundColor: "rgba(15,23,42,0.7)",
+    backgroundColor: COLORS.inputBg,
     fontSize: 14,
     fontWeight: "600",
   },
@@ -1343,11 +1336,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: SPACING.sm,
-    backgroundColor: "rgba(15,23,42,0.7)",
+    backgroundColor: COLORS.card,
     borderRadius: 16,
     padding: SPACING.md,
     borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
+    borderColor: COLORS.borderSoft,
   },
   todoText: {
     color: COLORS.textSecondary,
@@ -1363,8 +1356,8 @@ const styles = StyleSheet.create({
     padding: SPACING.md,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
-    backgroundColor: "rgba(15,23,42,0.85)",
+    borderColor: COLORS.borderSoft,
+    backgroundColor: COLORS.card,
   },
   sessionIcon: {
     width: 36,
@@ -1525,18 +1518,18 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1.5,
     borderColor: COLORS.borderSubtle,
-    backgroundColor: "rgba(15,23,42,0.7)",
+    backgroundColor: COLORS.card,
   },
   optionButtonSelected: {
     borderColor: COLORS.accent,
     backgroundColor: "rgba(109,94,247,0.15)",
   },
   optionButtonCorrect: {
-    borderColor: "#10B981",
+    borderColor: COLORS.success,
     backgroundColor: "rgba(16,185,129,0.15)",
   },
   optionButtonWrong: {
-    borderColor: "#EF4444",
+    borderColor: COLORS.danger,
     backgroundColor: "rgba(239,68,68,0.15)",
   },
   optionKeyCircle: {

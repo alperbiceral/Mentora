@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Image,
@@ -17,25 +17,8 @@ import {
   View,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
-
-const COLORS = {
-  // Dark navy theme to match the login screen
-  background: "#0B1220",
-  backgroundAlt: "#101B2E",
-  card: "rgba(15,23,42,0.85)", // glassy dark card
-  subtleCard: "rgba(15,23,42,0.85)",
-  // Use the same lavender as "See history >" everywhere
-  accent: "#6D5EF7",
-  accentSoft: "#6D5EF7",
-  textPrimary: "#EAF0FF",
-  textSecondary: "#9CA3AF",
-  textMuted: "#6B7280",
-  borderSubtle: "rgba(148,163,184,0.35)",
-  borderSoft: "rgba(148,163,184,0.18)",
-  shadow: "#000000",
-  online: "#10B981",
-  offline: "#6B7280",
-};
+import { useTheme } from "../../theme/ThemeProvider";
+import type { ThemeColors } from "../../theme/theme";
 
 const SPACING = {
   xs: 8,
@@ -153,6 +136,9 @@ type GroupLeaderboardEntry = {
 };
 
 export default function SocialScreen() {
+  const { colors: COLORS } = useTheme();
+  const styles = useMemo(() => createStyles(COLORS), [COLORS]);
+
   const router = useRouter();
   const [leaderboardMetric, setLeaderboardMetric] =
     useState<LeaderboardMetric>("hours");
@@ -1858,7 +1844,8 @@ const formatLeaderboardHours = (hours: number) => {
   return `${rounded}h`;
 };
 
-const styles = StyleSheet.create({
+const createStyles = (COLORS: ThemeColors) =>
+  StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: COLORS.background,
@@ -1869,7 +1856,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: "100%",
-    backgroundColor: "#0B1220",
+    backgroundColor: COLORS.background,
   },
   backgroundBottom: {
     position: "absolute",
@@ -1877,7 +1864,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: "100%",
-    backgroundColor: "#0F1A2B",
+    backgroundColor: COLORS.backgroundAlt,
     opacity: 0.45,
   },
   glow: {
@@ -1952,7 +1939,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(15,23,42,0.7)",
+    backgroundColor: COLORS.subtleCard,
   },
   scrollContent: {
     paddingTop: SPACING.lg,
@@ -1990,7 +1977,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: SPACING.sm,
     paddingVertical: 6,
-    backgroundColor: "rgba(15,23,42,0.8)",
+    backgroundColor: COLORS.subtleCard,
     borderRadius: 12,
   },
   statText: {
@@ -2025,7 +2012,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
     borderColor: COLORS.borderSoft,
-    backgroundColor: "rgba(15,23,42,0.4)",
+    backgroundColor: COLORS.subtleCard,
   },
   headerTabActive: {
     backgroundColor: COLORS.accent,
@@ -2079,7 +2066,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.borderSubtle,
     paddingHorizontal: SPACING.md,
     color: COLORS.textPrimary,
-    backgroundColor: "#020617",
+    backgroundColor: COLORS.inputBg,
   },
   groupInput: {
     height: 44,
@@ -2088,7 +2075,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.borderSubtle,
     paddingHorizontal: SPACING.md,
     color: COLORS.textPrimary,
-    backgroundColor: "#020617",
+    backgroundColor: COLORS.inputBg,
     marginBottom: SPACING.sm,
   },
   groupTextArea: {
@@ -2099,7 +2086,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     color: COLORS.textPrimary,
-    backgroundColor: "#020617",
+    backgroundColor: COLORS.inputBg,
     marginBottom: SPACING.sm,
     textAlignVertical: "top",
   },
@@ -2125,7 +2112,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "rgba(2,6,23,0.7)",
+    backgroundColor: COLORS.subtleCard,
     alignItems: "center",
     justifyContent: "center",
     marginRight: SPACING.sm,
@@ -2174,7 +2161,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     borderWidth: 1,
     borderColor: COLORS.borderSoft,
-    backgroundColor: "rgba(15,23,42,0.8)",
+    backgroundColor: COLORS.subtleCard,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -2225,7 +2212,7 @@ const styles = StyleSheet.create({
   },
   privacyToggle: {
     flexDirection: "row",
-    backgroundColor: "rgba(15,23,42,0.7)",
+    backgroundColor: COLORS.subtleCard,
     borderRadius: 999,
     padding: 3,
     borderWidth: 1,
@@ -2278,7 +2265,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: "rgba(2,6,23,0.7)",
+    backgroundColor: COLORS.subtleCard,
     alignItems: "center",
     justifyContent: "center",
     marginRight: SPACING.sm,
@@ -2386,7 +2373,7 @@ const styles = StyleSheet.create({
   friendItem: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(30, 41, 59, 0.95)",
+    backgroundColor: COLORS.subtleCard,
     borderRadius: 12,
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.md,
@@ -2395,7 +2382,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "rgba(15,23,42,0.9)",
+    backgroundColor: COLORS.subtleCard,
     alignItems: "center",
     justifyContent: "center",
     marginRight: SPACING.sm,
@@ -2422,7 +2409,7 @@ const styles = StyleSheet.create({
   messageButton: {
     padding: 8,
     borderRadius: 16,
-    backgroundColor: "rgba(15,23,42,0.8)",
+    backgroundColor: COLORS.subtleCard,
   },
   groupsList: {
     gap: SPACING.sm,
@@ -2452,7 +2439,7 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(15,23,42,0.7)",
+    backgroundColor: COLORS.subtleCard,
   },
   groupAvatar: {
     width: 36,
@@ -2461,7 +2448,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginRight: SPACING.sm,
-    backgroundColor: "rgba(2,6,23,0.7)",
+    backgroundColor: COLORS.subtleCard,
   },
   groupAvatarImage: {
     width: 36,
@@ -2539,7 +2526,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
     borderColor: COLORS.borderSoft,
-    backgroundColor: "rgba(15,23,42,0.6)",
+    backgroundColor: COLORS.subtleCard,
   },
   groupActionSecondaryText: {
     color: COLORS.textSecondary,
@@ -2552,7 +2539,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
     borderColor: COLORS.borderSoft,
-    backgroundColor: "rgba(15,23,42,0.6)",
+    backgroundColor: COLORS.subtleCard,
   },
   groupActionMutedText: {
     color: COLORS.textSecondary,
@@ -2653,7 +2640,7 @@ const styles = StyleSheet.create({
   },
   leaderboardToggle: {
     flexDirection: "row",
-    backgroundColor: "rgba(15,23,42,0.65)",
+    backgroundColor: COLORS.subtleCard,
     borderRadius: 14,
     padding: 4,
     borderWidth: 1,
@@ -2694,7 +2681,7 @@ const styles = StyleSheet.create({
   leaderboardItem: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(30, 41, 59, 0.95)",
+    backgroundColor: COLORS.subtleCard,
     borderRadius: 12,
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.md,
@@ -2758,7 +2745,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
     borderColor: COLORS.borderSubtle,
-    backgroundColor: "rgba(15,23,42,0.6)",
+    backgroundColor: COLORS.subtleCard,
   },
   groupLeaderboardTabActive: {
     backgroundColor: COLORS.accent,

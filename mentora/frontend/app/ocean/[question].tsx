@@ -9,24 +9,12 @@ import {
   View,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useTheme } from "../../theme/ThemeProvider";
+import type { ThemeColors } from "../../theme/theme";
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
 const TOTAL_QUESTIONS = 20;
 const OPTIONS = [1, 2, 3, 4, 5];
-
-const COLORS = {
-  background: "#0B1220",
-  backgroundAlt: "#101B2E",
-  card: "rgba(15,23,42,0.85)",
-  accent: "#6D5EF7",
-  accentSoft: "#7C6CF9",
-  textPrimary: "#EAF0FF",
-  textSecondary: "#9CA3AF",
-  textMuted: "#6B7280",
-  borderSoft: "rgba(148,163,184,0.22)",
-  inputBg: "rgba(2,6,23,0.65)",
-  danger: "#F87171",
-};
 
 type Status = "idle" | "saving" | "saved" | "error";
 
@@ -54,6 +42,9 @@ const QUESTIONS = [
 ];
 
 export default function OceanQuestionScreen() {
+  const { colors: COLORS } = useTheme();
+  const styles = useMemo(() => createStyles(COLORS), [COLORS]);
+
   const router = useRouter();
   const params = useLocalSearchParams();
   const rawQuestion = params.question;
@@ -290,7 +281,8 @@ export default function OceanQuestionScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (COLORS: ThemeColors) =>
+  StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: COLORS.background,

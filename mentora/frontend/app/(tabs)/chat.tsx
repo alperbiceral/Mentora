@@ -22,22 +22,8 @@ import {
   View,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
-
-const COLORS = {
-  background: "#0B1220",
-  backgroundAlt: "#101B2E",
-  card: "rgba(15,23,42,0.85)",
-  subtleCard: "rgba(15,23,42,0.85)",
-  accent: "#6D5EF7",
-  accentSoft: "#6D5EF7",
-  textPrimary: "#EAF0FF",
-  textSecondary: "#9CA3AF",
-  textMuted: "#6B7280",
-  borderSubtle: "rgba(148,163,184,0.35)",
-  borderSoft: "rgba(148,163,184,0.18)",
-  shadow: "#000000",
-  danger: "#EF4444",
-};
+import { useTheme } from "../../theme/ThemeProvider";
+import type { ThemeColors } from "../../theme/theme";
 
 const SPACING = {
   xs: 8,
@@ -90,6 +76,9 @@ type Profile = {
 const EMOJI_SET = ["🙂", "😂", "😍", "🥳", "👍", "🔥", "👏", "😮", "😢", "🙏"];
 
 export default function ChatScreen() {
+  const { colors: COLORS } = useTheme();
+  const styles = useMemo(() => createStyles(COLORS), [COLORS]);
+
   const params = useLocalSearchParams();
   const [username, setUsername] = useState<string | null>(null);
   const [threads, setThreads] = useState<ChatThreadItem[]>([]);
@@ -811,10 +800,20 @@ export default function ChatScreen() {
                               {senderName}
                             </Text>
                           ) : null}
-                          <Text style={styles.messageText}>
+                          <Text
+                            style={[
+                              styles.messageText,
+                              isMine && styles.messageTextMine,
+                            ]}
+                          >
                             {message.content}
                           </Text>
-                          <Text style={styles.messageTime}>
+                          <Text
+                            style={[
+                              styles.messageTime,
+                              isMine && styles.messageTimeMine,
+                            ]}
+                          >
                             {new Date(message.created_at).toLocaleTimeString(
                               [],
                               {
@@ -865,7 +864,7 @@ export default function ChatScreen() {
                   multiline
                 />
                 <Pressable style={styles.sendButton} onPress={handleSend}>
-                  <Ionicons name="send" size={18} color="#0B1020" />
+                  <Ionicons name="send" size={18} color="#FFFFFF" />
                 </Pressable>
               </View>
             </View>
@@ -886,7 +885,7 @@ export default function ChatScreen() {
                     style={styles.sectionAction}
                     onPress={() => setNewChatOpen(true)}
                   >
-                    <Ionicons name="add" size={16} color="#0B1020" />
+                    <Ionicons name="add" size={16} color="#FFFFFF" />
                     <Text style={styles.sectionActionText}>New</Text>
                   </Pressable>
                 </View>
@@ -964,7 +963,7 @@ export default function ChatScreen() {
                     style={styles.sectionAction}
                     onPress={() => setGroupCreateOpen(true)}
                   >
-                    <Ionicons name="add" size={16} color="#0B1020" />
+                    <Ionicons name="add" size={16} color="#FFFFFF" />
                     <Text style={styles.sectionActionText}>New</Text>
                   </Pressable>
                 </View>
@@ -1168,7 +1167,7 @@ export default function ChatScreen() {
                           <Ionicons
                             name="checkmark"
                             size={14}
-                            color="#0B1020"
+                            color="#FFFFFF"
                           />
                         ) : null}
                       </View>
@@ -1276,7 +1275,7 @@ export default function ChatScreen() {
                         ]}
                       >
                         {selected ? (
-                          <Ionicons name="close" size={14} color="#0B1020" />
+                          <Ionicons name="close" size={14} color="#FFFFFF" />
                         ) : null}
                       </View>
                     </Pressable>
@@ -1314,7 +1313,7 @@ export default function ChatScreen() {
                           <Ionicons
                             name="checkmark"
                             size={14}
-                            color="#0B1020"
+                            color="#FFFFFF"
                           />
                         ) : null}
                       </View>
@@ -1333,7 +1332,8 @@ export default function ChatScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (COLORS: ThemeColors) =>
+  StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: COLORS.background,
@@ -1344,7 +1344,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: "100%",
-    backgroundColor: "#0B1220",
+    backgroundColor: COLORS.background,
   },
   backgroundBottom: {
     position: "absolute",
@@ -1352,7 +1352,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: "100%",
-    backgroundColor: "#0F1A2B",
+    backgroundColor: COLORS.backgroundAlt,
     opacity: 0.45,
   },
   glow: {
@@ -1409,10 +1409,10 @@ const styles = StyleSheet.create({
   },
   chatSurface: {
     flex: 1,
-    backgroundColor: "rgba(9,16,28,0.85)",
+    backgroundColor: COLORS.card,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.2)",
+    borderColor: COLORS.borderSoft,
     paddingHorizontal: SPACING.md,
     paddingTop: SPACING.sm,
     paddingBottom: SPACING.md,
@@ -1458,7 +1458,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   sectionActionText: {
-    color: "#0B1020",
+    color: "#FFFFFF",
     fontWeight: "700",
     fontSize: 12,
   },
@@ -1472,7 +1472,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   newChatText: {
-    color: "#0B1020",
+    color: "#FFFFFF",
     fontWeight: "700",
     fontSize: 12,
   },
@@ -1495,7 +1495,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(15,23,42,0.8)",
+    backgroundColor: COLORS.subtleCard,
     marginRight: SPACING.sm,
   },
   threadAvatarImage: {
@@ -1543,7 +1543,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(15,23,42,0.8)",
+    backgroundColor: COLORS.subtleCard,
   },
   chatHeaderAvatar: {
     width: 32,
@@ -1551,7 +1551,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(15,23,42,0.8)",
+    backgroundColor: COLORS.subtleCard,
     borderWidth: 1,
     borderColor: COLORS.borderSoft,
   },
@@ -1571,7 +1571,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(15,23,42,0.8)",
+    backgroundColor: COLORS.subtleCard,
   },
   deleteButton: {
     width: 32,
@@ -1579,7 +1579,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(15,23,42,0.8)",
+    backgroundColor: COLORS.subtleCard,
   },
   messagesScroll: {
     flex: 1,
@@ -1605,7 +1605,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(15,23,42,0.8)",
+    backgroundColor: COLORS.subtleCard,
     borderWidth: 1,
     borderColor: COLORS.borderSoft,
   },
@@ -1629,7 +1629,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.accent,
   },
   messageBubbleOther: {
-    backgroundColor: "rgba(15,23,42,0.9)",
+    backgroundColor: COLORS.subtleCard,
     borderWidth: 1,
     borderColor: COLORS.borderSoft,
   },
@@ -1642,11 +1642,17 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     fontSize: 14,
   },
+  messageTextMine: {
+    color: "#FFFFFF",
+  },
   messageTime: {
     marginTop: 4,
     fontSize: 10,
     color: COLORS.textMuted,
     textAlign: "right",
+  },
+  messageTimeMine: {
+    color: "rgba(255,255,255,0.8)",
   },
   inputRow: {
     flexDirection: "row",
@@ -1658,7 +1664,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "rgba(15,23,42,0.8)",
+    backgroundColor: COLORS.subtleCard,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1672,7 +1678,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     paddingVertical: 10,
     color: COLORS.textPrimary,
-    backgroundColor: "#020617",
+    backgroundColor: COLORS.inputBg,
   },
   sendButton: {
     width: 40,
@@ -1692,7 +1698,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: "rgba(15,23,42,0.8)",
+    backgroundColor: COLORS.subtleCard,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1776,7 +1782,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: COLORS.borderSubtle,
-    backgroundColor: "#020617",
+    backgroundColor: COLORS.inputBg,
   },
   groupPhotoButtonText: {
     fontSize: 13,
@@ -1799,7 +1805,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.borderSubtle,
     paddingHorizontal: SPACING.md,
     color: COLORS.textPrimary,
-    backgroundColor: "#020617",
+    backgroundColor: COLORS.inputBg,
     marginBottom: SPACING.sm,
   },
   memberRow: {
@@ -1824,7 +1830,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.borderSoft,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(15,23,42,0.6)",
+    backgroundColor: COLORS.subtleCard,
   },
   checkBadgeActive: {
     backgroundColor: COLORS.accent,
@@ -1842,7 +1848,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.accent,
   },
   primaryButtonText: {
-    color: "#0B1020",
+    color: "#FFFFFF",
     fontWeight: "700",
     fontSize: 14,
   },
