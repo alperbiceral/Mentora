@@ -857,11 +857,18 @@ export default function StudyScreen() {
               <Text style={styles.statsTitle}>Recent sessions</Text>
               {loadingSessions ? (
                 <Text style={styles.emptyText}>Loading...</Text>
-              ) : sessions.length === 0 ? (
+              ) : sessions.filter((s) => new Date(s.started_at) <= new Date()).length === 0 ? (
                 <Text style={styles.emptyText}>No sessions yet</Text>
               ) : (
                 <View style={styles.sessionList}>
-                  {sessions.map((session) => (
+                  {sessions
+                    .filter((s) => new Date(s.started_at) <= new Date())
+                    .sort(
+                      (a, b) =>
+                        new Date(b.started_at).getTime() -
+                        new Date(a.started_at).getTime(),
+                    )
+                    .map((session) => (
                     <View key={session.session_id} style={styles.sessionItem}>
                       <View style={styles.sessionIcon}>
                         <Ionicons
