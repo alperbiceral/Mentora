@@ -787,6 +787,8 @@ async def import_syllabus(
         "- DO NOT include generative AI policies or academic integrity rules\n"
         "- Focus ONLY on course objectives and the topics/schedule section\n\n"
         "Format the output as a clear, detailed description with:\n"
+        "- The VERY FIRST LINE must be: 'ECTS Credits: X' where X is the credit value found in the "
+        "syllabus (e.g. 'ECTS Credits: 6'). If no credit value is found, write 'ECTS Credits: 0'.\n"
         "- A brief overview of the course\n"
         "- Course objectives (bullet points)\n"
         "- Detailed list of topics to be covered (organized by weeks if available)\n\n"

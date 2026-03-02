@@ -186,13 +186,31 @@ async def save_personality_profile(
         .first()
     )
 
-    # Create personality scores dictionary
+    # Normalize profile values to -1..1 for storage
+    def normalize_to_minus1_1(v) -> float:
+        try:
+            v = float(v)
+        except Exception:
+            return 0.0
+        # If already in -1..1, return as-is
+        if -1.0 <= v <= 1.0:
+            return v
+        # If value in 0..100 (calculated profile), map 50->0 to -1..1
+        if 0.0 <= v <= 100.0:
+            return round((v - 50.0) / 50.0, 4)
+        # If in 1..5 scale, map 1->-1,3->0,5->1
+        if 1.0 <= v <= 5.0:
+            return round((v - 3.0) / 2.0, 4)
+        # Fallback: scale around 50
+        return max(-1.0, min(1.0, (v - 50.0) / 50.0))
+
+    # Create personality scores dictionary (normalized)
     personality_scores = {
-        "openness": profile.openness,
-        "conscientiousness": profile.conscientiousness,
-        "extraversion": profile.extraversion,
-        "agreeableness": profile.agreeableness,
-        "neuroticism": profile.neuroticism,
+        "openness": normalize_to_minus1_1(profile.openness),
+        "conscientiousness": normalize_to_minus1_1(profile.conscientiousness),
+        "extraversion": normalize_to_minus1_1(profile.extraversion),
+        "agreeableness": normalize_to_minus1_1(profile.agreeableness),
+        "neuroticism": normalize_to_minus1_1(profile.neuroticism),
     }
 
     if existing_personality:
@@ -206,7 +224,7 @@ async def save_personality_profile(
         return {
             "message": "Personality profile updated successfully",
             "personality_id": existing_personality.personality_id,
-            "profile": profile,
+            "profile": personality_scores,
             "test_date": existing_personality.test_date,
         }
 
@@ -224,7 +242,7 @@ async def save_personality_profile(
     return {
         "message": "Personality profile saved successfully",
         "personality_id": new_personality.personality_id,
-        "profile": profile,
+        "profile": personality_scores,
         "test_date": new_personality.test_date,
     }
 
