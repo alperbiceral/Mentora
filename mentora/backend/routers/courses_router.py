@@ -8,7 +8,8 @@ import json
 
 from config import GEMINI_API_KEY, GEMINI_MODEL
 from deps import get_db
-from models import Course, CourseBlock, Profile
+from datetime import date, datetime, timedelta
+from models import Course, CourseBlock, Profile, StudySession
 from schemas import CourseCreate, CourseResponse, CourseUpdate
 from google import genai
 from google.genai import types
@@ -547,8 +548,24 @@ async def clear_courses(username: str, db: Session = Depends(get_db)):
     existing = db.query(Course).filter(Course.username == username).all()
     for course in existing:
         db.delete(course)
+
+    # Delete scheduled study sessions for the upcoming week (same window the scheduler creates)
+    today = date.today()
+    days_until_next_monday = 7 - today.weekday()
+    next_monday = datetime.combine(today + timedelta(days=days_until_next_monday), datetime.min.time())
+    next_sunday_end = next_monday + timedelta(days=7)
+    sessions = (
+        db.query(StudySession)
+        .filter(StudySession.username == username)
+        .filter(StudySession.started_at >= next_monday)
+        .filter(StudySession.started_at < next_sunday_end)
+        .all()
+    )
+    for session in sessions:
+        db.delete(session)
+
     db.commit()
-    return {"deleted": len(existing)}
+    return {"deleted": len(existing), "sessions_deleted": len(sessions)}
 
 
 @router.post("", response_model=CourseResponse, status_code=status.HTTP_201_CREATED)
