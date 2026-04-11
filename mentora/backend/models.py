@@ -462,3 +462,16 @@ class Post(Base):
 
     study_group = relationship("StudyGroup", back_populates="posts")
     owner = relationship("User", back_populates="posts")
+
+
+class AIAssistantMessage(Base):
+    __tablename__ = "ai_assistant_messages"
+
+    message_id: Mapped[int] = mapped_column(primary_key=True)
+    username: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    role: Mapped[str] = mapped_column(String(10), nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    actions: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.utcnow
+    )

@@ -583,12 +583,19 @@ export default function HomeScreen() {
 
   const handleLogout = async () => {
     try {
+      const logoutUsername = await AsyncStorage.getItem("mentora.username");
       await fetch(`${API_BASE_URL}/auth/logout`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
       });
+      if (logoutUsername) {
+        await fetch(
+          `${API_BASE_URL}/ai-assistant/history/${encodeURIComponent(logoutUsername)}`,
+          { method: "DELETE" },
+        ).catch(() => {});
+      }
       await AsyncStorage.multiRemove([
         "mentora.username",
         "mentora.email",
@@ -660,6 +667,7 @@ export default function HomeScreen() {
           <GreetingCard
             styles={styles}
             onPress={() => router.push("/ai-agent")}
+            displayName={profile?.full_name || profile?.username}
           />
 
           <ToggleTabs
@@ -1159,10 +1167,13 @@ const HeaderCard: React.FC<{
 const GreetingCard = ({
   styles,
   onPress,
+  displayName,
 }: {
   styles: any;
   onPress: () => void;
+  displayName?: string;
 }) => {
+  const name = displayName?.trim() ? displayName.trim() : "there";
   return (
     <Pressable
       onPress={onPress}
@@ -1171,7 +1182,7 @@ const GreetingCard = ({
         pressed && { opacity: 0.92, transform: [{ scale: 0.998 }] },
       ]}
     >
-      <Text style={styles.greetingTitle}>Hi Berfin Örtülü!</Text>
+      <Text style={styles.greetingTitle}>Hi {name}!</Text>
       <Text style={styles.greetingSubtitle}>
         Your AI study assistant is here. Ask anything about your studies.
       </Text>

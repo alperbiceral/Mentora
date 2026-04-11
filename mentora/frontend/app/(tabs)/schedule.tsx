@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import {
@@ -17,6 +17,7 @@ import {
   View,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useFocusEffect } from "@react-navigation/native";
 import { useTheme } from "../../theme/ThemeProvider";
 import type { ThemeColors } from "../../theme/theme";
 
@@ -256,9 +257,11 @@ export default function ScheduleScreen() {
     }
   };
 
-  useEffect(() => {
-    loadCourses();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      loadCourses();
+    }, []),
+  );
 
   // helpers: parse DB timestamp/ISO to Date, then to HH:MM
   const parseTimestampToDate = (s?: string | null) => {
@@ -1102,7 +1105,13 @@ const CourseModal: React.FC<CourseModalProps> = ({
           </Pressable>
         </View>
 
-        <View style={styles.modalBody}>
+        <ScrollView
+          style={styles.modalScrollBody}
+          contentContainerStyle={styles.modalBody}
+          showsVerticalScrollIndicator={true}
+          keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled
+        >
           <View style={styles.formRow}>
             <TextInput
               value={courseForm.name}
@@ -1187,7 +1196,7 @@ const CourseModal: React.FC<CourseModalProps> = ({
           ) : null}
 
           {message ? <Text style={styles.formMessage}>{message}</Text> : null}
-        </View>
+        </ScrollView>
 
         <View style={styles.modalFooter}>
           <Pressable style={styles.ghostButton} onPress={onClose}>
@@ -2372,6 +2381,7 @@ const createStyles = (COLORS: ThemeColors) =>
     borderWidth: 1,
     borderColor: COLORS.borderSubtle,
     gap: SPACING.md,
+    maxHeight: "90%",
   },
   modalHeader: {
     flexDirection: "row",
@@ -2383,8 +2393,12 @@ const createStyles = (COLORS: ThemeColors) =>
     fontWeight: "700",
     color: COLORS.textPrimary,
   },
+  modalScrollBody: {
+    flexShrink: 1,
+  },
   modalBody: {
     gap: SPACING.sm,
+    paddingBottom: SPACING.xs,
   },
   modalSectionHeader: {
     flexDirection: "row",
