@@ -10,6 +10,7 @@ import {
   View,
   Pressable,
   Image,
+  Modal,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "../../theme/ThemeProvider";
@@ -72,6 +73,62 @@ export default function ProfileScreen() {
   const [sessions, setSessions] = useState<StudySession[]>([]);
   const [focusLoading, setFocusLoading] = useState(false);
   const [oceanProfile, setOceanProfile] = useState<OceanProfile | null>(null);
+  const [personalityModalVisible, setPersonalityModalVisible] = useState(false);
+
+  const TRAIT_LABELS: Record<string, string> = {
+    openness: "Openness",
+    conscientiousness: "Conscientiousness",
+    extraversion: "Extraversion",
+    agreeableness: "Agreeableness",
+    neuroticism: "Neuroticism",
+  };
+
+  const TRAIT_SHORT: Record<string, string> = {
+    openness: "O",
+    conscientiousness: "C",
+    extraversion: "E",
+    agreeableness: "A",
+    neuroticism: "N",
+  };
+
+  const normalizeOcean = (op: OceanProfile) => {
+    const vals = [op.openness, op.conscientiousness, op.extraversion, op.agreeableness, op.neuroticism];
+    const isNormalized = vals.every((v) => v >= -1 && v <= 1);
+    const convert = (v: number) =>
+      isNormalized ? Math.round(((v + 1) / 2) * 100) : Math.round(v);
+    return {
+      openness: convert(op.openness),
+      conscientiousness: convert(op.conscientiousness),
+      extraversion: convert(op.extraversion),
+      agreeableness: convert(op.agreeableness),
+      neuroticism: convert(op.neuroticism),
+    };
+  };
+
+  const isNeutral = (op: OceanProfile) => {
+    const n = normalizeOcean(op);
+    return (
+      n.openness === 50 &&
+      n.conscientiousness === 50 &&
+      n.extraversion === 50 &&
+      n.agreeableness === 50 &&
+      n.neuroticism === 50
+    );
+  };
+
+  const getDominantTrait = (op: OceanProfile): string => {
+    if (isNeutral(op)) return "Neutral";
+    const n = normalizeOcean(op);
+    const entries: [string, number][] = [
+      ["openness", n.openness],
+      ["conscientiousness", n.conscientiousness],
+      ["extraversion", n.extraversion],
+      ["agreeableness", n.agreeableness],
+      ["neuroticism", n.neuroticism],
+    ];
+    entries.sort((a, b) => b[1] - a[1]);
+    return TRAIT_LABELS[entries[0][0]];
+  };
 
   const avatarSource = useMemo(() => {
     if (!profile?.profile_photo) {
@@ -301,19 +358,29 @@ export default function ProfileScreen() {
             value={profile?.university ?? "-"}
             styles={styles}
           />
-          <ProfileRow
-            label="PERSONALITY"
-            value={
-              oceanProfile
-                ? `O:${Math.round(oceanProfile.openness)} C:${Math.round(
-                    oceanProfile.conscientiousness,
-                  )} E:${Math.round(oceanProfile.extraversion)} A:${Math.round(
-                    oceanProfile.agreeableness,
-                  )} N:${Math.round(oceanProfile.neuroticism)}`
-                : profile?.personality ?? "-"
-            }
-            styles={styles}
-          />
+          <View style={styles.profileRow}>
+            <Text style={styles.profileRowLabel}>PERSONALITY</Text>
+            <View style={styles.personalityValueRow}>
+              <Text style={styles.profileRowValue}>
+                {oceanProfile
+                  ? getDominantTrait(oceanProfile)
+                  : profile?.personality ?? "-"}
+              </Text>
+              {oceanProfile && !isNeutral(oceanProfile) && (
+                <Pressable
+                  hitSlop={8}
+                  onPress={() => setPersonalityModalVisible(true)}
+                  style={styles.personalityInfoBtn}
+                >
+                  <Ionicons
+                    name="bar-chart-outline"
+                    size={15}
+                    color={COLORS.accent}
+                  />
+                </Pressable>
+              )}
+            </View>
+          </View>
         </View>
 
         {/* Study Insights card */}
@@ -403,6 +470,86 @@ export default function ProfileScreen() {
           </View>
         </View>
       </ScrollView>
+
+      {/* OCEAN Personality Bar Chart Modal */}
+      <Modal
+        visible={personalityModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPersonalityModalVisible(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setPersonalityModalVisible(false)}
+        >
+          <Pressable style={styles.modalCard} onPress={() => {}}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Personality Profile</Text>
+              <Pressable
+                hitSlop={10}
+                onPress={() => setPersonalityModalVisible(false)}
+              >
+                <Ionicons name="close" size={22} color={COLORS.textMuted} />
+              </Pressable>
+            </View>
+
+            {oceanProfile && (() => {
+              const norm = normalizeOcean(oceanProfile);
+              return (
+              <View style={styles.oceanChartContainer}>
+                {(
+                  [
+                    "openness",
+                    "conscientiousness",
+                    "extraversion",
+                    "agreeableness",
+                    "neuroticism",
+                  ] as (keyof OceanProfile)[]
+                ).map((key) => {
+                  const val = norm[key];
+                  return (
+                    <View key={key} style={styles.oceanBarRow}>
+                      <Text style={styles.oceanBarLabel}>
+                        {TRAIT_SHORT[key]}
+                      </Text>
+                      <View style={styles.oceanBarTrack}>
+                        <View
+                          style={[
+                            styles.oceanBarFill,
+                            { width: `${Math.max(2, val)}%` as any },
+                          ]}
+                        />
+                      </View>
+                      <Text style={styles.oceanBarValue}>{val}</Text>
+                    </View>
+                  );
+                })}
+
+                <View style={styles.oceanLegend}>
+                  {(
+                    [
+                      "openness",
+                      "conscientiousness",
+                      "extraversion",
+                      "agreeableness",
+                      "neuroticism",
+                    ] as (keyof OceanProfile)[]
+                  ).map((key) => (
+                    <Text key={key} style={styles.oceanLegendItem}>
+                      <Text style={styles.oceanLegendBold}>
+                        {TRAIT_SHORT[key]}
+                      </Text>
+                      {" — "}
+                      {TRAIT_LABELS[key]}
+                    </Text>
+                  ))}
+                </View>
+              </View>
+              );
+            })()}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -788,7 +935,7 @@ const createStyles = (COLORS: ThemeColors) =>
   profileRowValue: {
     fontSize: 14,
     color: COLORS.textPrimary,
-    maxWidth: "65%",
+    flexShrink: 1,
     textAlign: "right",
   },
   insightRow: {
@@ -915,5 +1062,96 @@ const createStyles = (COLORS: ThemeColors) =>
   retakeButton: {
     marginLeft: 12,
     backgroundColor: "rgba(109,94,247,0.85)",
+  },
+  personalityValueRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexShrink: 0,
+    gap: 8,
+  },
+  personalityInfoBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: COLORS.subtleCard,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalCard: {
+    width: "88%",
+    backgroundColor: COLORS.card,
+    borderRadius: 20,
+    padding: SPACING.lg,
+    borderWidth: 1,
+    borderColor: COLORS.borderSubtle,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 24,
+    elevation: 8,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: SPACING.md,
+  },
+  modalTitle: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: COLORS.textPrimary,
+  },
+  oceanChartContainer: {
+    gap: 10,
+  },
+  oceanBarRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  oceanBarLabel: {
+    width: 18,
+    fontSize: 13,
+    fontWeight: "700",
+    color: COLORS.textPrimary,
+    textAlign: "center",
+  },
+  oceanBarTrack: {
+    flex: 1,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: COLORS.subtleCard,
+    overflow: "hidden",
+  },
+  oceanBarFill: {
+    height: "100%",
+    borderRadius: 7,
+    backgroundColor: COLORS.accent,
+  },
+  oceanBarValue: {
+    width: 28,
+    fontSize: 12,
+    fontWeight: "600",
+    color: COLORS.textSecondary,
+    textAlign: "right",
+  },
+  oceanLegend: {
+    marginTop: SPACING.sm,
+    gap: 2,
+  },
+  oceanLegendItem: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    lineHeight: 16,
+  },
+  oceanLegendBold: {
+    fontWeight: "700",
+    color: COLORS.textSecondary,
   },
 });
