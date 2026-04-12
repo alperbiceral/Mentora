@@ -60,6 +60,75 @@ type OceanProfile = {
   neuroticism: number;
 };
 
+const TRAIT_LABELS: Record<string, string> = {
+  openness: "Openness",
+  conscientiousness: "Conscientiousness",
+  extraversion: "Extraversion",
+  agreeableness: "Agreeableness",
+  neuroticism: "Neuroticism",
+};
+
+const TRAIT_SHORT: Record<string, string> = {
+  openness: "O",
+  conscientiousness: "C",
+  extraversion: "E",
+  agreeableness: "A",
+  neuroticism: "N",
+};
+
+const OCEAN_KEYS: (keyof OceanProfile)[] = [
+  "openness",
+  "conscientiousness",
+  "extraversion",
+  "agreeableness",
+  "neuroticism",
+];
+
+function normalizeOcean(op: OceanProfile) {
+  const vals = [
+    op.openness,
+    op.conscientiousness,
+    op.extraversion,
+    op.agreeableness,
+    op.neuroticism,
+  ];
+  const isNormalized = vals.every((v) => v >= -1 && v <= 1);
+  const convert = (v: number) =>
+    isNormalized ? Math.round(((v + 1) / 2) * 100) : Math.round(v);
+  return {
+    openness: convert(op.openness),
+    conscientiousness: convert(op.conscientiousness),
+    extraversion: convert(op.extraversion),
+    agreeableness: convert(op.agreeableness),
+    neuroticism: convert(op.neuroticism),
+  };
+}
+
+function isNeutralOcean(op: OceanProfile) {
+  const n = normalizeOcean(op);
+  return (
+    n.openness === 50 &&
+    n.conscientiousness === 50 &&
+    n.extraversion === 50 &&
+    n.agreeableness === 50 &&
+    n.neuroticism === 50
+  );
+}
+
+function getDominantOceanTrait(op: OceanProfile): string {
+  if (isNeutralOcean(op)) return "Neutral";
+  const n = normalizeOcean(op);
+  const entries: [string, number][] = [
+    ["openness", n.openness],
+    ["conscientiousness", n.conscientiousness],
+    ["extraversion", n.extraversion],
+    ["agreeableness", n.agreeableness],
+    ["neuroticism", n.neuroticism],
+  ];
+  entries.sort((a, b) => b[1] - a[1]);
+  return TRAIT_LABELS[entries[0][0]];
+}
+
 export default function ProfileScreen() {
   const { colors: COLORS } = useTheme();
   const styles = useMemo(() => createStyles(COLORS), [COLORS]);
@@ -74,61 +143,6 @@ export default function ProfileScreen() {
   const [focusLoading, setFocusLoading] = useState(false);
   const [oceanProfile, setOceanProfile] = useState<OceanProfile | null>(null);
   const [personalityModalVisible, setPersonalityModalVisible] = useState(false);
-
-  const TRAIT_LABELS: Record<string, string> = {
-    openness: "Openness",
-    conscientiousness: "Conscientiousness",
-    extraversion: "Extraversion",
-    agreeableness: "Agreeableness",
-    neuroticism: "Neuroticism",
-  };
-
-  const TRAIT_SHORT: Record<string, string> = {
-    openness: "O",
-    conscientiousness: "C",
-    extraversion: "E",
-    agreeableness: "A",
-    neuroticism: "N",
-  };
-
-  const normalizeOcean = (op: OceanProfile) => {
-    const vals = [op.openness, op.conscientiousness, op.extraversion, op.agreeableness, op.neuroticism];
-    const isNormalized = vals.every((v) => v >= -1 && v <= 1);
-    const convert = (v: number) =>
-      isNormalized ? Math.round(((v + 1) / 2) * 100) : Math.round(v);
-    return {
-      openness: convert(op.openness),
-      conscientiousness: convert(op.conscientiousness),
-      extraversion: convert(op.extraversion),
-      agreeableness: convert(op.agreeableness),
-      neuroticism: convert(op.neuroticism),
-    };
-  };
-
-  const isNeutral = (op: OceanProfile) => {
-    const n = normalizeOcean(op);
-    return (
-      n.openness === 50 &&
-      n.conscientiousness === 50 &&
-      n.extraversion === 50 &&
-      n.agreeableness === 50 &&
-      n.neuroticism === 50
-    );
-  };
-
-  const getDominantTrait = (op: OceanProfile): string => {
-    if (isNeutral(op)) return "Neutral";
-    const n = normalizeOcean(op);
-    const entries: [string, number][] = [
-      ["openness", n.openness],
-      ["conscientiousness", n.conscientiousness],
-      ["extraversion", n.extraversion],
-      ["agreeableness", n.agreeableness],
-      ["neuroticism", n.neuroticism],
-    ];
-    entries.sort((a, b) => b[1] - a[1]);
-    return TRAIT_LABELS[entries[0][0]];
-  };
 
   const avatarSource = useMemo(() => {
     if (!profile?.profile_photo) {
@@ -238,6 +252,7 @@ export default function ProfileScreen() {
     [sessions, focusRange],
   );
   const maxFocusValue = Math.max(1, ...focusSeries.values);
+  const oceanNorm = oceanProfile ? normalizeOcean(oceanProfile) : null;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -363,10 +378,10 @@ export default function ProfileScreen() {
             <View style={styles.personalityValueRow}>
               <Text style={styles.profileRowValue}>
                 {oceanProfile
-                  ? getDominantTrait(oceanProfile)
+                  ? getDominantOceanTrait(oceanProfile)
                   : profile?.personality ?? "-"}
               </Text>
-              {oceanProfile && !isNeutral(oceanProfile) && (
+              {oceanProfile && !isNeutralOcean(oceanProfile) && (
                 <Pressable
                   hitSlop={8}
                   onPress={() => setPersonalityModalVisible(true)}
@@ -493,20 +508,10 @@ export default function ProfileScreen() {
               </Pressable>
             </View>
 
-            {oceanProfile && (() => {
-              const norm = normalizeOcean(oceanProfile);
-              return (
+            {oceanNorm && (
               <View style={styles.oceanChartContainer}>
-                {(
-                  [
-                    "openness",
-                    "conscientiousness",
-                    "extraversion",
-                    "agreeableness",
-                    "neuroticism",
-                  ] as (keyof OceanProfile)[]
-                ).map((key) => {
-                  const val = norm[key];
+                {OCEAN_KEYS.map((key) => {
+                  const val = oceanNorm[key];
                   return (
                     <View key={key} style={styles.oceanBarRow}>
                       <Text style={styles.oceanBarLabel}>
@@ -516,7 +521,7 @@ export default function ProfileScreen() {
                         <View
                           style={[
                             styles.oceanBarFill,
-                            { width: `${Math.max(2, val)}%` as any },
+                            { width: `${Math.max(2, val)}%` as `${number}%` },
                           ]}
                         />
                       </View>
@@ -526,15 +531,7 @@ export default function ProfileScreen() {
                 })}
 
                 <View style={styles.oceanLegend}>
-                  {(
-                    [
-                      "openness",
-                      "conscientiousness",
-                      "extraversion",
-                      "agreeableness",
-                      "neuroticism",
-                    ] as (keyof OceanProfile)[]
-                  ).map((key) => (
+                  {OCEAN_KEYS.map((key) => (
                     <Text key={key} style={styles.oceanLegendItem}>
                       <Text style={styles.oceanLegendBold}>
                         {TRAIT_SHORT[key]}
@@ -545,8 +542,7 @@ export default function ProfileScreen() {
                   ))}
                 </View>
               </View>
-              );
-            })()}
+            )}
           </Pressable>
         </Pressable>
       </Modal>
