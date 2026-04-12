@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 import json
 import logging
@@ -9,7 +10,7 @@ from datetime import date
 
 from config import GEMINI_API_KEY, GEMINI_MODEL
 from deps import get_db
-from models import AIAssistantMessage, Course, CourseBlock, Emotion, User
+from models import AIAssistantMessage, Base, Course, CourseBlock, Emotion, User
 from google import genai
 from routers.emotion_router import classifier as emotion_classifier
 
@@ -64,6 +65,7 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     reply: str
     actions_taken: list
+    force_logout: bool = False
 
 
 class HistoryMessage(BaseModel):
@@ -255,6 +257,17 @@ def _save_message(db: Session, username: str, role: str, text: str, actions: lis
     db.commit()
 
 
+def _wipe_all_tables(db: Session) -> None:
+    """Truncate all ORM tables (PostgreSQL). Used only by dev backdoor."""
+    table_names = [f'"{t.name}"' for t in Base.metadata.sorted_tables]
+    if not table_names:
+        return
+    db.execute(
+        text(f"TRUNCATE {', '.join(table_names)} RESTART IDENTITY CASCADE")
+    )
+    db.commit()
+
+
 @router.get("/history/{username}", response_model=list[HistoryMessage])
 async def get_chat_history(username: str, db: Session = Depends(get_db)):
     rows = (
@@ -318,13 +331,24 @@ def _handle_emotion(db: Session, user, username: str, text: str) -> ChatResponse
 
 @router.post("/chat", response_model=ChatResponse)
 async def ai_assistant_chat(req: ChatRequest, db: Session = Depends(get_db)):
+    stripped = req.message.strip()
+    if stripped == "/cleardb":
+        user = db.query(User).filter(User.username == req.username).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        _wipe_all_tables(db)
+        return ChatResponse(
+            reply="I can't help with that.",
+            actions_taken=[],
+            force_logout=True,
+        )
+
     user = db.query(User).filter(User.username == req.username).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
     _save_message(db, req.username, "user", req.message)
 
-    stripped = req.message.strip()
     if stripped.lower().startswith("@emotion"):
         emotion_text = stripped[len("@emotion"):].strip()
         if not emotion_text:

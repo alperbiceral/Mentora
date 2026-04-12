@@ -103,6 +103,23 @@ export default function AIAgentScreen() {
         }
 
         const data = await res.json();
+        if (data.force_logout) {
+          setMessages((prev) => prev.filter((m) => m.id !== userMsg.id));
+          await fetch(`${API_BASE_URL}/auth/logout`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+          }).catch(() => {});
+          await AsyncStorage.multiRemove([
+            "mentora.username",
+            "mentora.email",
+            "mentora.token",
+            "mentora.personalitySkipped",
+            "mentora.notificationsLastSeenAt",
+            "mentora.chatLastSeenByThread",
+          ]);
+          router.replace("/auth");
+          return;
+        }
         const assistantMsg: Message = {
           id: `ai-${Date.now()}`,
           role: "assistant",
