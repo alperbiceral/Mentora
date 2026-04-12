@@ -111,17 +111,12 @@ type ChatThreadItem = {
 
 type NotificationTab = "friends" | "groups" | "chats";
 
-type Range = "today" | "week";
-
 export default function HomeScreen() {
   const { colors: COLORS, mode, setMode } = useTheme();
   const styles = useMemo(() => createStyles(COLORS), [COLORS]);
 
   const router = useRouter();
-  const [selectedRange, setSelectedRange] = useState<Range>("today");
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [vibration, setVibration] = useState(true);
-  const [notifications, setNotifications] = useState(true);
   const [language, setLanguage] = useState<SettingsLanguage>("English");
   const [profile, setProfile] = useState<Profile | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
@@ -639,9 +634,55 @@ export default function HomeScreen() {
     }
   };
 
+  const [upcomingBlocks, setUpcomingBlocks] = useState<
+    { courseName: string; color: string; start: string; end: string; day: string }[]
+  >([]);
+
+  useFocusEffect(
+    useCallback(() => {
+      (async () => {
+        try {
+          const username = await AsyncStorage.getItem("mentora.username");
+          if (!username) return;
+          const res = await fetch(`${API_BASE_URL}/courses/${encodeURIComponent(username)}`);
+          if (!res.ok) return;
+          const courses = await res.json();
+          const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+          const now = new Date();
+          const todayDay = dayNames[now.getDay()];
+          const nowMins = now.getHours() * 60 + now.getMinutes();
+          const upcoming: typeof upcomingBlocks = [];
+          for (const c of courses) {
+            for (const b of c.blocks || []) {
+              if (b.day !== todayDay) continue;
+              const [sh, sm] = b.start.split(":").map(Number);
+              const [eh, em] = b.end.split(":").map(Number);
+              const startMins = sh * 60 + sm;
+              const endMins = eh * 60 + em;
+              if (endMins > nowMins && startMins < nowMins + 180) {
+                upcoming.push({
+                  courseName: c.name,
+                  color: c.color || "#6D5EF7",
+                  start: b.start,
+                  end: b.end,
+                  day: b.day,
+                });
+              }
+            }
+          }
+          upcoming.sort((a, b2) => {
+            const [ah, am] = a.start.split(":").map(Number);
+            const [bh, bm] = b2.start.split(":").map(Number);
+            return ah * 60 + am - (bh * 60 + bm);
+          });
+          setUpcomingBlocks(upcoming);
+        } catch { /* ignore */ }
+      })();
+    }, []),
+  );
+
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* Fake gradient using two layers to feel like the login page */}
       <View style={styles.backgroundTop} />
       <View style={styles.backgroundBottom} />
       <View style={styles.glow} />
@@ -654,7 +695,6 @@ export default function HomeScreen() {
           <HeaderCard
             title={headerTitle}
             subtitle={headerSubtitle}
-            streakCount={profile?.streak_count ?? 0}
             profilePhoto={profile?.profile_photo ?? null}
             onOpenSettings={() => setSettingsOpen(true)}
             onOpenNotifications={handleOpenNotifications}
@@ -664,26 +704,20 @@ export default function HomeScreen() {
             styles={styles}
           />
 
+          <StudyStatsCard profile={profile} styles={styles} colors={COLORS} />
+
+          <UpcomingSection blocks={upcomingBlocks} styles={styles} colors={COLORS} />
+
+          <QuickActions styles={styles} colors={COLORS} />
+
           <GreetingCard
             styles={styles}
+            colors={COLORS}
             onPress={() => router.push("/ai-agent")}
             displayName={profile?.full_name || profile?.username}
           />
 
-          <ToggleTabs
-            selected={selectedRange}
-            onSelect={setSelectedRange}
-            colors={COLORS}
-            styles={styles}
-          />
-
-          <ScheduleCard range={selectedRange} colors={COLORS} styles={styles} />
-
-          <QuickActions styles={styles} colors={COLORS} />
-
           <RecommendationCard styles={styles} colors={COLORS} />
-
-          <CarouselSection styles={styles} colors={COLORS} />
         </ScrollView>
       </View>
 
@@ -692,10 +726,6 @@ export default function HomeScreen() {
         onClose={() => setSettingsOpen(false)}
         darkMode={mode === "dark"}
         setDarkMode={(v) => setMode(v ? "dark" : "light")}
-        vibration={vibration}
-        setVibration={setVibration}
-        notifications={notifications}
-        setNotifications={setNotifications}
         language={language}
         setLanguage={setLanguage}
         onLogout={handleLogout}
@@ -1067,7 +1097,6 @@ const HeaderCard: React.FC<{
   notificationCount: number;
   title: string;
   subtitle: string;
-  streakCount: number;
   profilePhoto: string | null;
   loading: boolean;
   styles: any;
@@ -1078,7 +1107,6 @@ const HeaderCard: React.FC<{
   notificationCount,
   title,
   subtitle,
-  streakCount,
   profilePhoto,
   loading,
   styles,
@@ -1116,16 +1144,6 @@ const HeaderCard: React.FC<{
         </View>
 
         <View style={styles.headerRightRow}>
-          <View style={styles.streakBadge}>
-            <Ionicons
-              name="flame"
-              size={16}
-              color={colors.accent}
-              style={{ marginRight: 4 }}
-            />
-            <Text style={styles.streakText}>{streakCount} day</Text>
-          </View>
-
           <Pressable
             hitSlop={12}
             style={styles.notificationButton}
@@ -1168,134 +1186,153 @@ const GreetingCard = ({
   styles,
   onPress,
   displayName,
+  colors,
 }: {
   styles: any;
   onPress: () => void;
   displayName?: string;
+  colors: ThemeColors;
 }) => {
   const name = displayName?.trim() ? displayName.trim() : "there";
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
-        styles.card,
+        styles.aiCard,
         pressed && { opacity: 0.92, transform: [{ scale: 0.998 }] },
       ]}
     >
-      <Text style={styles.greetingTitle}>Hi {name}!</Text>
+      <View style={styles.aiCardHeader}>
+        <View style={styles.aiCardIconWrap}>
+          <Ionicons name="sparkles" size={20} color="#FFFFFF" />
+        </View>
+        <View style={styles.aiCardHeaderText}>
+          <Text style={styles.greetingTitle}>Hi {name}!</Text>
+          <Text style={styles.aiCardBadge}>Mentora AI</Text>
+        </View>
+      </View>
       <Text style={styles.greetingSubtitle}>
-        Your AI study assistant is here. Ask anything about your studies.
+        Move classes, swap time slots, or clear a day with natural language.
       </Text>
+      <View style={styles.aiFeatureRow}>
+        <View style={styles.aiFeatureChip}>
+          <Ionicons name="calendar-outline" size={12} color={colors.accent} />
+          <Text style={styles.aiFeatureChipText}>Schedule</Text>
+        </View>
+        <View style={styles.aiFeatureChip}>
+          <Ionicons name="heart-outline" size={12} color={colors.accent} />
+          <Text style={styles.aiFeatureChipText}>@emotion</Text>
+        </View>
+        <View style={styles.aiFeatureChip}>
+          <Ionicons name="swap-horizontal-outline" size={12} color={colors.accent} />
+          <Text style={styles.aiFeatureChipText}>Swap</Text>
+        </View>
+      </View>
+      <View style={styles.aiCardFooter}>
+        <Text style={styles.aiCardCta}>Tap to start a conversation</Text>
+        <Ionicons name="arrow-forward" size={16} color={colors.accent} />
+      </View>
     </Pressable>
   );
 };
 
-interface ToggleTabsProps {
-  selected: Range;
-  onSelect: (value: Range) => void;
-}
+const UpcomingSection = ({
+  blocks,
+  styles,
+  colors,
+}: {
+  blocks: { courseName: string; color: string; start: string; end: string; day: string }[];
+  styles: any;
+  colors: ThemeColors;
+}) => {
+  const router = useRouter();
 
-const ToggleTabs: React.FC<
-  ToggleTabsProps & { styles: any; colors: ThemeColors }
-> = ({ selected, onSelect, styles, colors }) => {
+  const formatTime = (t: string) => {
+    const [h, m] = t.split(":").map(Number);
+    const suffix = h >= 12 ? "PM" : "AM";
+    const displayH = h === 0 ? 12 : h > 12 ? h - 12 : h;
+    return `${displayH}:${String(m).padStart(2, "0")} ${suffix}`;
+  };
+
   return (
-    <View style={styles.toggleContainer}>
-      <Pressable
-        style={[
-          styles.togglePill,
-          selected === "today" && styles.togglePillActive,
-        ]}
-        onPress={() => onSelect("today")}
-      >
-        <Ionicons
-          name="calendar-outline"
-          size={16}
-          color={selected === "today" ? colors.accent : colors.textSecondary}
-          style={{ marginRight: 6 }}
-        />
-        <Text
-          style={[
-            styles.toggleText,
-            selected === "today" && styles.toggleTextActive,
-          ]}
-        >
-          Today
-        </Text>
-      </Pressable>
+    <View style={styles.upcomingSection}>
+      <View style={styles.upcomingSectionHeader}>
+        <View style={styles.upcomingSectionLeft}>
+          <Ionicons name="time-outline" size={18} color={colors.accent} />
+          <Text style={styles.upcomingSectionTitle}>Coming Up</Text>
+        </View>
+        <Pressable hitSlop={8} onPress={() => router.push("/(tabs)/schedule")}>
+          <Text style={styles.upcomingSeeAll}>See schedule</Text>
+        </Pressable>
+      </View>
+      {blocks.length === 0 ? (
+        <View style={styles.upcomingEmpty}>
+          <Ionicons name="checkmark-circle-outline" size={28} color={colors.success} />
+          <Text style={styles.upcomingEmptyText}>No classes in the next 3 hours</Text>
+          <Text style={styles.upcomingEmptyHint}>Enjoy your free time or start studying!</Text>
+        </View>
+      ) : (
+        <View style={styles.upcomingList}>
+          {blocks.slice(0, 3).map((block, idx) => {
+            const now = new Date();
+            const nowMins = now.getHours() * 60 + now.getMinutes();
+            const [sH, sM] = block.start.split(":").map(Number);
+            const isNow = nowMins >= sH * 60 + sM;
 
-      <Pressable
-        style={[
-          styles.togglePill,
-          selected === "week" && styles.togglePillActive,
-        ]}
-        onPress={() => onSelect("week")}
-      >
-        <Ionicons
-          name="calendar"
-          size={16}
-          color={selected === "week" ? colors.accent : colors.textSecondary}
-          style={{ marginRight: 6 }}
-        />
-        <Text
-          style={[
-            styles.toggleText,
-            selected === "week" && styles.toggleTextActive,
-          ]}
-        >
-          This week
-        </Text>
-      </Pressable>
+            return (
+              <View key={`${block.courseName}-${idx}`} style={styles.upcomingItem}>
+                <View style={[styles.upcomingDot, { backgroundColor: block.color }]} />
+                <View style={styles.upcomingItemContent}>
+                  <Text style={styles.upcomingCourseName} numberOfLines={1}>
+                    {block.courseName}
+                  </Text>
+                  <Text style={styles.upcomingTime}>
+                    {formatTime(block.start)} - {formatTime(block.end)}
+                  </Text>
+                </View>
+                {isNow && (
+                  <View style={styles.upcomingNowBadge}>
+                    <Text style={styles.upcomingNowText}>NOW</Text>
+                  </View>
+                )}
+              </View>
+            );
+          })}
+        </View>
+      )}
     </View>
   );
 };
 
-interface ScheduleCardProps {
-  range: Range;
-}
-
-const ScheduleCard: React.FC<
-  ScheduleCardProps & { styles: any; colors: ThemeColors }
-> = ({ range, styles, colors }) => {
-  const isToday = range === "today";
+const StudyStatsCard = ({
+  profile,
+  styles,
+  colors,
+}: {
+  profile: Profile | null;
+  styles: any;
+  colors: ThemeColors;
+}) => {
+  const hours = profile?.study_hours ?? 0;
+  const streak = profile?.streak_count ?? 0;
 
   return (
-    <View style={styles.card}>
-      <View style={styles.scheduleHeaderRow}>
-        <View style={styles.scheduleHeaderLeft}>
-          <Ionicons
-            name="calendar-clear-outline"
-            size={18}
-            color={colors.accent}
-            style={{ marginRight: 6 }}
-          />
-          <Text style={styles.scheduleTitleText}>
-            {isToday ? "Today" : "This week"}
-          </Text>
-        </View>
-        <Text style={styles.scheduleCountText}>
-          {isToday ? "2 sessions" : "Week overview"}
-        </Text>
+    <View style={styles.statsRow}>
+      <View style={styles.statCard}>
+        <Ionicons name="flame" size={22} color="#F59E0B" />
+        <Text style={styles.statValue}>{streak}</Text>
+        <Text style={styles.statLabel}>Day Streak</Text>
       </View>
-
-      {isToday ? (
-        <View style={styles.scheduleList}>
-          <View style={styles.scheduleItem}>
-            <Text style={styles.scheduleCourseText}>CS-476 MW3</Text>
-            <Text style={styles.scheduleTimeText}>Mon 1:30 PM</Text>
-          </View>
-
-          <View style={styles.scheduleItem}>
-            <Text style={styles.scheduleCourseText}>CS-473 CW1</Text>
-            <Text style={styles.scheduleTimeText}>Wed 5:30 PM</Text>
-          </View>
-        </View>
-      ) : (
-        <View style={styles.schedulePlaceholder}>
-          <Text style={styles.schedulePlaceholderText}>
-            Weekly schedule insights will appear here.
-          </Text>
-        </View>
-      )}
+      <View style={styles.statCard}>
+        <Ionicons name="time" size={22} color={colors.accent} />
+        <Text style={styles.statValue}>{hours.toFixed(1)}</Text>
+        <Text style={styles.statLabel}>Study Hours</Text>
+      </View>
+      <View style={styles.statCard}>
+        <Ionicons name="trophy" size={22} color={colors.success} />
+        <Text style={styles.statValue}>{Math.floor(hours / 5)}</Text>
+        <Text style={styles.statLabel}>Goals Met</Text>
+      </View>
     </View>
   );
 };
@@ -1304,99 +1341,82 @@ const QuickActions = ({ styles, colors }: { styles: any; colors: ThemeColors }) 
   const router = useRouter();
   const [isGenerating, setIsGenerating] = useState(false);
 
-  const handlePress = async (action: string) => {
-    if (action === "Study") {
-      router.push("/(tabs)/study");
-      return;
-    }
-
-    if (action === "Study plan") {
-      try {
-        const username = await AsyncStorage.getItem("mentora.username");
-        if (!username) {
-          Alert.alert("Not signed in", "Please sign in to generate a study plan.");
-          return;
-        }
-
-        setIsGenerating(true);
-
-        const res = await fetch(
-          `${API_BASE_URL}/scheduler/${encodeURIComponent(username)}`,
-          { method: "POST" },
-        );
-
-        if (!res.ok) {
-          const body = await res.json().catch(() => null);
-          throw new Error(body?.detail || "Failed to create study plan");
-        }
-
-        const data = await res.json().catch(() => null);
-        const created = data?.created ?? 0;
-        Alert.alert("Study plan created", `Created ${created} sessions.`);
-        router.push("/(tabs)/study");
-      } catch (err: any) {
-        Alert.alert("Error", err?.message || String(err));
-      } finally {
-        setIsGenerating(false);
+  const handleGenerateSchedule = async () => {
+    try {
+      const username = await AsyncStorage.getItem("mentora.username");
+      if (!username) {
+        Alert.alert("Not signed in", "Please sign in to generate a schedule.");
+        return;
       }
 
-      return;
-    }
+      setIsGenerating(true);
 
-    console.log(action);
+      const res = await fetch(
+        `${API_BASE_URL}/scheduler/${encodeURIComponent(username)}`,
+        { method: "POST" },
+      );
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.detail || "Failed to generate schedule");
+      }
+
+      const data = await res.json().catch(() => null);
+      const created = data?.created ?? 0;
+      Alert.alert("Schedule generated", `Created ${created} sessions.`);
+      router.push("/(tabs)/schedule");
+    } catch (err: any) {
+      Alert.alert("Error", err?.message || String(err));
+    } finally {
+      setIsGenerating(false);
+    }
   };
+
+  const actions = [
+    {
+      icon: "calendar-outline" as const,
+      label: "Generate\nSchedule",
+      color: colors.accent,
+      bg: colors.accent + "18",
+      onPress: handleGenerateSchedule,
+    },
+    {
+      icon: "book-outline" as const,
+      label: "Study\nSession",
+      color: colors.success,
+      bg: colors.success + "18",
+      onPress: () => router.push("/(tabs)/study"),
+    },
+    {
+      icon: "chatbubble-outline" as const,
+      label: "Message\nFriends",
+      color: "#3B82F6",
+      bg: "rgba(59,130,246,0.12)",
+      onPress: () => router.push("/(tabs)/chat"),
+    },
+  ];
 
   return (
     <View style={styles.section}>
-      <View style={styles.sectionHeaderRow}>
-        <Text style={styles.sectionTitle}>Quick Actions</Text>
-        <Pressable hitSlop={8} onPress={() => console.log("See history")}>
-          <Text style={styles.linkText}>See history &gt;</Text>
-        </Pressable>
-      </View>
+      <Text style={styles.sectionTitle}>Quick Actions</Text>
 
       <View style={styles.quickActionsRow}>
-        <Pressable
-          style={styles.quickActionCard}
-          onPress={() => handlePress("Study plan")}
-          disabled={isGenerating}
-        >
-          <Ionicons
-            name="list-outline"
-            size={22}
-            color={colors.accentSoft}
-            style={{ marginBottom: 6 }}
-          />
-          <Text style={styles.quickActionText}>Study plan</Text>
-        </Pressable>
-
-        <Pressable
-          style={styles.quickActionCard}
-          onPress={() => handlePress("Study")}
-          disabled={isGenerating}
-        >
-          <Ionicons
-            name="alarm-outline"
-            size={22}
-            color={colors.accentSoft}
-            style={{ marginBottom: 6 }}
-          />
-          <Text style={styles.quickActionText}>Study</Text>
-        </Pressable>
-
-        <Pressable
-          style={styles.quickActionCard}
-          onPress={() => handlePress("Ask a question")}
-          disabled={isGenerating}
-        >
-          <Ionicons
-            name="chatbubble-ellipses-outline"
-            size={22}
-            color={colors.accentSoft}
-            style={{ marginBottom: 6 }}
-          />
-          <Text style={styles.quickActionText}>Ask a question</Text>
-        </Pressable>
+        {actions.map((action) => (
+          <Pressable
+            key={action.label}
+            style={({ pressed }) => [
+              styles.quickActionCard,
+              pressed && { opacity: 0.85, transform: [{ scale: 0.96 }] },
+            ]}
+            onPress={action.onPress}
+            disabled={isGenerating}
+          >
+            <View style={[styles.quickActionIconWrap, { backgroundColor: action.bg }]}>
+              <Ionicons name={action.icon} size={22} color={action.color} />
+            </View>
+            <Text style={styles.quickActionText}>{action.label}</Text>
+          </Pressable>
+        ))}
       </View>
 
       <Modal transparent animationType="fade" visible={isGenerating}>
@@ -1404,7 +1424,7 @@ const QuickActions = ({ styles, colors }: { styles: any; colors: ThemeColors }) 
           <View style={[styles.card, { alignItems: "center", padding: 20 }]}>
             <ActivityIndicator size="large" color={colors.accent} />
             <Text style={{ marginTop: 12, color: colors.textSecondary }}>
-              Generating study plan...
+              Generating schedule...
             </Text>
           </View>
         </View>
@@ -1422,21 +1442,23 @@ const RecommendationCard = ({
 }) => {
   const router = useRouter();
 
+  const tips = [
+    { text: "Try the Pomodoro technique: 25 min focus, 5 min break.", icon: "timer-outline" as const },
+    { text: "Use @emotion in the AI chat to track how you feel today.", icon: "heart-outline" as const },
+    { text: "Ask the AI to rearrange your schedule before a busy week.", icon: "sparkles-outline" as const },
+    { text: "Short study sessions beat long cramming. Stay consistent!", icon: "trending-up-outline" as const },
+  ];
+  const tip = tips[new Date().getDay() % tips.length];
+
   return (
     <View style={styles.recommendationCard}>
       <View style={styles.recommendationLeft}>
         <View style={styles.recommendationIconWrapper}>
-          <Ionicons
-            name="notifications-outline"
-            size={18}
-            color={colors.accent}
-          />
+          <Ionicons name={tip.icon} size={18} color={colors.accent} />
         </View>
-        <View>
-          <Text style={styles.recommendationTitle}>You have a busy day.</Text>
-          <Text style={styles.recommendationSubtitle}>
-            Want a 25-min study session?
-          </Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.recommendationTitle}>Daily Tip</Text>
+          <Text style={styles.recommendationSubtitle}>{tip.text}</Text>
         </View>
       </View>
 
@@ -1444,52 +1466,8 @@ const RecommendationCard = ({
         style={styles.recommendationButton}
         onPress={() => router.push("/(tabs)/study")}
       >
-        <Text style={styles.recommendationButtonText}>Start study</Text>
+        <Text style={styles.recommendationButtonText}>Study now</Text>
       </Pressable>
-    </View>
-  );
-};
-
-const CarouselSection = ({ styles, colors }: { styles: any; colors: ThemeColors }) => {
-  const router = useRouter();
-
-  return (
-    <View style={styles.carouselSection}>
-      <View style={styles.carouselRow}>
-        <Pressable
-          style={styles.carouselCard}
-          onPress={() => router.push("/emotion")}
-        >
-          <View style={styles.carouselHeaderRow}>
-            <Ionicons
-              name="chevron-back-outline"
-              size={18}
-              color={colors.textMuted}
-            />
-            <Text style={styles.carouselTitle}>Daily emotion check</Text>
-          </View>
-          <Text style={styles.carouselSubtitle}>
-            Reflect on how you feel before you start.
-          </Text>
-        </Pressable>
-
-        <Pressable
-          style={[styles.carouselCard, styles.carouselCardSecondary]}
-          onPress={() => console.log("Quick study session")}
-        >
-          <View style={styles.carouselHeaderRow}>
-            <Text style={styles.carouselTitle}>Quick study session</Text>
-            <Ionicons
-              name="chevron-forward-outline"
-              size={18}
-              color={colors.textMuted}
-            />
-          </View>
-          <Text style={styles.carouselSubtitle}>
-            Jump into a focused 25-min block.
-          </Text>
-        </Pressable>
-      </View>
     </View>
   );
 };
@@ -1723,20 +1701,6 @@ const createStyles = (COLORS: ThemeColors) =>
     fontSize: 13,
     color: COLORS.textSecondary,
   },
-  streakBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: COLORS.subtleCard,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 6,
-    borderRadius: 14,
-    marginRight: SPACING.xs,
-  },
-  streakText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: COLORS.accent,
-  },
   notificationButton: {
     width: 32,
     height: 32,
@@ -1772,98 +1736,89 @@ const createStyles = (COLORS: ThemeColors) =>
     justifyContent: "center",
     backgroundColor: COLORS.subtleCard,
   },
+  aiCard: {
+    backgroundColor: COLORS.card,
+    borderRadius: 20,
+    padding: SPACING.lg,
+    borderWidth: 1,
+    borderColor: COLORS.accent + "30",
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 5,
+  },
+  aiCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: SPACING.sm,
+    gap: SPACING.sm,
+  },
+  aiCardIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: COLORS.accent,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  aiCardHeaderText: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  aiCardBadge: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: COLORS.accent,
+    backgroundColor: COLORS.accent + "18",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    overflow: "hidden",
+  },
+  aiFeatureRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: SPACING.sm,
+  },
+  aiFeatureChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: COLORS.accent + "14",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+  },
+  aiFeatureChipText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: COLORS.accent,
+  },
+  aiCardFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: SPACING.sm,
+    paddingTop: SPACING.sm,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.borderSubtle,
+  },
+  aiCardCta: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: COLORS.accent,
+  },
   greetingTitle: {
     fontSize: 20,
     fontWeight: "800",
     color: COLORS.textPrimary,
-    marginBottom: SPACING.xs,
   },
   greetingSubtitle: {
     fontSize: 14,
     lineHeight: 20,
-    color: COLORS.textSecondary,
-  },
-  toggleContainer: {
-    flexDirection: "row",
-    backgroundColor: COLORS.subtleCard,
-    borderRadius: 14,
-    padding: 4,
-    borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
-    alignSelf: "flex-start",
-  },
-  togglePill: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 6,
-    paddingHorizontal: SPACING.md,
-    borderRadius: 14,
-  },
-  togglePillActive: {
-    backgroundColor: "rgba(148,163,184,0.24)",
-    shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  toggleText: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    fontWeight: "500",
-  },
-  toggleTextActive: {
-    color: COLORS.accent,
-    fontWeight: "700",
-  },
-  scheduleHeaderRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: SPACING.sm,
-  },
-  scheduleHeaderLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  scheduleTitleText: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: COLORS.textPrimary,
-  },
-  scheduleCountText: {
-    fontSize: 12,
-    color: COLORS.textMuted,
-  },
-  scheduleList: {
-    gap: SPACING.sm,
-  },
-  scheduleItem: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    backgroundColor: COLORS.subtleCard,
-    borderRadius: 12,
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.md,
-  },
-  scheduleCourseText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: COLORS.textPrimary,
-  },
-  scheduleTimeText: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-  },
-  schedulePlaceholder: {
-    backgroundColor: COLORS.subtleCard,
-    borderRadius: 12,
-    paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.md,
-  },
-  schedulePlaceholderText: {
-    fontSize: 13,
     color: COLORS.textSecondary,
   },
   section: {
@@ -1880,6 +1835,7 @@ const createStyles = (COLORS: ThemeColors) =>
     fontSize: 16,
     fontWeight: "700",
     color: COLORS.textPrimary,
+    marginBottom: SPACING.sm,
   },
   linkText: {
     fontSize: 12,
@@ -1893,9 +1849,10 @@ const createStyles = (COLORS: ThemeColors) =>
   },
   quickActionCard: {
     flex: 1,
-    backgroundColor: COLORS.subtleCard,
-    borderRadius: 12,
-    paddingVertical: SPACING.sm,
+    backgroundColor: COLORS.card,
+    borderRadius: 16,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.xs,
     alignItems: "center",
     justifyContent: "center",
     shadowColor: COLORS.shadow,
@@ -1906,14 +1863,150 @@ const createStyles = (COLORS: ThemeColors) =>
     borderWidth: 1,
     borderColor: COLORS.borderSoft,
   },
+  quickActionIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 8,
+  },
   quickActionText: {
-    fontSize: 13,
+    fontSize: 12,
     color: COLORS.textPrimary,
     fontWeight: "600",
+    textAlign: "center",
+    lineHeight: 16,
   },
-  recommendationCard: {
-    marginTop: SPACING.md,
+
+  upcomingSection: {
+    marginTop: SPACING.sm,
+    backgroundColor: COLORS.card,
+    borderRadius: 16,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.borderSoft,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  upcomingSectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: SPACING.sm,
+  },
+  upcomingSectionLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  upcomingSectionTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: COLORS.textPrimary,
+  },
+  upcomingSeeAll: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: COLORS.accent,
+  },
+  upcomingEmpty: {
+    alignItems: "center",
+    paddingVertical: SPACING.md,
+    gap: 6,
+  },
+  upcomingEmptyText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: COLORS.textPrimary,
+    marginTop: 4,
+  },
+  upcomingEmptyHint: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+  upcomingList: {
+    gap: SPACING.xs,
+  },
+  upcomingItem: {
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: COLORS.subtleCard,
+    borderRadius: 12,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    gap: SPACING.sm,
+  },
+  upcomingDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  upcomingItemContent: {
+    flex: 1,
+  },
+  upcomingCourseName: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: COLORS.textPrimary,
+  },
+  upcomingTime: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  upcomingNowBadge: {
+    backgroundColor: COLORS.success + "22",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  upcomingNowText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: COLORS.success,
+    letterSpacing: 0.5,
+  },
+
+  statsRow: {
+    flexDirection: "row",
+    gap: SPACING.sm,
+    marginTop: SPACING.sm,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: COLORS.card,
+    borderRadius: 16,
+    paddingVertical: SPACING.md,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: COLORS.borderSoft,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  statValue: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: COLORS.textPrimary,
+    marginTop: 6,
+  },
+  statLabel: {
+    fontSize: 11,
+    fontWeight: "500",
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+
+  recommendationCard: {
+    marginTop: SPACING.xs,
+    backgroundColor: COLORS.card,
     borderRadius: 16,
     paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.md,
@@ -1925,6 +2018,8 @@ const createStyles = (COLORS: ThemeColors) =>
     shadowOpacity: 0.06,
     shadowRadius: 10,
     elevation: 3,
+    borderWidth: 1,
+    borderColor: COLORS.borderSoft,
     borderLeftWidth: 3,
     borderLeftColor: COLORS.accent,
   },
@@ -1938,7 +2033,7 @@ const createStyles = (COLORS: ThemeColors) =>
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: "rgba(124,58,237,0.22)",
+    backgroundColor: COLORS.accent + "22",
     alignItems: "center",
     justifyContent: "center",
     marginRight: SPACING.sm,
@@ -1954,55 +2049,14 @@ const createStyles = (COLORS: ThemeColors) =>
     color: COLORS.textSecondary,
   },
   recommendationButton: {
-    paddingVertical: 4,
-    paddingHorizontal: SPACING.xs,
+    paddingVertical: 6,
+    paddingHorizontal: SPACING.sm,
     borderRadius: 999,
-    // exactly same lavender as other accents (See history, icons, etc.)
     backgroundColor: COLORS.accent,
   },
   recommendationButtonText: {
     fontSize: 13,
     fontWeight: "600",
     color: "#FFFFFF",
-  },
-  carouselSection: {
-    marginTop: SPACING.lg,
-  },
-  carouselRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: SPACING.sm,
-  },
-  carouselCard: {
-    flex: 1,
-    backgroundColor: COLORS.card,
-    borderRadius: 16,
-    paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.md,
-    shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
-  },
-  carouselCardSecondary: {
-    backgroundColor: "rgba(148,163,184,0.15)",
-  },
-  carouselHeaderRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: SPACING.xs,
-  },
-  carouselTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-  },
-  carouselSubtitle: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
   },
 });

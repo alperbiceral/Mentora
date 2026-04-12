@@ -19,10 +19,6 @@ type Props = {
   onClose: () => void;
   darkMode: boolean;
   setDarkMode: (v: boolean) => void;
-  vibration: boolean;
-  setVibration: (v: boolean) => void;
-  notifications: boolean;
-  setNotifications: (v: boolean) => void;
   language: SettingsLanguage;
   setLanguage: (v: SettingsLanguage) => void;
   onLogout: () => void;
@@ -34,10 +30,6 @@ export function SettingsModal({
   onClose,
   darkMode,
   setDarkMode,
-  vibration,
-  setVibration,
-  notifications,
-  setNotifications,
   language,
   setLanguage,
   onLogout,
@@ -119,24 +111,6 @@ export function SettingsModal({
                 label="Dark Mode"
                 value={darkMode}
                 onValueChange={setDarkMode}
-                trackOnColor={colors.accentSoft}
-                trackOffColor={colors.borderSubtle}
-                thumbOnColor={colors.accent}
-                thumbOffColor="#FFFFFF"
-              />
-              <SettingSwitchRow
-                label="Vibration"
-                value={vibration}
-                onValueChange={setVibration}
-                trackOnColor={colors.accentSoft}
-                trackOffColor={colors.borderSubtle}
-                thumbOnColor={colors.accent}
-                thumbOffColor="#FFFFFF"
-              />
-              <SettingSwitchRow
-                label="Notifications"
-                value={notifications}
-                onValueChange={setNotifications}
                 trackOnColor={colors.accentSoft}
                 trackOffColor={colors.borderSubtle}
                 thumbOnColor={colors.accent}

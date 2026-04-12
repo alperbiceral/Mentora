@@ -5,10 +5,13 @@ import json
 import logging
 import re
 
+from datetime import date
+
 from config import GEMINI_API_KEY, GEMINI_MODEL
 from deps import get_db
-from models import AIAssistantMessage, Course, CourseBlock, User
+from models import AIAssistantMessage, Course, CourseBlock, Emotion, User
 from google import genai
+from routers.emotion_router import classifier as emotion_classifier
 
 router = APIRouter(prefix="/ai-assistant", tags=["ai-assistant"])
 logger = logging.getLogger("mentora.ai_assistant")
@@ -285,6 +288,34 @@ async def clear_chat_history(username: str, db: Session = Depends(get_db)):
     return {"detail": "Chat history cleared"}
 
 
+def _handle_emotion(db: Session, user, username: str, text: str) -> ChatResponse:
+    """Run emotion classification, persist to DB, return formatted reply."""
+    result = emotion_classifier(text)
+    scores = result[0]
+    sorted_scores = sorted(scores, key=lambda e: e["score"], reverse=True)
+
+    scores_dict = {e["label"]: float(e["score"]) for e in scores}
+    emotion_row = Emotion(
+        user_id=user.user_id,
+        emotion_test_date=date.today(),
+        emotion_scores=scores_dict,
+    )
+    db.add(emotion_row)
+    db.commit()
+
+    lines = [f"  {e['label'].capitalize()}: {e['score'] * 100:.1f}%" for e in sorted_scores]
+    reply = "Here's my reading of your emotions:\n\n" + "\n".join(lines)
+
+    top = sorted_scores[0]
+    if top["label"] in ("sadness", "fear", "anger", "disgust") and top["score"] > 0.4:
+        reply += "\n\nIt sounds like you're going through a tough time. Remember to take breaks and be kind to yourself."
+    elif top["label"] == "joy" and top["score"] > 0.4:
+        reply += "\n\nGreat to see you're feeling positive! That's a good energy for studying."
+
+    _save_message(db, username, "assistant", reply)
+    return ChatResponse(reply=reply, actions_taken=[])
+
+
 @router.post("/chat", response_model=ChatResponse)
 async def ai_assistant_chat(req: ChatRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == req.username).first()
@@ -292,6 +323,15 @@ async def ai_assistant_chat(req: ChatRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="User not found")
 
     _save_message(db, req.username, "user", req.message)
+
+    stripped = req.message.strip()
+    if stripped.lower().startswith("@emotion"):
+        emotion_text = stripped[len("@emotion"):].strip()
+        if not emotion_text:
+            fallback = "Please add some text after @emotion so I can analyze it. For example: @emotion I feel stressed about my exams"
+            _save_message(db, req.username, "assistant", fallback)
+            return ChatResponse(reply=fallback, actions_taken=[])
+        return _handle_emotion(db, user, req.username, emotion_text)
 
     schedule_context = _build_schedule_context(db, req.username)
 
