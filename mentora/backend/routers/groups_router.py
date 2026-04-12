@@ -34,6 +34,7 @@ from schemas import (
     GroupTransferOwner,
     GroupUpdate,
 )
+from ws_manager import manager
 
 router = APIRouter(prefix="/groups", tags=["groups"])
 
@@ -164,6 +165,17 @@ async def create_group(payload: GroupCreate, db: Session = Depends(get_db)):
         )
     if invitees:
         db.commit()
+        for invitee in invitees:
+            await manager.send_to(
+                invitee,
+                {
+                    "type": "notification",
+                    "notification_type": "group_invite",
+                    "group_name": group.name,
+                    "from_username": payload.username,
+                    "created_at": group.created_at.isoformat(),
+                },
+            )
 
     return GroupListItem(
         group_id=group.group_id,
@@ -610,6 +622,18 @@ async def invite_to_group(payload: GroupInviteCreate, db: Session = Depends(get_
     db.commit()
     db.refresh(invite)
 
+    await manager.send_to(
+        payload.to_username,
+        {
+            "type": "notification",
+            "notification_type": "group_invite",
+            "group_name": group.name,
+            "from_username": payload.from_username,
+            "invite_id": invite.invite_id,
+            "created_at": invite.created_at.isoformat(),
+        },
+    )
+
     return GroupInviteItem(
         invite_id=invite.invite_id,
         group_id=group.group_id,
@@ -741,6 +765,18 @@ async def request_to_join(payload: GroupJoinRequestCreate, db: Session = Depends
     db.add(request)
     db.commit()
     db.refresh(request)
+
+    await manager.send_to(
+        group.owner_username,
+        {
+            "type": "notification",
+            "notification_type": "group_join_request",
+            "group_name": group.name,
+            "from_username": payload.username,
+            "request_id": request.request_id,
+            "created_at": request.created_at.isoformat(),
+        },
+    )
 
     return GroupJoinRequestItem(
         request_id=request.request_id,

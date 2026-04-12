@@ -38,6 +38,7 @@ const GROUP_PANEL_HEIGHT = 320;
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
 const CHAT_LAST_SEEN_KEY = "mentora.chatLastSeenByThread";
+const CHATS_NOTIF_LAST_SEEN_KEY = "mentora.chatsNotifLastSeenAt";
 
 type FriendProfile = {
   username: string;
@@ -271,8 +272,10 @@ export default function ChatScreen() {
   useFocusEffect(
     useCallback(() => {
       isChatFocusedRef.current = true;
+      AsyncStorage.setItem(CHATS_NOTIF_LAST_SEEN_KEY, String(Date.now()));
       return () => {
         isChatFocusedRef.current = false;
+        AsyncStorage.setItem(CHATS_NOTIF_LAST_SEEN_KEY, String(Date.now()));
       };
     }, []),
   );

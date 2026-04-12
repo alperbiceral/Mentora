@@ -13,6 +13,7 @@ from schemas import (
     FriendRequestsList,
     FriendSearchResponse,
 )
+from ws_manager import manager
 
 router = APIRouter(prefix="/friends", tags=["friends"])
 
@@ -96,6 +97,18 @@ async def send_friend_request(payload: FriendRequestCreate, db: Session = Depend
     db.add(request)
     db.commit()
     db.refresh(request)
+
+    await manager.send_to(
+        payload.to_username,
+        {
+            "type": "notification",
+            "notification_type": "friend_request",
+            "from_username": payload.from_username,
+            "request_id": request.request_id,
+            "created_at": request.created_at.isoformat(),
+        },
+    )
+
     return request
 
 

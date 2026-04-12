@@ -20,39 +20,9 @@ from schemas import (
     ChatThreadItem,
     ChatThreadsResponse,
 )
+from ws_manager import manager
 
 router = APIRouter(prefix="/chat", tags=["chat"])
-
-
-class ConnectionManager:
-    def __init__(self) -> None:
-        self.active: dict[str, set[WebSocket]] = {}
-
-    async def connect(self, username: str, websocket: WebSocket) -> None:
-        await websocket.accept()
-        self.active.setdefault(username, set()).add(websocket)
-
-    def disconnect(self, username: str, websocket: WebSocket) -> None:
-        if username not in self.active:
-            return
-        self.active[username].discard(websocket)
-        if not self.active[username]:
-            self.active.pop(username, None)
-
-    async def send_to(self, username: str, payload: dict) -> None:
-        if username not in self.active:
-            return
-        dead: list[WebSocket] = []
-        for ws in self.active.get(username, set()):
-            try:
-                await ws.send_json(payload)
-            except RuntimeError:
-                dead.append(ws)
-        for ws in dead:
-            self.disconnect(username, ws)
-
-
-manager = ConnectionManager()
 
 
 def _thread_friend(thread: ChatThread, username: str) -> str:
@@ -163,6 +133,7 @@ async def list_threads(username: str, db: Session = Depends(get_db)):
                 members_count=members_count,
                 last_message=last_message.content if last_message else None,
                 last_message_at=last_message.created_at if last_message else None,
+                last_message_sender=last_message.sender if last_message else None,
             )
         )
 
@@ -493,6 +464,7 @@ async def update_group(
         members_count=len(next_participants),
         last_message=last_message.content if last_message else None,
         last_message_at=last_message.created_at if last_message else None,
+        last_message_sender=last_message.sender if last_message else None,
     )
 
 

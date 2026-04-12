@@ -114,7 +114,9 @@ export default function AIAgentScreen() {
             "mentora.email",
             "mentora.token",
             "mentora.personalitySkipped",
-            "mentora.notificationsLastSeenAt",
+            "mentora.friendsNotifLastSeenAt",
+            "mentora.groupsNotifLastSeenAt",
+            "mentora.chatsNotifLastSeenAt",
             "mentora.chatLastSeenByThread",
           ]);
           router.replace("/auth");

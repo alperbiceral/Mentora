@@ -251,6 +251,7 @@ class ChatThreadItem(BaseModel):
     members_count: int = 0
     last_message: Optional[str]
     last_message_at: Optional[datetime]
+    last_message_sender: Optional[str] = None
 
 
 class ChatThreadsResponse(BaseModel):

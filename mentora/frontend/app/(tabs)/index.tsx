@@ -5,7 +5,6 @@ import React, {
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from "react";
 import {
@@ -37,7 +36,9 @@ const SPACING = {
 };
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
-const NOTIFICATIONS_LAST_SEEN_KEY = "mentora.notificationsLastSeenAt";
+const FRIENDS_LAST_SEEN_KEY = "mentora.friendsNotifLastSeenAt";
+const GROUPS_LAST_SEEN_KEY = "mentora.groupsNotifLastSeenAt";
+const CHATS_LAST_SEEN_KEY = "mentora.chatsNotifLastSeenAt";
 const CHAT_LAST_SEEN_KEY = "mentora.chatLastSeenByThread";
 
 type Profile = {
@@ -107,6 +108,7 @@ type ChatThreadItem = {
   members_count?: number;
   last_message?: string | null;
   last_message_at?: string | null;
+  last_message_sender?: string | null;
 };
 
 type NotificationTab = "friends" | "groups" | "chats";
@@ -137,10 +139,7 @@ export default function HomeScreen() {
   const [chatThreads, setChatThreads] = useState<ChatThreadItem[]>([]);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
   const [notificationBadgeCount, setNotificationBadgeCount] = useState(0);
-  const [chatLastSeenMap, setChatLastSeenMap] = useState<
-    Record<number, number>
-  >({});
-  const notificationsLastSeenRef = useRef(0);
+  const [chatsTabLastSeen, setChatsTabLastSeen] = useState(0);
 
   const headerTitle = useMemo(() => {
     if (!profile) {
@@ -209,71 +208,42 @@ export default function HomeScreen() {
     if (!value) {
       return 0;
     }
-    const date = new Date(value);
+    const hasTimezone = /[Zz]|[+-]\d{2}:\d{2}$/.test(value);
+    const date = new Date(hasTimezone ? value : value + "Z");
     return Number.isNaN(date.getTime()) ? 0 : date.getTime();
   }, []);
 
-  const getStoredNotificationsLastSeen = useCallback(async () => {
-    const stored = await AsyncStorage.getItem(NOTIFICATIONS_LAST_SEEN_KEY);
-    const parsed = stored ? Number(stored) : 0;
-    return Number.isFinite(parsed) ? parsed : 0;
-  }, []);
-
-  const getStoredChatLastSeen = useCallback(async () => {
-    const stored = await AsyncStorage.getItem(CHAT_LAST_SEEN_KEY);
-    if (!stored) {
-      return {} as Record<number, number>;
-    }
+  const fetchBadgeCount = useCallback(async () => {
     try {
-      const parsed = JSON.parse(stored) as Record<string, number>;
-      return Object.fromEntries(
-        Object.entries(parsed).map(([key, value]) => [
-          Number(key),
-          Number(value) || 0,
-        ]),
-      ) as Record<number, number>;
-    } catch {
-      return {} as Record<number, number>;
-    }
-  }, []);
-
-  const ensureChatLastSeen = useCallback(
-    async (threads: ChatThreadItem[], storedMap: Record<number, number>) => {
-      const hasSeen =
-        Object.keys(storedMap).length > 0 &&
-        Object.values(storedMap).some((value) => value > 0);
-      if (hasSeen || threads.length === 0) {
-        setChatLastSeenMap(storedMap);
-        return storedMap;
-      }
-      const now = Date.now();
-      const seeded = Object.fromEntries(
-        threads.map((thread) => [
-          thread.thread_id,
-          toTimestampMs(thread.last_message_at) || now,
-        ]),
-      ) as Record<number, number>;
-      await AsyncStorage.setItem(CHAT_LAST_SEEN_KEY, JSON.stringify(seeded));
-      setChatLastSeenMap(seeded);
-      return seeded;
-    },
-    [toTimestampMs],
-  );
-
-  const fetchNotifications = useCallback(async () => {
-    setNotificationsLoading(true);
-    try {
-      const storedLastSeen = await getStoredNotificationsLastSeen();
-      const storedChatLastSeen = await getStoredChatLastSeen();
-      notificationsLastSeenRef.current = storedLastSeen;
-
-      let friendUnreadCount = 0;
-      let groupUnreadCount = 0;
-      let chatUnreadCount = 0;
-
       const username = await AsyncStorage.getItem("mentora.username");
       if (!username) {
         setCurrentUsername(null);
+        setNotificationBadgeCount(0);
+        return;
+      }
+      setCurrentUsername(username);
+      const [friendSince, groupSince, chatSince] = await Promise.all([
+        AsyncStorage.getItem(FRIENDS_LAST_SEEN_KEY).then((v) => Number(v) || 0),
+        AsyncStorage.getItem(GROUPS_LAST_SEEN_KEY).then((v) => Number(v) || 0),
+        AsyncStorage.getItem(CHATS_LAST_SEEN_KEY).then((v) => Number(v) || 0),
+      ]);
+      const res = await fetch(
+        `${API_BASE_URL}/notifications/counts/${encodeURIComponent(username)}?friend_since=${friendSince}&group_since=${groupSince}&chat_since=${chatSince}`,
+      );
+      if (res.ok) {
+        const data = await res.json();
+        setNotificationBadgeCount(data.total ?? 0);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const fetchNotificationDetails = useCallback(async () => {
+    setNotificationsLoading(true);
+    try {
+      const username = await AsyncStorage.getItem("mentora.username");
+      if (!username) {
         setFriendRequests({ incoming: [], outgoing: [] });
         setGroupRequests({
           incoming_invites: [],
@@ -282,10 +252,12 @@ export default function HomeScreen() {
           outgoing_join_requests: [],
         });
         setChatThreads([]);
-        setNotificationBadgeCount(0);
         return;
       }
-      setCurrentUsername(username);
+
+      const chatsSince =
+        Number(await AsyncStorage.getItem(CHATS_LAST_SEEN_KEY)) || 0;
+      setChatsTabLastSeen(chatsSince);
 
       const [friendsRes, groupsRes, threadsRes] = await Promise.all([
         fetch(`${API_BASE_URL}/friends/requests/${username}`),
@@ -301,10 +273,6 @@ export default function HomeScreen() {
           incoming: data.incoming ?? [],
           outgoing: data.outgoing ?? [],
         });
-        const incomingUnread = (data.incoming ?? []).filter(
-          (request) => toTimestampMs(request.created_at) > storedLastSeen,
-        ).length;
-        friendUnreadCount = incomingUnread;
       } else {
         setFriendRequests({ incoming: [], outgoing: [] });
       }
@@ -317,13 +285,6 @@ export default function HomeScreen() {
           incoming_join_requests: data.incoming_join_requests ?? [],
           outgoing_join_requests: data.outgoing_join_requests ?? [],
         });
-        const inviteUnread = (data.incoming_invites ?? []).filter(
-          (invite) => toTimestampMs(invite.created_at) > storedLastSeen,
-        ).length;
-        const joinUnread = (data.incoming_join_requests ?? []).filter(
-          (request) => toTimestampMs(request.created_at) > storedLastSeen,
-        ).length;
-        groupUnreadCount = inviteUnread + joinUnread;
       } else {
         setGroupRequests({
           incoming_invites: [],
@@ -336,66 +297,44 @@ export default function HomeScreen() {
       if (threadsRes.ok) {
         const data = await threadsRes.json();
         setChatThreads(data.threads ?? []);
-        const chatLastSeen = await ensureChatLastSeen(
-          data.threads ?? [],
-          storedChatLastSeen,
-        );
-        const chatUnread = (data.threads ?? []).filter(
-          (thread: ChatThreadItem) => {
-            const lastMessageAt = toTimestampMs(thread.last_message_at);
-            if (!lastMessageAt) {
-              return false;
-            }
-            return lastMessageAt > storedLastSeen;
-          },
-        ).length;
-        chatUnreadCount = chatUnread;
       } else {
         setChatThreads([]);
       }
-
-      setNotificationBadgeCount(
-        friendUnreadCount + groupUnreadCount + chatUnreadCount,
-      );
     } finally {
       setNotificationsLoading(false);
     }
-  }, [
-    ensureChatLastSeen,
-    getStoredChatLastSeen,
-    getStoredNotificationsLastSeen,
-    toTimestampMs,
-  ]);
+  }, []);
 
   useEffect(() => {
     if (!notificationsOpen) {
       return;
     }
-
-    fetchNotifications();
-  }, [notificationsOpen, fetchNotifications]);
+    fetchNotificationDetails();
+  }, [notificationsOpen, fetchNotificationDetails]);
 
   useFocusEffect(
     useCallback(() => {
-      fetchNotifications();
-      const interval = setInterval(() => {
-        fetchNotifications();
-      }, 15000);
-      return () => clearInterval(interval);
-    }, [fetchNotifications]),
+      fetchBadgeCount();
+    }, [fetchBadgeCount]),
   );
 
-  const markNotificationsSeen = useCallback(async () => {
-    const now = Date.now();
-    await AsyncStorage.setItem(NOTIFICATIONS_LAST_SEEN_KEY, String(now));
-    notificationsLastSeenRef.current = now;
-    setNotificationBadgeCount(0);
-  }, []);
+  const markTabSeen = useCallback(
+    async (tab: NotificationTab) => {
+      const keyMap: Record<NotificationTab, string> = {
+        friends: FRIENDS_LAST_SEEN_KEY,
+        groups: GROUPS_LAST_SEEN_KEY,
+        chats: CHATS_LAST_SEEN_KEY,
+      };
+      await AsyncStorage.setItem(keyMap[tab], String(Date.now()));
+      await fetchBadgeCount();
+    },
+    [fetchBadgeCount],
+  );
 
   const handleOpenNotifications = async () => {
     setNotificationTab("friends");
-    await markNotificationsSeen();
     setNotificationsOpen(true);
+    await markTabSeen("friends");
   };
 
   const handleFriendRequestAction = async (
@@ -419,7 +358,7 @@ export default function HomeScreen() {
         const message = await response.json().catch(() => null);
         throw new Error(message?.detail ?? "Request failed");
       }
-      await fetchNotifications();
+      await fetchNotificationDetails();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Request failed";
       Alert.alert("Error", message);
@@ -447,7 +386,7 @@ export default function HomeScreen() {
         const message = await response.json().catch(() => null);
         throw new Error(message?.detail ?? "Invite action failed");
       }
-      await fetchNotifications();
+      await fetchNotificationDetails();
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Invite action failed";
@@ -476,7 +415,7 @@ export default function HomeScreen() {
         const message = await response.json().catch(() => null);
         throw new Error(message?.detail ?? "Request action failed");
       }
-      await fetchNotifications();
+      await fetchNotificationDetails();
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Request action failed";
@@ -488,7 +427,8 @@ export default function HomeScreen() {
     if (!value) {
       return "";
     }
-    const date = new Date(value);
+    const hasTimezone = /[Zz]|[+-]\d{2}:\d{2}$/.test(value);
+    const date = new Date(hasTimezone ? value : value + "Z");
     if (Number.isNaN(date.getTime())) {
       return "";
     }
@@ -505,14 +445,13 @@ export default function HomeScreen() {
 
   const unreadChatThreads = useMemo(() => {
     return chatThreads.filter((thread) => {
-      const lastMessageAt = toTimestampMs(thread.last_message_at);
-      if (!lastMessageAt) {
+      if (thread.last_message_sender === currentUsername) {
         return false;
       }
-      const seenAt = chatLastSeenMap[thread.thread_id] ?? 0;
-      return lastMessageAt > seenAt;
+      const lastMessageAt = toTimestampMs(thread.last_message_at);
+      return lastMessageAt > 0 && lastMessageAt > chatsTabLastSeen;
     });
-  }, [chatLastSeenMap, chatThreads, toTimestampMs]);
+  }, [chatThreads, toTimestampMs, chatsTabLastSeen, currentUsername]);
 
   useEffect(() => {
     if (!currentUsername) {
@@ -527,14 +466,35 @@ export default function HomeScreen() {
     ws.onmessage = (event) => {
       try {
         const payload = JSON.parse(event.data);
+
+        if (payload.type === "notification") {
+          setNotificationBadgeCount((count) => count + 1);
+          return;
+        }
+
         if (payload.type !== "message") {
           return;
         }
         const message = payload.message as {
           thread_id: number;
+          sender: string;
           content: string;
           created_at: string;
         };
+        if (message.sender === currentUsername) {
+          setChatThreads((prev) =>
+            prev.map((thread) =>
+              thread.thread_id === message.thread_id
+                ? {
+                    ...thread,
+                    last_message: message.content,
+                    last_message_at: message.created_at,
+                  }
+                : thread,
+            ),
+          );
+          return;
+        }
         setChatThreads((prev) => {
           const existing = prev.find(
             (thread) => thread.thread_id === message.thread_id,
@@ -550,19 +510,10 @@ export default function HomeScreen() {
                   : thread,
               )
             : prev;
-          const lastSeen = notificationsLastSeenRef.current;
-          const prevLastMessageAt = existing
-            ? toTimestampMs(existing.last_message_at)
-            : 0;
-          const newMessageAt = toTimestampMs(message.created_at);
-          const shouldIncrement =
-            newMessageAt > lastSeen && prevLastMessageAt <= lastSeen;
-          if (shouldIncrement) {
-            setNotificationBadgeCount((count) => count + 1);
-          }
           return next;
         });
-      } catch (error) {
+        setNotificationBadgeCount((count) => count + 1);
+      } catch {
         // ignore
       }
     };
@@ -574,7 +525,7 @@ export default function HomeScreen() {
     return () => {
       ws.close();
     };
-  }, [currentUsername, toTimestampMs]);
+  }, [currentUsername]);
 
   const handleLogout = async () => {
     try {
@@ -596,6 +547,10 @@ export default function HomeScreen() {
         "mentora.email",
         "mentora.token",
         "mentora.personalitySkipped",
+        FRIENDS_LAST_SEEN_KEY,
+        GROUPS_LAST_SEEN_KEY,
+        CHATS_LAST_SEEN_KEY,
+        CHAT_LAST_SEEN_KEY,
       ]);
     } catch (error) {
       Alert.alert("Logout failed", "Please try again.");
@@ -762,7 +717,10 @@ export default function HomeScreen() {
                   styles.notificationTab,
                   notificationTab === "friends" && styles.notificationTabActive,
                 ]}
-                onPress={() => setNotificationTab("friends")}
+                onPress={() => {
+                  setNotificationTab("friends");
+                  markTabSeen("friends");
+                }}
               >
                 <Text
                   style={[
@@ -780,7 +738,10 @@ export default function HomeScreen() {
                   styles.notificationTab,
                   notificationTab === "groups" && styles.notificationTabActive,
                 ]}
-                onPress={() => setNotificationTab("groups")}
+                onPress={() => {
+                  setNotificationTab("groups");
+                  markTabSeen("groups");
+                }}
               >
                 <Text
                   style={[
@@ -798,7 +759,10 @@ export default function HomeScreen() {
                   styles.notificationTab,
                   notificationTab === "chats" && styles.notificationTabActive,
                 ]}
-                onPress={() => setNotificationTab("chats")}
+                onPress={() => {
+                  setNotificationTab("chats");
+                  markTabSeen("chats");
+                }}
               >
                 <Text
                   style={[

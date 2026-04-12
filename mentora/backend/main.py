@@ -15,6 +15,7 @@ from routers.study_sessions_router import router as study_sessions_router
 from routers.daily_question_router import router as daily_question_router
 from routers.scheduler import router as scheduler_router
 from routers.ai_assistant_router import router as ai_assistant_router
+from routers.notification_router import router as notification_router
 import models
 
 # Create tables
@@ -49,3 +50,4 @@ app.include_router(study_sessions_router)
 app.include_router(daily_question_router)
 app.include_router(scheduler_router)
 app.include_router(ai_assistant_router)
+app.include_router(notification_router)
