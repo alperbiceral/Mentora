@@ -682,10 +682,17 @@ async def import_schedule(
         data=image_bytes,
         mime_type=file.content_type or "image/jpeg"
     )
-    response = client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=[prompt, image_part]
-    )
+    try:
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=[prompt, image_part]
+        )
+    except Exception as exc:
+        logger.error(f"Gemini API error during schedule import: {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AI service is temporarily unavailable. Please try again in a few moments.",
+        )
     parsed_courses = _extract_json_payload(response.text or "")
     if OCR_DEBUG:
         logger.info(f"Parsed courses from Gemini: {json.dumps(parsed_courses, indent=2)}")
@@ -816,12 +823,19 @@ async def import_syllabus(
         data=image_bytes,
         mime_type=file.content_type or "image/jpeg"
     )
-    
-    response = client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=[prompt, image_part]
-    )
-    
+
+    try:
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=[prompt, image_part]
+        )
+    except Exception as exc:
+        logger.error(f"Gemini API error during syllabus import: {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AI service is temporarily unavailable. Please try again in a few moments.",
+        )
+
     description = (response.text or "").strip()
     if not description:
         raise HTTPException(

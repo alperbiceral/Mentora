@@ -129,11 +129,11 @@ export default function AIAgentScreen() {
           actions: data.actions_taken ?? [],
         };
         setMessages((prev) => [...prev, assistantMsg]);
-      } catch (err: any) {
+      } catch {
         const errorMsg: Message = {
           id: `err-${Date.now()}`,
           role: "assistant",
-          text: `Sorry, something went wrong: ${err?.message || String(err)}`,
+          text: "I'm having a little trouble right now. Could you please try again in a moment? If the problem persists, check your internet connection or try restarting the app.",
         };
         setMessages((prev) => [...prev, errorMsg]);
       } finally {

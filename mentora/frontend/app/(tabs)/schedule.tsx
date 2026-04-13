@@ -1,9 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import {
   Alert,
+  FlatList,
   LayoutAnimation,
   Modal,
   Platform,
@@ -78,6 +79,7 @@ type StudyBlock = {
   start: string;
   end: string;
   color: string;
+  dateStr?: string;
 };
 
 type DraftBlock = {
@@ -113,6 +115,10 @@ const SLOT_MINUTES = 30;
 const SLOT_HEIGHT = 22;
 const GRID_MAX_HEIGHT = 820;
 const DRAFT_GRID_MAX_HEIGHT = 640;
+const HOUR_HEIGHT = 80;
+const TIMELINE_LEFT_WIDTH = 50;
+const COMPLETED_SESSIONS_KEY = "mentora.completedSessions";
+const SHORT_DAY_NAMES = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 
 const TIME_SLOTS = buildTimeSlots(START_HOUR, END_HOUR, SLOT_MINUTES);
 
@@ -151,7 +157,16 @@ export default function ScheduleScreen() {
   const { COLORS, styles } = useScheduleTheme();
 
   const [mode, setMode] = useState<Mode>("courses");
-  const [selectedPlanDay, setSelectedPlanDay] = useState<WeekdayKey>("Mon");
+  const [selectedDate, setSelectedDate] = useState<Date>(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  });
+  const [completedSessions, setCompletedSessions] = useState<Set<string>>(new Set());
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [selectedSession, setSelectedSession] = useState<StudyBlock | null>(null);
+  const [isSessionSheetOpen, setIsSessionSheetOpen] = useState(false);
+  const timelineScrollRef = useRef<ScrollView>(null);
   const [courses, setCourses] = useState<Course[]>(INITIAL_COURSES);
   const [blocks, setBlocks] = useState<CourseBlock[]>(INITIAL_BLOCKS);
   const [isCourseModalOpen, setIsCourseModalOpen] = useState(false);
@@ -186,7 +201,7 @@ export default function ScheduleScreen() {
 
   useEffect(() => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-  }, [mode, selectedPlanDay, courses.length, blocks.length]);
+  }, [mode, selectedDate, courses.length, blocks.length]);
 
   const canAddCourse =
     modalCourseForm.name.trim().length > 0 && modalBlocks.length > 0;
@@ -330,7 +345,14 @@ export default function ScheduleScreen() {
           Sun: [],
         };
 
+        const AD_HOC_TIMER_TYPES = new Set(["countup", "countdown", "pomodoro"]);
+
         sessions.forEach((s) => {
+          const timerType = (s.timer_type ?? "").toLowerCase().trim();
+          const sessionMode = (s.mode ?? "").toLowerCase().trim();
+          if (sessionMode === "normal" || sessionMode === "pomodoro") return;
+          if (AD_HOC_TIMER_TYPES.has(timerType)) return;
+
           const dStart = parseTimestampToDate(s.started_at ?? s.session_date ?? null);
           const dEnd = parseTimestampToDate(s.ended_at ?? null);
           if (!dStart) return;
@@ -377,6 +399,7 @@ export default function ScheduleScreen() {
             start,
             end,
             color,
+            dateStr: formatDateStr(dStart),
           };
 
           newPlan[dayKey].push(block);
@@ -725,6 +748,58 @@ export default function ScheduleScreen() {
     setIsCourseModalOpen(true);
   }
 
+  useEffect(() => {
+    AsyncStorage.getItem(COMPLETED_SESSIONS_KEY).then((raw) => {
+      if (raw) {
+        try {
+          const arr = JSON.parse(raw) as string[];
+          setCompletedSessions(new Set(arr));
+        } catch { /* ignore */ }
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => setCurrentTime(new Date()), 60_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const selectedDayKey = getWeekdayKey(selectedDate);
+  const selectedDateStr = formatDateStr(selectedDate);
+  const isSelectedDateToday = isSameDay(selectedDate, new Date());
+
+  const selectedDayStudyBlocks = useMemo(() => {
+    const all = Object.values(studyPlan).flat();
+    const byDate = all.filter((b) => b.dateStr === selectedDateStr);
+    if (byDate.length > 0) return byDate;
+    return studyPlan[selectedDayKey] || [];
+  }, [studyPlan, selectedDateStr, selectedDayKey]);
+
+  const selectedDayCourseBlocks = useMemo(() => {
+    return blocks.filter((b) => b.day === selectedDayKey);
+  }, [blocks, selectedDayKey]);
+
+  function handleSelectDate(date: Date) {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setSelectedDate(date);
+    timelineScrollRef.current?.scrollTo({ y: 0, animated: true });
+  }
+
+  function handleToggleDone(sessionId: string) {
+    setCompletedSessions((prev) => {
+      const next = new Set(prev);
+      if (next.has(sessionId)) next.delete(sessionId);
+      else next.add(sessionId);
+      AsyncStorage.setItem(COMPLETED_SESSIONS_KEY, JSON.stringify([...next]));
+      return next;
+    });
+  }
+
+  function handlePressSession(session: StudyBlock) {
+    setSelectedSession(session);
+    setIsSessionSheetOpen(true);
+  }
+
   async function handleImportSyllabus(courseId: string) {
     try {
       setImportingSyllabusId(courseId);
@@ -802,62 +877,43 @@ export default function ScheduleScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.header}>
-            <Text style={styles.title}>Schedule</Text>
             <SegmentedControl mode={mode} setMode={setMode} />
           </View>
 
           {mode === "courses" ? (
             <View style={styles.section}>
-              <View style={styles.coursesHeader}>
-                <View style={styles.coursesTitleRow}>
-                  <Text
-                    style={styles.sectionTitleInline}
-                    numberOfLines={1}
-                    adjustsFontSizeToFit
-                    minimumFontScale={0.9}
-                  >
-                    Weekly Schedule
-                  </Text>
-                  <View style={styles.coursesActionRow}>
-                    <Pressable
-                      style={styles.clearScheduleButton}
-                      onPress={handleClearSchedule}
-                      disabled={isClearingSchedule}
-                      hitSlop={6}
-                    >
-                      <Ionicons
-                        name="trash-outline"
-                        size={18}
-                        color={COLORS.danger}
-                      />
-                    </Pressable>
-                    <Pressable
-                      style={styles.importButton}
-                      onPress={() => setIsImportModalOpen(true)}
-                    >
-                      <Ionicons
-                        name="cloud-upload-outline"
-                        size={16}
-                        color={COLORS.textPrimary}
-                      />
-                      <Text style={styles.importButtonText}>Import</Text>
-                    </Pressable>
-                    <Pressable
-                      style={styles.addCourseButton}
-                      onPress={handleOpenCourseModal}
-                    >
-                      <Ionicons name="add" size={16} color="#FFFFFF" />
-                      <Text
-                        style={styles.addCourseText}
-                        numberOfLines={1}
-                        adjustsFontSizeToFit
-                        minimumFontScale={0.85}
-                      >
-                        Add Course
-                      </Text>
-                    </Pressable>
-                  </View>
-                </View>
+              <View style={styles.coursesActionRow}>
+                <Pressable
+                  style={styles.clearScheduleButton}
+                  onPress={handleClearSchedule}
+                  disabled={isClearingSchedule}
+                  hitSlop={6}
+                >
+                  <Ionicons
+                    name="trash-outline"
+                    size={15}
+                    color={COLORS.danger}
+                  />
+                  <Text style={styles.clearScheduleText}>Clear</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.importButton}
+                  onPress={() => setIsImportModalOpen(true)}
+                >
+                  <Ionicons
+                    name="cloud-upload-outline"
+                    size={15}
+                    color={COLORS.accent}
+                  />
+                  <Text style={styles.importButtonText}>Import</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.addCourseButton}
+                  onPress={handleOpenCourseModal}
+                >
+                  <Ionicons name="add-circle-outline" size={15} color="#FFFFFF" />
+                  <Text style={styles.addCourseText}>Add Course</Text>
+                </Pressable>
               </View>
 
               <ScheduleCard>
@@ -950,24 +1006,32 @@ export default function ScheduleScreen() {
             </View>
           ) : (
             <View style={styles.section}>
-              <SectionHeader
-                title="Study plan"
-                subtitle="Daily focus blocks in 30-minute slices."
+              <DateStrip
+                selectedDate={selectedDate}
+                onSelectDate={handleSelectDate}
               />
 
-              <DaySelector
-                selectedDay={selectedPlanDay}
-                onSelect={setSelectedPlanDay}
+              <AIInsightBanner blocks={selectedDayStudyBlocks} />
+
+              <TimelineView
+                studyBlocks={selectedDayStudyBlocks}
+                courseBlocks={selectedDayCourseBlocks}
+                courseLookup={courseLookup}
+                completedSessions={completedSessions}
+                onToggleDone={handleToggleDone}
+                onPressSession={handlePressSession}
+                isToday={isSelectedDateToday}
+                currentTime={currentTime}
+                scrollRef={timelineScrollRef}
               />
 
-              <ScheduleCard title="Today plan">
-                <StudyPlanGrid
-                  day={selectedPlanDay}
-                  blocks={studyPlan[selectedPlanDay] || []}
-                  courseBlocks={blocks}
-                  courseLookup={courseLookup}
-                />
-              </ScheduleCard>
+              <SessionDetailSheet
+                visible={isSessionSheetOpen}
+                session={selectedSession}
+                isDone={selectedSession ? completedSessions.has(selectedSession.id) : false}
+                onToggleDone={handleToggleDone}
+                onClose={() => setIsSessionSheetOpen(false)}
+              />
             </View>
           )}
         </ScrollView>
@@ -1002,7 +1066,7 @@ const SegmentedControl: React.FC<SegmentedProps> = ({ mode, setMode }) => {
             mode === "courses" && styles.segmentLabelActive,
           ]}
         >
-          Courses
+          Weekly Schedule
         </Text>
       </Pressable>
 
@@ -1019,7 +1083,7 @@ const SegmentedControl: React.FC<SegmentedProps> = ({ mode, setMode }) => {
             mode === "study" && styles.segmentLabelActive,
           ]}
         >
-          Study Plan
+          Daily Schedule
         </Text>
       </Pressable>
     </View>
@@ -1727,137 +1791,408 @@ const CourseCardList: React.FC<CourseCardListProps> = ({
   );
 };
 
-type StudyPlanGridProps = {
-  day: WeekdayKey;
-  blocks: StudyBlock[];
-  courseBlocks: CourseBlock[];
-  courseLookup: Map<string, Course>;
+const DATE_STRIP_ITEMS = generateDateStrip();
+const DATE_STRIP_ITEM_WIDTH = 56;
+
+type DateStripProps = {
+  selectedDate: Date;
+  onSelectDate: (d: Date) => void;
 };
 
-const StudyPlanGrid: React.FC<StudyPlanGridProps> = ({
-  day,
-  blocks,
-  courseBlocks,
-  courseLookup,
-}) => {
-  const { styles } = useScheduleTheme();
-  const gridHeight = TIME_SLOTS.length * SLOT_HEIGHT;
-  const dayCourseBlocks = courseBlocks.filter((block) => block.day === day);
+const DateStrip: React.FC<DateStripProps> = ({ selectedDate, onSelectDate }) => {
+  const { styles, COLORS } = useScheduleTheme();
+  const listRef = useRef<FlatList>(null);
+  const today = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
+
+  useEffect(() => {
+    const idx = DATE_STRIP_ITEMS.findIndex((d) => isSameDay(d, selectedDate));
+    if (idx >= 0 && listRef.current) {
+      listRef.current.scrollToIndex({ index: idx, animated: true, viewPosition: 0.3 });
+    }
+  }, []);
+
+  const renderDateItem = useCallback(
+    ({ item }: { item: Date }) => {
+      const isActive = isSameDay(item, selectedDate);
+      const isToday = isSameDay(item, today);
+      return (
+        <Pressable
+          style={styles.dateStripItem}
+          onPress={() => onSelectDate(item)}
+        >
+          <Text
+            style={[
+              styles.dateStripDayName,
+              isActive && styles.dateStripDayNameActive,
+            ]}
+          >
+            {SHORT_DAY_NAMES[item.getDay()]}
+          </Text>
+          <View
+            style={[
+              styles.dateStripNumberWrap,
+              isActive && styles.dateStripNumberWrapActive,
+            ]}
+          >
+            <Text
+              style={[
+                styles.dateStripNumber,
+                isActive && styles.dateStripNumberActive,
+              ]}
+            >
+              {item.getDate()}
+            </Text>
+          </View>
+          {isToday && <View style={[styles.dateStripTodayDot, { backgroundColor: COLORS.accent }]} />}
+        </Pressable>
+      );
+    },
+    [selectedDate, today, styles, COLORS, onSelectDate],
+  );
 
   return (
-    <View style={styles.planGridWrapper}>
-      <View style={styles.gridHeaderRow}>
-        <View style={styles.timeHeaderSpacer} />
-        <View style={styles.dayHeaderCellSingle}>
-          <Text style={styles.dayHeaderText}>{day}</Text>
-        </View>
-      </View>
+    <FlatList
+      ref={listRef}
+      data={DATE_STRIP_ITEMS}
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      keyExtractor={(item) => formatDateStr(item)}
+      renderItem={renderDateItem}
+      getItemLayout={(_, index) => ({
+        length: DATE_STRIP_ITEM_WIDTH,
+        offset: DATE_STRIP_ITEM_WIDTH * index,
+        index,
+      })}
+      contentContainerStyle={styles.dateStripContainer}
+    />
+  );
+};
+
+type AIInsightBannerProps = {
+  blocks: StudyBlock[];
+};
+
+const AIInsightBanner: React.FC<AIInsightBannerProps> = ({ blocks }) => {
+  const { styles, COLORS } = useScheduleTheme();
+
+  const summary = useMemo(() => {
+    if (blocks.length === 0) return null;
+    let totalMin = 0;
+    blocks.forEach((b) => {
+      totalMin += timeToMinutes(b.end) - timeToMinutes(b.start);
+    });
+    const hours = Math.floor(totalMin / 60);
+    const mins = totalMin % 60;
+    const timeStr = hours > 0 ? (mins > 0 ? `${hours}h ${mins}m` : `${hours}h`) : `${mins}m`;
+    return `Today: ${blocks.length} session${blocks.length > 1 ? "s" : ""}, ${timeStr} of focus`;
+  }, [blocks]);
+
+  if (!summary) return null;
+
+  return (
+    <View style={styles.insightBanner}>
+      <Ionicons name="sparkles" size={16} color={COLORS.accent} />
+      <Text style={styles.insightText}>{summary}</Text>
+    </View>
+  );
+};
+
+type TimelineViewProps = {
+  studyBlocks: StudyBlock[];
+  courseBlocks: CourseBlock[];
+  courseLookup: Map<string, Course>;
+  completedSessions: Set<string>;
+  onToggleDone: (id: string) => void;
+  onPressSession: (block: StudyBlock) => void;
+  isToday: boolean;
+  currentTime: Date;
+  scrollRef: React.RefObject<ScrollView | null>;
+};
+
+const TimelineView: React.FC<TimelineViewProps> = ({
+  studyBlocks,
+  courseBlocks,
+  courseLookup,
+  completedSessions,
+  onToggleDone,
+  onPressSession,
+  isToday,
+  currentTime,
+  scrollRef,
+}) => {
+  const { styles, COLORS } = useScheduleTheme();
+  const totalHeight = (END_HOUR - START_HOUR) * HOUR_HEIGHT;
+  const hours = useMemo(() => {
+    const arr: number[] = [];
+    for (let h = START_HOUR; h < END_HOUR; h++) arr.push(h);
+    return arr;
+  }, []);
+
+  const currentMinuteOffset = isToday
+    ? (currentTime.getHours() * 60 + currentTime.getMinutes() - START_HOUR * 60)
+    : -1;
+  const currentTimePx = currentMinuteOffset >= 0
+    ? (currentMinuteOffset / 60) * HOUR_HEIGHT
+    : -1;
+
+  useEffect(() => {
+    if (isToday && scrollRef.current && currentTimePx > 0) {
+      const scrollTarget = Math.max(0, currentTimePx - 160);
+      setTimeout(() => {
+        scrollRef.current?.scrollTo({ y: scrollTarget, animated: true });
+      }, 300);
+    }
+  }, [isToday]);
+
+  return (
+    <View style={styles.timelineWrapper}>
       <ScrollView
-        style={[styles.gridBody, { maxHeight: GRID_MAX_HEIGHT }]}
-        nestedScrollEnabled
+        ref={scrollRef}
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ height: totalHeight, position: "relative" }}
       >
-        <View style={styles.gridRow}>
-          <TimeColumn height={gridHeight} />
-          <View style={[styles.dayColumnSingle, { height: gridHeight }]}>
-            {TIME_SLOTS.map((slot) => (
-              <View key={`${day}-${slot}`} style={styles.gridSlot} />
-            ))}
+        {hours.map((h) => {
+          const topPx = (h - START_HOUR) * HOUR_HEIGHT;
+          const label = `${String(h).padStart(2, "0")}:00`;
+          return (
+            <View key={`hour-${h}`} style={[styles.timelineHourRow, { top: topPx }]}>
+              <Text style={styles.timelineHourLabel}>{label}</Text>
+              <View style={styles.timelineHourLine} />
+            </View>
+          );
+        })}
 
-            {dayCourseBlocks.map((block) => {
-              const course = courseLookup.get(block.courseId);
-              if (!course) {
-                return null;
-              }
-              const startIndex = timeToIndex(block.start);
-              const endIndex = timeToIndex(block.end);
-              if (startIndex < 0 || endIndex <= startIndex) {
-                return null;
-              }
-              const blockHeight = (endIndex - startIndex) * SLOT_HEIGHT;
-              return (
-                <View
-                  key={`plan-course-${block.id}`}
-                  style={[
-                    styles.courseBlock,
-                    styles.planCourseBlock,
-                    {
-                      top: startIndex * SLOT_HEIGHT,
-                      height: blockHeight,
-                      backgroundColor: course.color,
-                    },
-                  ]}
-                >
-                  <Text style={styles.courseBlockCode} numberOfLines={1}>
-                    {course.name.split(" - ")[0]}
-                  </Text>
-                  <Text style={styles.courseBlockName} numberOfLines={1}>
-                    {course.location}
-                  </Text>
-                </View>
-              );
-            })}
+        <View style={[styles.timelineAxis, { height: totalHeight }]} />
 
-            {blocks.map((block) => {
-              const startIndex = timeToIndex(block.start);
-              const endIndex = timeToIndex(block.end);
-              if (startIndex < 0 || endIndex <= startIndex) {
-                return null;
-              }
-              const blockHeight = (endIndex - startIndex) * SLOT_HEIGHT;
-              return (
-                <View
-                  key={block.id}
-                  style={[
-                    styles.planBlock,
-                    {
-                      top: startIndex * SLOT_HEIGHT,
-                      height: blockHeight,
-                      backgroundColor: block.color,
-                    },
-                  ]}
-                >
-                  <Text style={styles.planBlockTitle}>{block.title}</Text>
-                  <Text style={styles.planBlockFocus}>{block.focus}</Text>
-                </View>
-              );
-            })}
+        {courseBlocks.map((block) => {
+          const course = courseLookup.get(block.courseId);
+          if (!course) return null;
+          const startMin = timeToMinutes(block.start);
+          const endMin = timeToMinutes(block.end);
+          const topPx = ((startMin - START_HOUR * 60) / 60) * HOUR_HEIGHT;
+          const heightPx = ((endMin - startMin) / 60) * HOUR_HEIGHT;
+          if (heightPx <= 0) return null;
+          return (
+            <View
+              key={`tl-course-${block.id}`}
+              style={[
+                styles.timelineCourseCard,
+                {
+                  top: topPx,
+                  height: heightPx,
+                  borderLeftColor: course.color,
+                  backgroundColor: course.color + "18",
+                  borderColor: course.color + "30",
+                },
+              ]}
+            >
+              <Ionicons name="school-outline" size={14} color={course.color} />
+              <View style={styles.timelineCourseCardContent}>
+                <Text style={styles.timelineCourseTitle} numberOfLines={1}>
+                  {course.name.split(" - ")[0]}
+                </Text>
+                <Text style={styles.timelineCourseTime}>
+                  {block.start} - {block.end}
+                </Text>
+              </View>
+            </View>
+          );
+        })}
+
+        {studyBlocks.map((block) => {
+          const isDone = completedSessions.has(block.id);
+          return (
+            <SessionCard
+              key={`session-${block.id}`}
+              block={block}
+              isDone={isDone}
+              onToggleDone={onToggleDone}
+              onPress={onPressSession}
+            />
+          );
+        })}
+
+        {isToday && currentTimePx >= 0 && currentTimePx <= totalHeight && (
+          <View style={[styles.currentTimeRow, { top: currentTimePx }]}>
+            <View style={[styles.currentTimeDot, { backgroundColor: COLORS.danger }]} />
+            <View style={[styles.currentTimeLine, { backgroundColor: COLORS.danger }]} />
           </View>
-        </View>
+        )}
       </ScrollView>
     </View>
   );
 };
 
-type DaySelectorProps = {
-  selectedDay: WeekdayKey;
-  onSelect: (d: WeekdayKey) => void;
+type SessionCardProps = {
+  block: StudyBlock;
+  isDone: boolean;
+  onToggleDone: (id: string) => void;
+  onPress: (block: StudyBlock) => void;
 };
 
-const DaySelector: React.FC<DaySelectorProps> = ({ selectedDay, onSelect }) => {
-  const { styles } = useScheduleTheme();
+const SessionCard: React.FC<SessionCardProps> = ({
+  block,
+  isDone,
+  onToggleDone,
+  onPress,
+}) => {
+  const { styles, COLORS } = useScheduleTheme();
+  const startMin = timeToMinutes(block.start);
+  const endMin = timeToMinutes(block.end);
+  const topPx = ((startMin - START_HOUR * 60) / 60) * HOUR_HEIGHT;
+  const heightPx = Math.max(36, ((endMin - startMin) / 60) * HOUR_HEIGHT);
+  const isCompact = heightPx < 56;
 
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.daysRow}
+    <Pressable
+      onPress={() => onPress(block)}
+      style={[
+        styles.sessionCard,
+        {
+          top: topPx,
+          height: heightPx,
+          borderLeftColor: block.color,
+          backgroundColor: block.color + "18",
+          borderColor: block.color + "30",
+          opacity: isDone ? 0.5 : 1,
+        },
+      ]}
     >
-      {DAYS.map((d) => {
-        const active = d === selectedDay;
-        return (
-          <Pressable
-            key={d}
-            style={[styles.dayPill, active && styles.dayPillActive]}
-            onPress={() => onSelect(d)}
+      <View style={styles.sessionCardRow}>
+        <Ionicons
+          name={getSubjectIcon(block.title)}
+          size={isCompact ? 14 : 18}
+          color={block.color}
+        />
+        <View style={styles.sessionCardContent}>
+          <Text
+            style={[
+              styles.sessionCardTitle,
+              isDone && styles.sessionCardTitleDone,
+              isCompact && { fontSize: 12 },
+            ]}
+            numberOfLines={1}
           >
-            <Text style={[styles.dayLabel, active && styles.dayLabelActive]}>
-              {d}
+            {block.title}
+          </Text>
+          {!isCompact && (
+            <Text style={styles.sessionCardTime}>
+              {block.start} - {block.end}
             </Text>
-          </Pressable>
-        );
-      })}
-    </ScrollView>
+          )}
+        </View>
+        <Pressable
+          onPress={(e) => {
+            e.stopPropagation();
+            onToggleDone(block.id);
+          }}
+          hitSlop={8}
+        >
+          <Ionicons
+            name={isDone ? "checkmark-circle" : "checkmark-circle-outline"}
+            size={20}
+            color={isDone ? COLORS.success : COLORS.textMuted}
+          />
+        </Pressable>
+      </View>
+      {!isCompact && block.focus ? (
+        <View style={[styles.sessionTag, { backgroundColor: block.color + "20" }]}>
+          <Text style={[styles.sessionTagText, { color: block.color }]}>
+            #{block.focus}
+          </Text>
+        </View>
+      ) : null}
+    </Pressable>
+  );
+};
+
+type SessionDetailSheetProps = {
+  visible: boolean;
+  session: StudyBlock | null;
+  isDone: boolean;
+  onToggleDone: (id: string) => void;
+  onClose: () => void;
+};
+
+const SessionDetailSheet: React.FC<SessionDetailSheetProps> = ({
+  visible,
+  session,
+  isDone,
+  onToggleDone,
+  onClose,
+}) => {
+  const { styles, COLORS } = useScheduleTheme();
+  if (!session) return null;
+
+  const startMin = timeToMinutes(session.start);
+  const endMin = timeToMinutes(session.end);
+  const durationMin = endMin - startMin;
+
+  return (
+    <Modal animationType="slide" transparent visible={visible}>
+      <Pressable style={styles.sheetBackdrop} onPress={onClose}>
+        <Pressable style={styles.sheetCard} onPress={(e) => e.stopPropagation()}>
+          <View style={styles.sheetHandle} />
+
+          <View style={styles.sheetHeader}>
+            <View style={[styles.sheetIconWrap, { backgroundColor: session.color + "20" }]}>
+              <Ionicons
+                name={getSubjectIcon(session.title)}
+                size={24}
+                color={session.color}
+              />
+            </View>
+            <Pressable onPress={onClose} hitSlop={8}>
+              <Ionicons name="close" size={22} color={COLORS.textSecondary} />
+            </Pressable>
+          </View>
+
+          <Text style={styles.sheetTitle}>{session.title}</Text>
+
+          <View style={styles.sheetMetaRow}>
+            <Ionicons name="time-outline" size={16} color={COLORS.textSecondary} />
+            <Text style={styles.sheetMetaText}>
+              {session.start} - {session.end} ({durationMin} min)
+            </Text>
+          </View>
+
+          {session.focus ? (
+            <View style={styles.sheetMetaRow}>
+              <Ionicons name="flash-outline" size={16} color={COLORS.textSecondary} />
+              <Text style={styles.sheetMetaText}>{session.focus}</Text>
+            </View>
+          ) : null}
+
+          <View style={styles.sheetActions}>
+            <Pressable
+              style={[
+                styles.sheetDoneButton,
+                isDone && { backgroundColor: COLORS.success + "20" },
+              ]}
+              onPress={() => onToggleDone(session.id)}
+            >
+              <Ionicons
+                name={isDone ? "checkmark-circle" : "checkmark-circle-outline"}
+                size={20}
+                color={isDone ? COLORS.success : COLORS.accent}
+              />
+              <Text
+                style={[
+                  styles.sheetDoneButtonText,
+                  isDone && { color: COLORS.success },
+                ]}
+              >
+                {isDone ? "Completed" : "Mark as Done"}
+              </Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 };
 
@@ -1905,6 +2240,55 @@ function indexToTime(index: number) {
   const hh = String(hour).padStart(2, "0");
   const mm = String(minute).padStart(2, "0");
   return `${hh}:${mm}`;
+}
+
+function getSubjectIcon(title: string): keyof typeof Ionicons.glyphMap {
+  const lower = title.toLowerCase();
+  if (/math|algebra|calculus|geometry|trigonometry/.test(lower)) return "calculator-outline";
+  if (/literature|reading|english|writing|essay/.test(lower)) return "book-outline";
+  if (/science|physics|chemistry|biology/.test(lower)) return "flask-outline";
+  if (/history/.test(lower)) return "time-outline";
+  if (/programming|code|data.?struct|computer|software/.test(lower)) return "code-slash-outline";
+  if (/music|art|design/.test(lower)) return "color-palette-outline";
+  if (/language|spanish|french|german/.test(lower)) return "language-outline";
+  return "school-outline";
+}
+
+function formatDateStr(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function generateDateStrip(): Date[] {
+  const dates: Date[] = [];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  for (let i = 0; i < 14; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() + i);
+    dates.push(d);
+  }
+  return dates;
+}
+
+function isSameDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+function getWeekdayKey(date: Date): WeekdayKey {
+  const dayNames: WeekdayKey[] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  return dayNames[date.getDay()];
+}
+
+function timeToMinutes(time: string): number {
+  const [h, m] = time.split(":").map(Number);
+  return h * 60 + m;
 }
 
 const createStyles = (COLORS: ThemeColors) =>
@@ -1956,6 +2340,12 @@ const createStyles = (COLORS: ThemeColors) =>
     alignItems: "center",
     gap: SPACING.sm,
   },
+  headerTopBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    alignSelf: "stretch",
+  },
   section: {
     gap: SPACING.lg,
   },
@@ -1974,7 +2364,7 @@ const createStyles = (COLORS: ThemeColors) =>
   coursesActionRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: SPACING.sm,
+    gap: SPACING.xs,
   },
   title: {
     fontSize: 22,
@@ -2034,42 +2424,49 @@ const createStyles = (COLORS: ThemeColors) =>
   importButton: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    backgroundColor: COLORS.subtleCard,
+    gap: 5,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    backgroundColor: COLORS.accent + "14",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
+    borderColor: COLORS.accent + "30",
   },
   clearScheduleButton: {
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    width: 32,
-    height: 32,
+    gap: 5,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "rgba(239,68,68,0.45)",
+    borderColor: "rgba(239,68,68,0.30)",
     backgroundColor: "rgba(239,68,68,0.08)",
+  },
+  clearScheduleText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: COLORS.danger,
   },
   importButtonText: {
     fontSize: 12,
-    color: COLORS.textPrimary,
+    color: COLORS.accent,
     fontWeight: "600",
   },
   addCourseButton: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingVertical: 5,
-    paddingHorizontal: 8,
+    gap: 5,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
     backgroundColor: COLORS.accent,
     borderRadius: 12,
   },
   addCourseText: {
-    fontSize: 11,
+    fontSize: 12,
     color: "#FFFFFF",
-    fontWeight: "700",
+    fontWeight: "600",
   },
   panelCard: {
     backgroundColor: COLORS.card,
@@ -2195,12 +2592,6 @@ const createStyles = (COLORS: ThemeColors) =>
     borderWidth: 1,
     borderColor: COLORS.borderSoft,
   },
-  planGridWrapper: {
-    borderRadius: 16,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-  },
   gridScroll: {
     paddingBottom: 4,
   },
@@ -2213,13 +2604,6 @@ const createStyles = (COLORS: ThemeColors) =>
   },
   dayHeaderCell: {
     width: 57,
-    paddingVertical: 10,
-    borderLeftWidth: 1,
-    borderLeftColor: COLORS.borderSoft,
-    alignItems: "center",
-  },
-  dayHeaderCellSingle: {
-    flex: 1,
     paddingVertical: 10,
     borderLeftWidth: 1,
     borderLeftColor: COLORS.borderSoft,
@@ -2253,12 +2637,6 @@ const createStyles = (COLORS: ThemeColors) =>
   },
   dayColumn: {
     width: 57,
-    borderLeftWidth: 1,
-    borderLeftColor: COLORS.borderSoft,
-    position: "relative",
-  },
-  dayColumnSingle: {
-    flex: 1,
     borderLeftWidth: 1,
     borderLeftColor: COLORS.borderSoft,
     position: "relative",
@@ -2345,28 +2723,268 @@ const createStyles = (COLORS: ThemeColors) =>
     color: "rgba(11,18,32,0.75)",
     textAlign: "center",
   },
-  daysRow: {
-    marginTop: SPACING.sm,
-    paddingVertical: 2,
-    gap: SPACING.sm,
+  dateStripContainer: {
+    paddingVertical: SPACING.xs,
+    gap: 0,
   },
-  dayPill: {
-    paddingHorizontal: SPACING.sm,
+  dateStripItem: {
+    width: DATE_STRIP_ITEM_WIDTH,
+    alignItems: "center",
+    gap: 4,
     paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: COLORS.subtleCard,
-    marginRight: SPACING.sm,
   },
-  dayPillActive: {
+  dateStripDayName: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: COLORS.textMuted,
+    letterSpacing: 0.5,
+  },
+  dateStripDayNameActive: {
+    color: COLORS.accent,
+  },
+  dateStripNumberWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  dateStripNumberWrapActive: {
     backgroundColor: COLORS.accent,
   },
-  dayLabel: {
+  dateStripNumber: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: COLORS.textPrimary,
+  },
+  dateStripNumberActive: {
+    color: "#FFFFFF",
+  },
+  dateStripTodayDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+  },
+  insightBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.xs,
+    backgroundColor: COLORS.subtleCard,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.borderSoft,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+  },
+  insightText: {
     fontSize: 13,
     color: COLORS.textSecondary,
+    fontWeight: "500",
+    flex: 1,
   },
-  dayLabelActive: {
-    color: "#FFFFFF",
+  timelineWrapper: {
+    backgroundColor: COLORS.card,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: COLORS.borderSubtle,
+    padding: SPACING.sm,
+    maxHeight: 600,
+    overflow: "hidden",
+  },
+  timelineHourRow: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    height: HOUR_HEIGHT,
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+  timelineHourLabel: {
+    width: TIMELINE_LEFT_WIDTH,
+    fontSize: 11,
+    color: COLORS.textMuted,
+    fontWeight: "500",
+    textAlign: "right",
+    paddingRight: 10,
+    marginTop: -6,
+  },
+  timelineHourLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: COLORS.borderSoft,
+  },
+  timelineAxis: {
+    position: "absolute",
+    left: TIMELINE_LEFT_WIDTH,
+    width: 2,
+    backgroundColor: COLORS.borderSubtle,
+    borderRadius: 1,
+  },
+  timelineCourseCard: {
+    position: "absolute",
+    left: TIMELINE_LEFT_WIDTH + 12,
+    right: 8,
+    borderRadius: 12,
+    backgroundColor: COLORS.card,
+    borderLeftWidth: 3,
+    borderWidth: 1,
+    borderColor: COLORS.borderSoft,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  timelineCourseCardContent: {
+    flex: 1,
+    gap: 2,
+  },
+  timelineCourseTitle: {
+    fontSize: 13,
     fontWeight: "700",
+    color: COLORS.textPrimary,
+  },
+  timelineCourseTime: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+  },
+  sessionCard: {
+    position: "absolute",
+    left: TIMELINE_LEFT_WIDTH + 12,
+    right: 8,
+    borderRadius: 16,
+    backgroundColor: COLORS.card,
+    borderLeftWidth: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 4,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: COLORS.borderSoft,
+  },
+  sessionCardRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  sessionCardContent: {
+    flex: 1,
+    gap: 2,
+  },
+  sessionCardTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: COLORS.textPrimary,
+  },
+  sessionCardTitleDone: {
+    textDecorationLine: "line-through",
+    color: COLORS.textMuted,
+  },
+  sessionCardTime: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+  },
+  sessionTag: {
+    alignSelf: "flex-start",
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    marginLeft: 26,
+  },
+  sessionTagText: {
+    fontSize: 10,
+    fontWeight: "600",
+  },
+  currentTimeRow: {
+    position: "absolute",
+    left: TIMELINE_LEFT_WIDTH - 4,
+    right: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    zIndex: 10,
+  },
+  currentTimeDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  currentTimeLine: {
+    flex: 1,
+    height: 2,
+    marginLeft: -1,
+  },
+  sheetBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(2,6,23,0.5)",
+    justifyContent: "flex-end",
+  },
+  sheetCard: {
+    backgroundColor: COLORS.card,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: SPACING.lg,
+    paddingTop: SPACING.sm,
+    borderWidth: 1,
+    borderColor: COLORS.borderSubtle,
+    gap: SPACING.md,
+  },
+  sheetHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: COLORS.borderSubtle,
+    alignSelf: "center",
+    marginBottom: SPACING.xs,
+  },
+  sheetHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  sheetIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sheetTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: COLORS.textPrimary,
+  },
+  sheetMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.xs,
+  },
+  sheetMetaText: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+  },
+  sheetActions: {
+    marginTop: SPACING.xs,
+    gap: SPACING.sm,
+  },
+  sheetDoneButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: SPACING.xs,
+    paddingVertical: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.borderSubtle,
+    backgroundColor: COLORS.subtleCard,
+  },
+  sheetDoneButtonText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: COLORS.accent,
   },
   modalBackdrop: {
     flex: 1,

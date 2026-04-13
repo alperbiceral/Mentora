@@ -57,6 +57,16 @@ type Profile = {
   updated_at: string;
 };
 
+type LeaderboardEntry = {
+  rank: number;
+  username: string;
+  full_name: string;
+  university?: string | null;
+  study_hours: number;
+  streak_count: number;
+  profile_photo?: string | null;
+};
+
 type FriendRequest = {
   request_id: number;
   from_username: string;
@@ -140,6 +150,8 @@ export default function HomeScreen() {
   const [notificationsLoading, setNotificationsLoading] = useState(false);
   const [notificationBadgeCount, setNotificationBadgeCount] = useState(0);
   const [chatsTabLastSeen, setChatsTabLastSeen] = useState(0);
+  const [streakRank, setStreakRank] = useState<number | null>(null);
+  const [hoursRank, setHoursRank] = useState<number | null>(null);
 
   const headerTitle = useMemo(() => {
     if (!profile) {
@@ -203,6 +215,32 @@ export default function HomeScreen() {
   }, []);
 
   useFocusEffect(loadProfile);
+
+  useEffect(() => {
+    async function loadRanks() {
+      try {
+        const username = await AsyncStorage.getItem("mentora.username");
+        if (!username) return;
+
+        const [streakRes, hoursRes] = await Promise.all([
+          fetch(`${API_BASE_URL}/profile/leaderboard?metric=streak&limit=50`),
+          fetch(`${API_BASE_URL}/profile/leaderboard?metric=hours&limit=50`),
+        ]);
+
+        if (streakRes.ok) {
+          const data = (await streakRes.json()) as LeaderboardEntry[];
+          const me = data.find((e) => e.username === username);
+          setStreakRank(me?.rank ?? null);
+        }
+        if (hoursRes.ok) {
+          const data = (await hoursRes.json()) as LeaderboardEntry[];
+          const me = data.find((e) => e.username === username);
+          setHoursRank(me?.rank ?? null);
+        }
+      } catch { /* ignore */ }
+    }
+    loadRanks();
+  }, [profile]);
 
   const toTimestampMs = useCallback((value?: string | null) => {
     if (!value) {
@@ -659,7 +697,7 @@ export default function HomeScreen() {
             styles={styles}
           />
 
-          <StudyStatsCard profile={profile} styles={styles} colors={COLORS} />
+          <StudyStatsCard profile={profile} streakRank={streakRank} hoursRank={hoursRank} styles={styles} colors={COLORS} />
 
           <UpcomingSection blocks={upcomingBlocks} styles={styles} colors={COLORS} />
 
@@ -1270,32 +1308,49 @@ const UpcomingSection = ({
 
 const StudyStatsCard = ({
   profile,
+  streakRank,
+  hoursRank,
   styles,
   colors,
 }: {
   profile: Profile | null;
+  streakRank: number | null;
+  hoursRank: number | null;
   styles: any;
   colors: ThemeColors;
 }) => {
   const hours = profile?.study_hours ?? 0;
   const streak = profile?.streak_count ?? 0;
 
+  const formatStudyTime = (h: number) => {
+    const totalSeconds = h * 3600;
+    if (totalSeconds < 60) return `${Math.round(totalSeconds)}sec`;
+    const totalMinutes = h * 60;
+    if (totalMinutes < 60) return `${Math.round(totalMinutes)}min`;
+    return `${h.toFixed(1)}h`;
+  };
+
   return (
     <View style={styles.statsRow}>
       <View style={styles.statCard}>
-        <Ionicons name="flame" size={22} color="#F59E0B" />
+        <Ionicons name="flame" size={20} color="#F59E0B" />
         <Text style={styles.statValue}>{streak}</Text>
-        <Text style={styles.statLabel}>Day Streak</Text>
+        <Text style={styles.statLabel}>Streak</Text>
       </View>
       <View style={styles.statCard}>
-        <Ionicons name="time" size={22} color={colors.accent} />
-        <Text style={styles.statValue}>{hours.toFixed(1)}</Text>
-        <Text style={styles.statLabel}>Study Hours</Text>
+        <Ionicons name="time" size={20} color={colors.accent} />
+        <Text style={styles.statValue}>{formatStudyTime(hours)}</Text>
+        <Text style={styles.statLabel}>Study</Text>
       </View>
       <View style={styles.statCard}>
-        <Ionicons name="trophy" size={22} color={colors.success} />
-        <Text style={styles.statValue}>{Math.floor(hours / 5)}</Text>
-        <Text style={styles.statLabel}>Goals Met</Text>
+        <Ionicons name="podium-outline" size={20} color="#F59E0B" />
+        <Text style={styles.statValue}>{streakRank != null ? `#${streakRank}` : "—"}</Text>
+        <Text style={styles.statLabel}>Streak#</Text>
+      </View>
+      <View style={styles.statCard}>
+        <Ionicons name="trophy-outline" size={20} color={colors.success} />
+        <Text style={styles.statValue}>{hoursRank != null ? `#${hoursRank}` : "—"}</Text>
+        <Text style={styles.statLabel}>Hours#</Text>
       </View>
     </View>
   );
@@ -1404,8 +1459,6 @@ const RecommendationCard = ({
   styles: any;
   colors: ThemeColors;
 }) => {
-  const router = useRouter();
-
   const tips = [
     { text: "Try the Pomodoro technique: 25 min focus, 5 min break.", icon: "timer-outline" as const },
     { text: "Use @emotion in the AI chat to track how you feel today.", icon: "heart-outline" as const },
@@ -1416,22 +1469,13 @@ const RecommendationCard = ({
 
   return (
     <View style={styles.recommendationCard}>
-      <View style={styles.recommendationLeft}>
-        <View style={styles.recommendationIconWrapper}>
-          <Ionicons name={tip.icon} size={18} color={colors.accent} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.recommendationTitle}>Daily Tip</Text>
-          <Text style={styles.recommendationSubtitle}>{tip.text}</Text>
-        </View>
+      <View style={styles.recommendationIconWrapper}>
+        <Ionicons name={tip.icon} size={18} color={colors.accent} />
       </View>
-
-      <Pressable
-        style={styles.recommendationButton}
-        onPress={() => router.push("/(tabs)/study")}
-      >
-        <Text style={styles.recommendationButtonText}>Study now</Text>
-      </Pressable>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.recommendationTitle}>Daily Tip</Text>
+        <Text style={styles.recommendationSubtitle}>{tip.text}</Text>
+      </View>
     </View>
   );
 };
@@ -1943,8 +1987,9 @@ const createStyles = (COLORS: ThemeColors) =>
   statCard: {
     flex: 1,
     backgroundColor: COLORS.card,
-    borderRadius: 16,
+    borderRadius: 14,
     paddingVertical: SPACING.md,
+    paddingHorizontal: 6,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
@@ -1952,17 +1997,17 @@ const createStyles = (COLORS: ThemeColors) =>
     shadowColor: COLORS.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
-    shadowRadius: 6,
+    shadowRadius: 5,
     elevation: 2,
   },
   statValue: {
-    fontSize: 20,
+    fontSize: 17,
     fontWeight: "800",
     color: COLORS.textPrimary,
-    marginTop: 6,
+    marginTop: 4,
   },
   statLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "500",
     color: COLORS.textSecondary,
     marginTop: 2,
@@ -1976,7 +2021,7 @@ const createStyles = (COLORS: ThemeColors) =>
     paddingHorizontal: SPACING.md,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    gap: SPACING.sm,
     shadowColor: COLORS.shadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.06,
@@ -1986,12 +2031,6 @@ const createStyles = (COLORS: ThemeColors) =>
     borderColor: COLORS.borderSoft,
     borderLeftWidth: 3,
     borderLeftColor: COLORS.accent,
-  },
-  recommendationLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-    marginRight: SPACING.sm,
   },
   recommendationIconWrapper: {
     width: 32,
@@ -2011,16 +2050,5 @@ const createStyles = (COLORS: ThemeColors) =>
   recommendationSubtitle: {
     fontSize: 13,
     color: COLORS.textSecondary,
-  },
-  recommendationButton: {
-    paddingVertical: 6,
-    paddingHorizontal: SPACING.sm,
-    borderRadius: 999,
-    backgroundColor: COLORS.accent,
-  },
-  recommendationButtonText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#FFFFFF",
   },
 });
