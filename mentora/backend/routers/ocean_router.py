@@ -25,26 +25,26 @@ class OceanProfile(BaseModel):
 
 # Question trait mappings: [openness, conscientiousness, extraversion, agreeableness, neuroticism]
 QUESTION_TRAITS = [
-    [0, 0, 1, 0, 0],   # 1: konuşkan
-    [0, 0, 1, 0, 0],   # 2: dışa dönük, sosyal
-    [0, 0, -1, 0, 0],  # 3: sessiz olmaya eğilimli
-    [0, 0, 1, 0, 0],   # 4: enerji dolu
-    [0, 0, 0, 1, 0],   # 5: yardımsever, bencil olmayan
-    [0, 0, 0, 1, 0],   # 6: şefkatli, yumuşak kalpli
-    [0, 0, 0, -1, 0],  # 7: başkalarında hata arama eğiliminde
-    [0, 0, 0, -1, 0],  # 8: soğuk ve başkalarını umursamayan
-    [0, 1, 0, 0, 0],   # 9: kolay vazgeçmeyen
-    [0, 1, 0, 0, 0],   # 10: güvenilir, istikrarlı
-    [0, 1, 0, 0, 0],   # 11: etrafını derli toplu tutan
-    [0, -1, 0, 0, 0],  # 12: dağınık olma eğiliminde
-    [0, 0, 0, 0, 1],   # 13: çok endişelenen
-    [0, 0, 0, 0, 1],   # 14: sıkça üzgün hisseden
-    [0, 0, 0, 0, 1],   # 15: gergin olabilen
-    [0, 0, 0, 0, 1],   # 16: ruh hali inişli çıkışlı
-    [1, 0, 0, 0, 0],   # 17: birçok şeye merak duyan
-    [1, 0, 0, 0, 0],   # 18: özgün, yeni fikirler üreten
-    [1, 0, 0, 0, 0],   # 19: yaratıcı
-    [1, 0, 0, 0, 0],   # 20: sanatla çok ilgili
+    [0, 0, 1, 0, 0],   # 1: is talkative
+    [0, 0, 1, 0, 0],   # 2: is outgoing, sociable
+    [0, 0, -1, 0, 0],  # 3: tends to be quiet
+    [0, 0, 1, 0, 0],   # 4: is full of energy
+    [0, 0, 0, 1, 0],   # 5: is helpful and unselfish
+    [0, 0, 0, 1, 0],   # 6: has a forgiving nature
+    [0, 0, 0, -1, 0],  # 7: tends to find fault with others
+    [0, 0, 0, -1, 0],  # 8: is cold and aloof
+    [0, 1, 0, 0, 0],   # 9: perseveres until task is finished
+    [0, 1, 0, 0, 0],   # 10: is a reliable worker
+    [0, 1, 0, 0, 0],   # 11: keeps things neat and organized
+    [0, -1, 0, 0, 0],  # 12: tends to be disorganized
+    [0, 0, 0, 0, 1],   # 13: worries a lot
+    [0, 0, 0, 0, 1],   # 14: often feels sad
+    [0, 0, 0, 0, 1],   # 15: can be tense
+    [0, 0, 0, 0, 1],   # 16: is moody, has ups and downs
+    [1, 0, 0, 0, 0],   # 17: is curious about many things
+    [1, 0, 0, 0, 0],   # 18: is original, comes up with new ideas
+    [1, 0, 0, 0, 0],   # 19: has an active imagination
+    [1, 0, 0, 0, 0],   # 20: values artistic experiences
 ]
 
 # Store answers per user: {user_id: [answers]}

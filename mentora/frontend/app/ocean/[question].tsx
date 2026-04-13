@@ -19,26 +19,26 @@ const OPTIONS = [1, 2, 3, 4, 5];
 type Status = "idle" | "saving" | "saved" | "error";
 
 const QUESTIONS = [
-  "konuşkan",
-  "dışa dönük, sosyal",
-  "sessiz olmaya eğilimli",
-  "enerji dolu",
-  "yardımsever, bencil olmayan",
-  "şefkatli, yumuşak kalpli",
-  "başkalarında hata arama eğiliminde",
-  "soğuk ve başkalarını umursamayan",
-  "kolay vazgeçmeyen",
-  "güvenilir, istikrarlı",
-  "etrafını derli toplu tutan",
-  "dağınık olma eğiliminde",
-  "çok endişelenen",
-  "sıkça üzgün hisseden",
-  "gergin olabilen",
-  "ruh hali inişli çıkışlı",
-  "birçok şeye merak duyan",
-  "özgün, yeni fikirler üreten",
-  "yaratıcı",
-  "sanatla çok ilgili",
+  "is talkative",
+  "is outgoing, sociable",
+  "tends to be quiet",
+  "is full of energy",
+  "is helpful and unselfish with others",
+  "has a forgiving nature",
+  "tends to find fault with others",
+  "is cold and aloof",
+  "perseveres until the task is finished",
+  "is a reliable worker",
+  "keeps things neat and organized",
+  "tends to be disorganized",
+  "worries a lot",
+  "often feels sad",
+  "can be tense",
+  "is moody, has ups and downs",
+  "is curious about many different things",
+  "is original, comes up with new ideas",
+  "has an active imagination",
+  "values artistic, aesthetic experiences",
 ];
 
 export default function OceanQuestionScreen() {
@@ -190,7 +190,7 @@ export default function OceanQuestionScreen() {
 
         <View style={styles.card}>
           <Text style={styles.questionText}>
-            Kendimi {QUESTIONS[questionNumber - 1]} biri olarak görüyorum.
+            I see myself as someone who {QUESTIONS[questionNumber - 1]}.
           </Text>
           <Text style={styles.questionHint}>How true is this statement?</Text>
 
