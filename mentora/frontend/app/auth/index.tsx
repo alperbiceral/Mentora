@@ -55,10 +55,11 @@ export default function AuthScreen() {
   }, [email, password, username, isRegister]);
 
   const canSubmit =
-    emailIsValid &&
+    email.trim().length > 0 &&
     password.trim().length > 0 &&
     (!isRegister || (username.trim().length > 0 && confirmPassword.length > 0)) &&
-    passwordsMatch;
+    passwordsMatch &&
+    (!isRegister || emailIsValid);
 
   const handleSubmit = async () => {
     if (!canSubmit || loading) {
