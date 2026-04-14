@@ -36,6 +36,15 @@ export default function AuthScreen() {
     ? "Use a unique username to stand out in Mentora."
     : "Log in to continue your study flow.";
 
+  const emailIsValid = useMemo(() => {
+    const trimmed = email.trim();
+    if (!trimmed) {
+      return false;
+    }
+    // Practical (not RFC-perfect) email check for UI validation.
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed);
+  }, [email]);
+
   const passwordsMatch = !isRegister || password === confirmPassword;
 
   const payload = useMemo(() => {
@@ -46,7 +55,7 @@ export default function AuthScreen() {
   }, [email, password, username, isRegister]);
 
   const canSubmit =
-    email.trim().length > 0 &&
+    emailIsValid &&
     password.trim().length > 0 &&
     (!isRegister || (username.trim().length > 0 && confirmPassword.length > 0)) &&
     passwordsMatch;
@@ -60,6 +69,11 @@ export default function AuthScreen() {
     setError(null);
 
     try {
+      if (isRegister && !emailIsValid) {
+        setError("Please enter a valid email address.");
+        setLoading(false);
+        return;
+      }
       if (isRegister && password !== confirmPassword) {
         setError("Passwords do not match.");
         setLoading(false);

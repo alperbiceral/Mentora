@@ -54,16 +54,22 @@ export default function EditProfileScreen() {
   const [username, setUsername] = useState("");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
+  const [phoneDigits, setPhoneDigits] = useState("");
   const [university, setUniversity] = useState("");
   const [department, setDepartment] = useState("");
   const [profilePhoto, setProfilePhoto] = useState("");
   const [loading, setLoading] = useState(true);
   const [fieldErrors, setFieldErrors] = useState({
     fullName: "",
+    phone: "",
     university: "",
     department: "",
   });
+
+  const phoneFormatted = useMemo(
+    () => formatPhoneNumber(phoneDigits),
+    [phoneDigits],
+  );
 
   useEffect(() => {
     let active = true;
@@ -98,7 +104,7 @@ export default function EditProfileScreen() {
         setUsername(data.username);
         setFullName(data.full_name);
         setEmail(data.email);
-        setPhone(data.phone_number ?? "");
+        setPhoneDigits(digitsOnly(data.phone_number ?? ""));
         setUniversity(data.university ?? "");
         setDepartment(data.department ?? "");
         setProfilePhoto(data.profile_photo ?? "");
@@ -122,6 +128,10 @@ export default function EditProfileScreen() {
   const handleSave = async () => {
     const nextErrors = {
       fullName: fullName.trim() ? "" : "Required",
+      phone:
+        phoneDigits.length === 0 || phoneDigits.length === 10
+          ? ""
+          : "Phone number must be exactly 10 digits.",
       university: university.trim() ? "" : "Required",
       department: department.trim() ? "" : "Required",
     };
@@ -134,7 +144,7 @@ export default function EditProfileScreen() {
       username,
       full_name: fullName,
       email,
-      phone_number: phone || null,
+      phone_number: phoneDigits || null,
       university: university || null,
       department: department || null,
       profile_photo: profilePhoto || null,
@@ -249,9 +259,17 @@ export default function EditProfileScreen() {
 
           <Field
             label="Phone Number"
-            value={phone}
-            onChangeText={setPhone}
+            value={phoneFormatted}
+            onChangeText={(text) => {
+              const nextDigits = digitsOnly(text).slice(0, 10);
+              setPhoneDigits(nextDigits);
+              if (fieldErrors.phone) {
+                setFieldErrors((prev) => ({ ...prev, phone: "" }));
+              }
+            }}
+            error={fieldErrors.phone}
             keyboardType="phone-pad"
+            placeholder="(___) ___-____"
             styles={styles}
             colors={COLORS}
           />
@@ -361,6 +379,7 @@ type FieldProps = {
     | "number-pad";
   editable?: boolean;
   multiline?: boolean;
+  placeholder?: string;
   styles: any;
   colors: ThemeColors;
 };
@@ -374,6 +393,7 @@ const Field: React.FC<FieldProps> = ({
   keyboardType = "default",
   editable = true,
   multiline = false,
+  placeholder,
   styles,
   colors,
 }) => (
@@ -383,6 +403,7 @@ const Field: React.FC<FieldProps> = ({
       value={value}
       onChangeText={onChangeText}
       style={styles.textInput}
+      placeholder={placeholder}
       placeholderTextColor={colors.textMuted}
       autoCapitalize={autoCapitalize}
       keyboardType={keyboardType}
@@ -392,6 +413,24 @@ const Field: React.FC<FieldProps> = ({
     {error ? <Text style={styles.fieldErrorText}>{error}</Text> : null}
   </View>
 );
+
+function digitsOnly(value: string) {
+  return value.replace(/\D/g, "");
+}
+
+function formatPhoneNumber(digits: string) {
+  const d = digitsOnly(digits).slice(0, 10);
+  if (d.length === 0) {
+    return "";
+  }
+  if (d.length <= 3) {
+    return `(${d}`;
+  }
+  if (d.length <= 6) {
+    return `(${d.slice(0, 3)}) ${d.slice(3)}`;
+  }
+  return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`;
+}
 
 const createStyles = (COLORS: ThemeColors) =>
   StyleSheet.create({

@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Modal,
@@ -44,6 +44,18 @@ export function SettingsModal({
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordLoading, setPasswordLoading] = useState(false);
+
+  useEffect(() => {
+    if (!visible) {
+      setLanguageOpen(false);
+      setPasswordOpen(false);
+      setOldPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setPasswordError(null);
+      setPasswordLoading(false);
+    }
+  }, [visible]);
 
   type SwitchRowProps = {
     label: string;
@@ -99,80 +111,35 @@ export function SettingsModal({
             }}
           >
             <View style={styles.headerRow}>
-              <View style={{ width: 28 }} />
-              <Text style={styles.title}>Settings</Text>
+              {passwordOpen ? (
+                <Pressable
+                  hitSlop={10}
+                  onPress={() => {
+                    setPasswordOpen(false);
+                    setPasswordError(null);
+                    setPasswordLoading(false);
+                    setOldPassword("");
+                    setNewPassword("");
+                    setConfirmPassword("");
+                  }}
+                  style={styles.backBtn}
+                >
+                  <Ionicons
+                    name="chevron-back"
+                    size={20}
+                    color={colors.textPrimary}
+                  />
+                </Pressable>
+              ) : (
+                <View style={{ width: 28 }} />
+              )}
+              <Text style={styles.title}>
+                {passwordOpen ? "Change Password" : "Settings"}
+              </Text>
               <Pressable hitSlop={10} onPress={onClose} style={styles.closeBtn}>
                 <Ionicons name="close" size={20} color={colors.textPrimary} />
               </Pressable>
             </View>
-
-            <View style={styles.rows}>
-              <SettingSwitchRow
-                label="Dark Mode"
-                value={darkMode}
-                onValueChange={setDarkMode}
-                trackOnColor={colors.accentSoft}
-                trackOffColor={colors.borderSubtle}
-                thumbOnColor={colors.accent}
-                thumbOffColor="#FFFFFF"
-              />
-
-              <View style={styles.row}>
-                <Text style={styles.rowLabel}>Language</Text>
-                <View style={styles.languageWrap}>
-                  <Pressable
-                    style={styles.languageButton}
-                    onPress={() => setLanguageOpen((v) => !v)}
-                  >
-                    <Text style={styles.languageText}>{language}</Text>
-                    <Ionicons
-                      name={languageOpen ? "chevron-up" : "chevron-down"}
-                      size={18}
-                      color={colors.textMuted}
-                    />
-                  </Pressable>
-
-                  {languageOpen ? (
-                    <View style={styles.dropdown}>
-                      {languageOptions.map((opt) => {
-                        const selected = opt === language;
-                        return (
-                          <Pressable
-                            key={opt}
-                            style={[
-                              styles.dropdownItem,
-                              selected && styles.dropdownItemSelected,
-                            ]}
-                            onPress={() => {
-                              setLanguage(opt);
-                              setLanguageOpen(false);
-                            }}
-                          >
-                            <Text
-                              style={[
-                                styles.dropdownItemText,
-                                selected && styles.dropdownItemTextSelected,
-                              ]}
-                            >
-                              {opt}
-                            </Text>
-                          </Pressable>
-                        );
-                      })}
-                    </View>
-                  ) : null}
-                </View>
-              </View>
-            </View>
-
-            <Pressable
-              style={styles.changePasswordButton}
-              onPress={() => setPasswordOpen((v) => !v)}
-            >
-              <Text style={styles.changePasswordText}>
-                {passwordOpen ? "Back" : "Change Password"}
-              </Text>
-            </Pressable>
 
             {passwordOpen ? (
               <View style={styles.passwordCard}>
@@ -213,6 +180,12 @@ export function SettingsModal({
                       setPasswordError("Please fill all fields.");
                       return;
                     }
+                    if (oldPassword === newPassword) {
+                      setPasswordError(
+                        "New password cannot be the same as your old password.",
+                      );
+                      return;
+                    }
                     if (newPassword !== confirmPassword) {
                       setPasswordError("Passwords do not match.");
                       return;
@@ -221,7 +194,10 @@ export function SettingsModal({
                     setPasswordLoading(true);
                     try {
                       await onChangePassword(oldPassword, newPassword);
-                      Alert.alert("Password updated");
+                      Alert.alert(
+                        "Password Updated",
+                        "Your password has been updated successfully.",
+                      );
                       setOldPassword("");
                       setNewPassword("");
                       setConfirmPassword("");
@@ -242,11 +218,82 @@ export function SettingsModal({
                   </Text>
                 </Pressable>
               </View>
-            ) : null}
+            ) : (
+              <>
+                <View style={styles.rows}>
+                  <SettingSwitchRow
+                    label="Dark Mode"
+                    value={darkMode}
+                    onValueChange={setDarkMode}
+                    trackOnColor={colors.accentSoft}
+                    trackOffColor={colors.borderSubtle}
+                    thumbOnColor={colors.accent}
+                    thumbOffColor="#FFFFFF"
+                  />
 
-            <Pressable style={styles.logoutButton} onPress={onLogout}>
-              <Text style={styles.logoutText}>Log Out</Text>
-            </Pressable>
+                  <View style={styles.row}>
+                    <Text style={styles.rowLabel}>Language</Text>
+                    <View style={styles.languageWrap}>
+                      <Pressable
+                        style={styles.languageButton}
+                        onPress={() => setLanguageOpen((v) => !v)}
+                      >
+                        <Text style={styles.languageText}>{language}</Text>
+                        <Ionicons
+                          name={languageOpen ? "chevron-up" : "chevron-down"}
+                          size={18}
+                          color={colors.textMuted}
+                        />
+                      </Pressable>
+
+                      {languageOpen ? (
+                        <View style={styles.dropdown}>
+                          {languageOptions.map((opt) => {
+                            const selected = opt === language;
+                            return (
+                              <Pressable
+                                key={opt}
+                                style={[
+                                  styles.dropdownItem,
+                                  selected && styles.dropdownItemSelected,
+                                ]}
+                                onPress={() => {
+                                  setLanguage(opt);
+                                  setLanguageOpen(false);
+                                }}
+                              >
+                                <Text
+                                  style={[
+                                    styles.dropdownItemText,
+                                    selected && styles.dropdownItemTextSelected,
+                                  ]}
+                                >
+                                  {opt}
+                                </Text>
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+                      ) : null}
+                    </View>
+                  </View>
+                </View>
+
+                <Pressable
+                  style={styles.changePasswordButton}
+                  onPress={() => {
+                    setLanguageOpen(false);
+                    setPasswordOpen(true);
+                  }}
+                >
+                  <Text style={styles.changePasswordText}>Change Password</Text>
+                </Pressable>
+
+                <Pressable style={styles.logoutButton} onPress={onLogout}>
+                  <Text style={styles.logoutText}>Log Out</Text>
+                </Pressable>
+              </>
+            )}
           </Pressable>
         </View>
       </Pressable>
@@ -306,6 +353,13 @@ const createStyles = (colors: {
     flex: 1,
   },
   closeBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  backBtn: {
     width: 28,
     height: 28,
     borderRadius: 14,
