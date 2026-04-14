@@ -9,6 +9,7 @@ import React, {
 } from "react";
 import {
   Alert,
+  Animated,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -31,7 +32,6 @@ const SPACING = {
 
 export default function StudyScreen() {
   const { colors: COLORS } = useTheme();
-  const styles = useMemo(() => createStyles(COLORS), [COLORS]);
 
   const [activeTab, setActiveTab] = useState<"normal" | "pomodoro" | "streak">(
     "normal",
@@ -45,8 +45,49 @@ export default function StudyScreen() {
   const [pomodoroBreakInput, setPomodoroBreakInput] = useState("5");
   const [pomodoroCyclesInput, setPomodoroCyclesInput] = useState("4");
 
+  // Helper functions for input validation and conversion
+  const formatNumericInput = (value: string): string => {
+    // Remove all non-digit characters
+    return value.replace(/[^0-9]/g, "");
+  };
+
+  const handleNormalMinutesBlur = (value: string) => {
+    const numericValue = parseInt(value, 10);
+    if (isNaN(numericValue)) {
+      setNormalMinutesInput("0");
+      return;
+    }
+
+    if (numericValue >= 60) {
+      const extraHours = Math.floor(numericValue / 60);
+      const remainingMinutes = numericValue % 60;
+
+      // Update hours
+      const currentHours = parseInt(normalHoursInput, 10) || 0;
+      setNormalHoursInput(String(currentHours + extraHours));
+
+      // Update minutes to the remainder
+      setNormalMinutesInput(String(remainingMinutes));
+    }
+  };
+
+  const handleNumericInput = (
+    value: string,
+    setter: React.Dispatch<React.SetStateAction<string>>,
+  ) => {
+    setter(formatNumericInput(value));
+  };
+
   const [isRunning, setIsRunning] = useState(false);
   const [isOnBreak, setIsOnBreak] = useState(false);
+  const pulseAnim = useRef(new Animated.Value(0)).current;
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const [sessionListContentHeight, setSessionListContentHeight] = useState(0);
+  const [sessionListVisibleHeight, setSessionListVisibleHeight] = useState(0);
+  const styles = useMemo(
+    () => createStyles(COLORS, isOnBreak),
+    [COLORS, isOnBreak],
+  );
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [studySeconds, setStudySeconds] = useState(0);
@@ -128,6 +169,31 @@ export default function StudyScreen() {
     const minutes = parseNonNegativeInt(normalMinutesInput, 0);
     return hours * 3600 + minutes * 60;
   }, [normalHoursInput, normalMinutesInput]);
+
+  // Pulse animation effect when timer is running
+  useEffect(() => {
+    if (!isRunning) {
+      pulseAnim.setValue(0);
+      return;
+    }
+
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 2000,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+
+    animation.start();
+
+    return () => {
+      animation.stop();
+      pulseAnim.setValue(0);
+    };
+  }, [isRunning]);
 
   useEffect(() => {
     if (!isRunning) {
@@ -498,9 +564,6 @@ export default function StudyScreen() {
             <Text style={styles.headerText}>
               Study <Text style={styles.headerAccent}>Timer</Text>
             </Text>
-            <Text style={styles.headerSubtitle}>
-              Track focused time and save every session.
-            </Text>
           </View>
 
           <View style={styles.segmentedControl}>
@@ -568,6 +631,25 @@ export default function StudyScreen() {
 
                 <View style={styles.timerCluster}>
                   <View style={styles.timerAura} />
+                  <Animated.View
+                    style={[
+                      styles.timerPulseRing,
+                      {
+                        transform: [
+                          {
+                            scale: pulseAnim.interpolate({
+                              inputRange: [0, 1.5],
+                              outputRange: [0.8, 1.6],
+                            }),
+                          },
+                        ],
+                        opacity: pulseAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0.45, 0],
+                        }),
+                      },
+                    ]}
+                  />
                   <View style={styles.timerRingOuter}>
                     <View style={styles.timerRingGradient} />
                     <View style={styles.timerRingInner}>
@@ -766,7 +848,9 @@ export default function StudyScreen() {
                       <Text style={styles.inputLabel}>Hours</Text>
                       <TextInput
                         value={normalHoursInput}
-                        onChangeText={setNormalHoursInput}
+                        onChangeText={(value) =>
+                          handleNumericInput(value, setNormalHoursInput)
+                        }
                         style={styles.inputField}
                         keyboardType="number-pad"
                         placeholder="0"
@@ -777,7 +861,12 @@ export default function StudyScreen() {
                       <Text style={styles.inputLabel}>Minutes</Text>
                       <TextInput
                         value={normalMinutesInput}
-                        onChangeText={setNormalMinutesInput}
+                        onChangeText={(value) =>
+                          handleNumericInput(value, setNormalMinutesInput)
+                        }
+                        onBlur={() =>
+                          handleNormalMinutesBlur(normalMinutesInput)
+                        }
                         style={styles.inputField}
                         keyboardType="number-pad"
                         placeholder="30"
@@ -796,7 +885,9 @@ export default function StudyScreen() {
                     <Text style={styles.inputLabel}>Focus</Text>
                     <TextInput
                       value={pomodoroFocusInput}
-                      onChangeText={setPomodoroFocusInput}
+                      onChangeText={(value) =>
+                        handleNumericInput(value, setPomodoroFocusInput)
+                      }
                       style={styles.inputField}
                       keyboardType="number-pad"
                       placeholder="25"
@@ -807,7 +898,9 @@ export default function StudyScreen() {
                     <Text style={styles.inputLabel}>Break</Text>
                     <TextInput
                       value={pomodoroBreakInput}
-                      onChangeText={setPomodoroBreakInput}
+                      onChangeText={(value) =>
+                        handleNumericInput(value, setPomodoroBreakInput)
+                      }
                       style={styles.inputField}
                       keyboardType="number-pad"
                       placeholder="5"
@@ -818,7 +911,9 @@ export default function StudyScreen() {
                     <Text style={styles.inputLabel}>Cycles</Text>
                     <TextInput
                       value={pomodoroCyclesInput}
-                      onChangeText={setPomodoroCyclesInput}
+                      onChangeText={(value) =>
+                        handleNumericInput(value, setPomodoroCyclesInput)
+                      }
                       style={styles.inputField}
                       keyboardType="number-pad"
                       placeholder="4"
@@ -857,41 +952,101 @@ export default function StudyScreen() {
               <Text style={styles.statsTitle}>Recent sessions</Text>
               {loadingSessions ? (
                 <Text style={styles.emptyText}>Loading...</Text>
-              ) : sessions.filter((s) => new Date(s.started_at) <= new Date()).length === 0 ? (
+              ) : sessions.filter((s) => new Date(s.started_at) <= new Date())
+                  .length === 0 ? (
                 <Text style={styles.emptyText}>No sessions yet</Text>
               ) : (
-                <View style={styles.sessionList}>
-                  {sessions
-                    .filter((s) => new Date(s.started_at) <= new Date())
-                    .sort(
-                      (a, b) =>
-                        new Date(b.started_at).getTime() -
-                        new Date(a.started_at).getTime(),
-                    )
-                    .map((session) => (
-                    <View key={session.session_id} style={styles.sessionItem}>
-                      <View style={styles.sessionIcon}>
-                        <Ionicons
-                          name={
-                            session.mode === "pomodoro"
-                              ? "timer-outline"
-                              : "hourglass-outline"
-                          }
-                          size={16}
-                          color={COLORS.textPrimary}
-                        />
-                      </View>
-                      <View style={styles.sessionInfo}>
-                        <Text style={styles.sessionName}>
-                          {session.mode === "pomodoro" ? "Pomodoro" : "Focus"}
-                        </Text>
-                        <Text style={styles.sessionMeta}>
-                          {formatDuration(session.duration_minutes)} •{" "}
-                          {formatDateTime(session.started_at)}
-                        </Text>
-                      </View>
+                <View style={styles.sessionListContainer}>
+                  <Animated.ScrollView
+                    style={styles.sessionListScroll}
+                    showsVerticalScrollIndicator={false}
+                    onScroll={Animated.event(
+                      [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+                      {
+                        useNativeDriver: false,
+                        listener: (event) => {
+                          const {
+                            layoutMeasurement,
+                            contentOffset,
+                            contentSize,
+                          } = event.nativeEvent;
+                          setSessionListVisibleHeight(layoutMeasurement.height);
+                          setSessionListContentHeight(contentSize.height);
+                        },
+                      },
+                    )}
+                    onLayout={(event) => {
+                      setSessionListVisibleHeight(
+                        event.nativeEvent.layout.height,
+                      );
+                    }}
+                    scrollEventThrottle={16}
+                  >
+                    <View
+                      onLayout={(event) => {
+                        setSessionListContentHeight(
+                          event.nativeEvent.layout.height,
+                        );
+                      }}
+                    >
+                      {sessions
+                        .filter((s) => new Date(s.started_at) <= new Date())
+                        .sort(
+                          (a, b) =>
+                            new Date(b.started_at).getTime() -
+                            new Date(a.started_at).getTime(),
+                        )
+                        .map((session) => (
+                          <View
+                            key={session.session_id}
+                            style={styles.sessionItem}
+                          >
+                            <View style={styles.sessionIcon}>
+                              <Ionicons
+                                name={
+                                  session.mode === "pomodoro"
+                                    ? "timer-outline"
+                                    : "hourglass-outline"
+                                }
+                                size={16}
+                                color={COLORS.textPrimary}
+                              />
+                            </View>
+                            <View style={styles.sessionInfo}>
+                              <Text style={styles.sessionName}>
+                                {session.mode === "pomodoro"
+                                  ? "Pomodoro"
+                                  : "Focus"}
+                              </Text>
+                              <Text style={styles.sessionMeta}>
+                                {formatDuration(session.duration_minutes)} •{" "}
+                                {formatDateTime(session.started_at)}
+                              </Text>
+                            </View>
+                          </View>
+                        ))}
                     </View>
-                  ))}
+                  </Animated.ScrollView>
+                  {sessionListContentHeight > sessionListVisibleHeight && (
+                    <View style={styles.scrollbarTrack}>
+                      <Animated.View
+                        style={[
+                          styles.scrollbarThumb,
+                          {
+                            top: scrollY.interpolate({
+                              inputRange: [
+                                0,
+                                sessionListContentHeight -
+                                  sessionListVisibleHeight,
+                              ],
+                              outputRange: [0, sessionListVisibleHeight - 30],
+                              extrapolate: "clamp",
+                            }),
+                          },
+                        ]}
+                      />
+                    </View>
+                  )}
                 </View>
               )}
             </View>
@@ -1057,527 +1212,565 @@ const recordSession = async (
   }
 };
 
-const createStyles = (COLORS: ThemeColors) =>
+const createStyles = (COLORS: ThemeColors, isOnBreak: boolean) =>
   StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  backgroundTop: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: "100%",
-    backgroundColor: COLORS.background,
-  },
-  backgroundBottom: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: "100%",
-    backgroundColor: COLORS.backgroundAlt,
-    opacity: 0.45,
-  },
-  glow: {
-    position: "absolute",
-    top: -120,
-    left: -60,
-    right: -60,
-    height: 260,
-    borderRadius: 260,
-    backgroundColor: "rgba(109,94,247,0.18)",
-    opacity: 0.25,
-  },
-  wrapper: {
-    flex: 1,
-    alignSelf: "center",
-    width: "100%",
-    maxWidth: 430,
-    paddingHorizontal: SPACING.lg,
-  },
-  content: {
-    paddingTop: SPACING.lg,
-    paddingBottom: SPACING.xl * 2,
-    gap: SPACING.lg,
-  },
-  header: {
-    alignItems: "center",
-  },
-  headerText: {
-    fontSize: 24,
-    fontWeight: "800",
-    color: COLORS.textPrimary,
-  },
-  headerAccent: {
-    color: COLORS.accent,
-  },
-  headerSubtitle: {
-    marginTop: 4,
-    fontSize: 13,
-    color: COLORS.textSecondary,
-  },
-  timerCard: {
-    backgroundColor: COLORS.card,
-    borderRadius: 24,
-    paddingVertical: SPACING.lg,
-    paddingHorizontal: SPACING.lg,
-    borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
-    shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.16,
-    shadowRadius: 18,
-    elevation: 6,
-  },
-  sessionTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-    textAlign: "center",
-  },
-  sessionSubtitle: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    textAlign: "center",
-    marginTop: 4,
-    marginBottom: SPACING.lg,
-  },
-  timerCluster: {
-    marginTop: 4,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  timerAura: {
-    position: "absolute",
-    width: 240,
-    height: 240,
-    borderRadius: 120,
-    backgroundColor: "rgba(109,94,247,0.18)",
-    opacity: 0.7,
-  },
-  timerRingOuter: {
-    width: 210,
-    height: 210,
-    borderRadius: 105,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: COLORS.card,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 14 },
-    shadowOpacity: 0.55,
-    shadowRadius: 26,
-    elevation: 12,
-    overflow: "hidden",
-  },
-  timerRingGradient: {
-    position: "absolute",
-    width: 230,
-    height: 230,
-    borderRadius: 115,
-    borderWidth: 10,
-    borderColor: "rgba(167,183,243,0.16)",
-  },
-  timerRingInner: {
-    width: 178,
-    height: 178,
-    borderRadius: 89,
-    borderWidth: 8,
-    borderColor: COLORS.accent,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: COLORS.subtleCard,
-  },
-  timerLabel: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginBottom: 4,
-  },
-  timerText: {
-    fontSize: 38,
-    fontWeight: "900",
-    color: COLORS.textPrimary,
-  },
-  timerHint: {
-    marginTop: 4,
-    fontSize: 11,
-    color: COLORS.textMuted,
-  },
-  timerButtonsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: SPACING.lg,
-    gap: SPACING.sm,
-  },
-  primaryButton: {
-    flex: 1,
-    height: 48,
-    borderRadius: 999,
-    backgroundColor: COLORS.accent,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: COLORS.accent,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 5,
-  },
-  primaryButtonText: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: "#FFFFFF",
-  },
-  secondaryButton: {
-    flex: 1,
-    height: 48,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: COLORS.subtleCard,
-  },
-  secondaryButtonText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-  },
-  statsSection: {
-    marginTop: SPACING.lg,
-  },
-  statsTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-    marginBottom: SPACING.sm,
-  },
-  statsRow: {
-    flexDirection: "row",
-    gap: SPACING.sm,
-  },
-  emptyText: {
-    fontSize: 13,
-    color: COLORS.textMuted,
-  },
-  segmentedControl: {
-    flexDirection: "row",
-    backgroundColor: COLORS.subtleCard,
-    borderRadius: 999,
-    padding: 6,
-    borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
-    gap: 6,
-  },
-  segmentButton: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 999,
-    alignItems: "center",
-  },
-  segmentButtonActive: {
-    backgroundColor: COLORS.accent,
-  },
-  segmentText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: COLORS.textSecondary,
-  },
-  segmentTextActive: {
-    color: "#FFFFFF",
-  },
-  settingsBlock: {
-    marginTop: SPACING.lg,
-    gap: SPACING.sm,
-  },
-  toggleRow: {
-    flexDirection: "row",
-    gap: SPACING.sm,
-  },
-  toggleButton: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
-    alignItems: "center",
-    backgroundColor: COLORS.subtleCard,
-  },
-  toggleButtonActive: {
-    borderColor: COLORS.accent,
-    backgroundColor: "rgba(109,94,247,0.2)",
-  },
-  toggleText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: COLORS.textSecondary,
-  },
-  toggleTextActive: {
-    color: COLORS.textPrimary,
-  },
-  inputRow: {
-    flexDirection: "row",
-    gap: SPACING.sm,
-  },
-  inputGroup: {
-    flex: 1,
-  },
-  inputLabel: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginBottom: 6,
-  },
-  inputField: {
-    height: 44,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
-    paddingHorizontal: 12,
-    color: COLORS.textPrimary,
-    backgroundColor: COLORS.inputBg,
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  todoCard: {
-    marginTop: SPACING.lg,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.sm,
-    backgroundColor: COLORS.card,
-    borderRadius: 16,
-    padding: SPACING.md,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-  },
-  todoText: {
-    color: COLORS.textSecondary,
-    fontSize: 13,
-  },
-  sessionList: {
-    gap: SPACING.sm,
-  },
-  sessionItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.sm,
-    padding: SPACING.md,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-    backgroundColor: COLORS.card,
-  },
-  sessionIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "rgba(109,94,247,0.2)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  sessionInfo: {
-    flex: 1,
-  },
-  sessionName: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-  },
-  sessionMeta: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginTop: 2,
-  },
-  questionLoadingContainer: {
-    marginTop: SPACING.lg,
-    padding: SPACING.xl,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  questionLoadingText: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    fontWeight: "600",
-  },
-  questionResultContainer: {
-    marginTop: SPACING.lg,
-    padding: SPACING.xl,
-    alignItems: "center",
-    gap: SPACING.sm,
-  },
-  questionResultTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: COLORS.textPrimary,
-    marginTop: SPACING.sm,
-  },
-  questionResultSubtitle: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    textAlign: "center",
-  },
-  streakMainContainer: {
-    marginTop: SPACING.xl,
-    marginBottom: SPACING.xl,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: SPACING.lg,
-  },
-  bigAnswerButton: {
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    backgroundColor: COLORS.accent,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: COLORS.accent,
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.5,
-    shadowRadius: 24,
-    elevation: 12,
-    borderWidth: 8,
-    borderColor: "rgba(109,94,247,0.3)",
-  },
-  bigAnswerButtonText: {
-    fontSize: 28,
-    fontWeight: "900",
-    color: "#FFFFFF",
-    letterSpacing: 1,
-  },
-  bigAnswerButtonDisabled: {
-    opacity: 0.6,
-  },
-  answerButton: {
-    marginTop: SPACING.lg,
-    height: 56,
-    borderRadius: 999,
-    backgroundColor: COLORS.accent,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: COLORS.accent,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 20,
-    elevation: 8,
-  },
-  answerButtonText: {
-    fontSize: 18,
-    fontWeight: "900",
-    color: "#FFFFFF",
-    letterSpacing: 0.5,
-  },
-  questionContainer: {
-    marginTop: SPACING.lg,
-    gap: SPACING.md,
-  },
-  streakBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    alignSelf: "center",
-    backgroundColor: "rgba(245,158,11,0.15)",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(245,158,11,0.3)",
-  },
-  streakText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#F59E0B",
-  },
-  timerBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    alignSelf: "center",
-    backgroundColor: "rgba(109,94,247,0.15)",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
-  },
-  questionTimerText: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: COLORS.textPrimary,
-  },
-  timerTextUrgent: {
-    color: "#EF4444",
-  },
-  questionText: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: COLORS.textPrimary,
-    lineHeight: 22,
-    marginTop: SPACING.sm,
-    marginBottom: SPACING.sm,
-  },
-  optionsContainer: {
-    gap: SPACING.sm,
-  },
-  optionButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.sm,
-    padding: SPACING.md,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: COLORS.borderSubtle,
-    backgroundColor: COLORS.card,
-  },
-  optionButtonSelected: {
-    borderColor: COLORS.accent,
-    backgroundColor: "rgba(109,94,247,0.15)",
-  },
-  optionButtonCorrect: {
-    borderColor: COLORS.success,
-    backgroundColor: "rgba(16,185,129,0.15)",
-  },
-  optionButtonWrong: {
-    borderColor: COLORS.danger,
-    backgroundColor: "rgba(239,68,68,0.15)",
-  },
-  optionKeyCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: COLORS.accent,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  optionKeyText: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: "#FFFFFF",
-  },
-  optionLabel: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: "600",
-    color: COLORS.textPrimary,
-    lineHeight: 20,
-  },
-  submitButton: {
-    marginTop: SPACING.sm,
-    height: 48,
-    borderRadius: 999,
-    backgroundColor: COLORS.accent,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: COLORS.accent,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 5,
-  },
-  submitButtonDisabled: {
-    opacity: 0.5,
-  },
-  submitButtonText: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: "#FFFFFF",
-  },
-});
+    safeArea: {
+      flex: 1,
+      backgroundColor: COLORS.background,
+    },
+    backgroundTop: {
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: 0,
+      height: "100%",
+      backgroundColor: COLORS.background,
+    },
+    backgroundBottom: {
+      position: "absolute",
+      bottom: 0,
+      left: 0,
+      right: 0,
+      height: "100%",
+      backgroundColor: COLORS.backgroundAlt,
+      opacity: 0.45,
+    },
+    glow: {
+      position: "absolute",
+      top: -120,
+      left: -60,
+      right: -60,
+      height: 260,
+      borderRadius: 260,
+      backgroundColor: "rgba(109,94,247,0.18)",
+      opacity: 0.25,
+    },
+    wrapper: {
+      flex: 1,
+      alignSelf: "center",
+      width: "100%",
+      maxWidth: 430,
+      paddingHorizontal: SPACING.lg,
+    },
+    content: {
+      paddingTop: SPACING.lg,
+      paddingBottom: SPACING.xl * 2,
+      gap: SPACING.lg,
+    },
+    header: {
+      alignItems: "center",
+    },
+    headerText: {
+      fontSize: 24,
+      fontWeight: "800",
+      color: COLORS.textPrimary,
+    },
+    headerAccent: {
+      color: COLORS.accent,
+    },
+    headerSubtitle: {
+      marginTop: 4,
+      fontSize: 13,
+      color: COLORS.textSecondary,
+    },
+    timerCard: {
+      backgroundColor: COLORS.card,
+      borderRadius: 24,
+      paddingVertical: SPACING.lg,
+      paddingHorizontal: SPACING.lg,
+      borderWidth: 1,
+      borderColor: COLORS.borderSubtle,
+      shadowColor: COLORS.shadow,
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.16,
+      shadowRadius: 18,
+      elevation: 6,
+    },
+    sessionTitle: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: COLORS.textPrimary,
+      textAlign: "center",
+    },
+    sessionSubtitle: {
+      fontSize: 13,
+      color: COLORS.textSecondary,
+      textAlign: "center",
+      marginTop: 4,
+      marginBottom: SPACING.lg,
+    },
+    timerCluster: {
+      marginTop: 4,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    timerAura: {
+      position: "absolute",
+      width: 240,
+      height: 240,
+      borderRadius: 120,
+      backgroundColor: isOnBreak
+        ? "rgba(119,221,119,0.18)"
+        : "rgba(109,94,247,0.18)",
+      opacity: 0.7,
+    },
+    timerPulseRing: {
+      position: "absolute",
+      width: 210,
+      height: 210,
+      borderRadius: 105,
+      borderWidth: 4,
+      borderColor: isOnBreak ? "#77dd77" : COLORS.accent,
+    },
+    timerRingOuter: {
+      width: 210,
+      height: 210,
+      borderRadius: 105,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: COLORS.card,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 14 },
+      shadowOpacity: 0.55,
+      shadowRadius: 26,
+      elevation: 12,
+      overflow: "hidden",
+    },
+    timerRingGradient: {
+      position: "absolute",
+      width: 230,
+      height: 230,
+      borderRadius: 115,
+      borderWidth: 10,
+      borderColor: isOnBreak
+        ? "rgba(119,221,119,0.3)"
+        : "rgba(167,183,243,0.16)",
+    },
+    timerRingInner: {
+      width: 178,
+      height: 178,
+      borderRadius: 89,
+      borderWidth: 8,
+      borderColor: isOnBreak ? "#77dd77" : COLORS.accent,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: COLORS.subtleCard,
+    },
+    timerLabel: {
+      fontSize: 12,
+      color: COLORS.textSecondary,
+      marginBottom: 4,
+    },
+    timerText: {
+      fontSize: 38,
+      fontWeight: "900",
+      color: COLORS.textPrimary,
+    },
+    timerHint: {
+      marginTop: 4,
+      fontSize: 11,
+      color: COLORS.textMuted,
+    },
+    timerButtonsRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      marginTop: SPACING.lg,
+      gap: SPACING.sm,
+    },
+    primaryButton: {
+      flex: 1,
+      height: 48,
+      borderRadius: 999,
+      backgroundColor: COLORS.accent,
+      alignItems: "center",
+      justifyContent: "center",
+      shadowColor: COLORS.accent,
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.3,
+      shadowRadius: 16,
+      elevation: 5,
+    },
+    primaryButtonText: {
+      fontSize: 14,
+      fontWeight: "800",
+      color: "#FFFFFF",
+    },
+    secondaryButton: {
+      flex: 1,
+      height: 48,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: COLORS.borderSubtle,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: COLORS.subtleCard,
+    },
+    secondaryButtonText: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: COLORS.textPrimary,
+    },
+    statsSection: {
+      marginTop: SPACING.lg,
+    },
+    statsTitle: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: COLORS.textPrimary,
+      marginBottom: SPACING.sm,
+    },
+    statsRow: {
+      flexDirection: "row",
+      gap: SPACING.sm,
+    },
+    emptyText: {
+      fontSize: 13,
+      color: COLORS.textMuted,
+    },
+    segmentedControl: {
+      flexDirection: "row",
+      backgroundColor: COLORS.subtleCard,
+      borderRadius: 999,
+      padding: 6,
+      borderWidth: 1,
+      borderColor: COLORS.borderSubtle,
+      gap: 6,
+    },
+    segmentButton: {
+      flex: 1,
+      paddingVertical: 8,
+      borderRadius: 999,
+      alignItems: "center",
+    },
+    segmentButtonActive: {
+      backgroundColor: COLORS.accent,
+    },
+    segmentText: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: COLORS.textSecondary,
+    },
+    segmentTextActive: {
+      color: "#FFFFFF",
+    },
+    settingsBlock: {
+      marginTop: SPACING.lg,
+      gap: SPACING.sm,
+    },
+    toggleRow: {
+      flexDirection: "row",
+      gap: SPACING.sm,
+    },
+    toggleButton: {
+      flex: 1,
+      paddingVertical: 10,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: COLORS.borderSubtle,
+      alignItems: "center",
+      backgroundColor: COLORS.subtleCard,
+    },
+    toggleButtonActive: {
+      borderColor: COLORS.accent,
+      backgroundColor: "rgba(109,94,247,0.2)",
+    },
+    toggleText: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: COLORS.textSecondary,
+    },
+    toggleTextActive: {
+      color: COLORS.textPrimary,
+    },
+    inputRow: {
+      flexDirection: "row",
+      gap: SPACING.sm,
+    },
+    inputGroup: {
+      flex: 1,
+    },
+    inputLabel: {
+      fontSize: 12,
+      color: COLORS.textSecondary,
+      marginBottom: 6,
+    },
+    inputField: {
+      height: 44,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: COLORS.borderSubtle,
+      paddingHorizontal: 12,
+      color: COLORS.textPrimary,
+      backgroundColor: COLORS.inputBg,
+      fontSize: 14,
+      fontWeight: "600",
+    },
+    todoCard: {
+      marginTop: SPACING.lg,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: SPACING.sm,
+      backgroundColor: COLORS.card,
+      borderRadius: 16,
+      padding: SPACING.md,
+      borderWidth: 1,
+      borderColor: COLORS.borderSoft,
+    },
+    todoText: {
+      color: COLORS.textSecondary,
+      fontSize: 13,
+    },
+    sessionList: {
+      gap: SPACING.sm,
+    },
+    sessionListContainer: {
+      position: "relative",
+      maxHeight: 300,
+      minHeight: 40,
+    },
+    sessionListScroll: {
+      maxHeight: 300,
+    },
+    scrollbarTrack: {
+      position: "absolute",
+      right: 0,
+      top: 0,
+      bottom: 0,
+      width: 10,
+      borderRadius: 3,
+      opacity: 0.3,
+    },
+    scrollbarThumb: {
+      position: "absolute",
+      right: 0,
+      width: 10,
+      backgroundColor: COLORS.accent,
+      borderRadius: 6,
+      minHeight: 30,
+      maxHeight: 100,
+    },
+    sessionItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: SPACING.sm,
+      padding: SPACING.md,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: COLORS.borderSoft,
+      backgroundColor: COLORS.card,
+    },
+    sessionIcon: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: "rgba(109,94,247,0.2)",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    sessionInfo: {
+      flex: 1,
+    },
+    sessionName: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: COLORS.textPrimary,
+    },
+    sessionMeta: {
+      fontSize: 12,
+      color: COLORS.textSecondary,
+      marginTop: 2,
+    },
+    questionLoadingContainer: {
+      marginTop: SPACING.lg,
+      padding: SPACING.xl,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    questionLoadingText: {
+      fontSize: 14,
+      color: COLORS.textSecondary,
+      fontWeight: "600",
+    },
+    questionResultContainer: {
+      marginTop: SPACING.lg,
+      padding: SPACING.xl,
+      alignItems: "center",
+      gap: SPACING.sm,
+    },
+    questionResultTitle: {
+      fontSize: 18,
+      fontWeight: "800",
+      color: COLORS.textPrimary,
+      marginTop: SPACING.sm,
+    },
+    questionResultSubtitle: {
+      fontSize: 14,
+      color: COLORS.textSecondary,
+      textAlign: "center",
+    },
+    streakMainContainer: {
+      marginTop: SPACING.xl,
+      marginBottom: SPACING.xl,
+      alignItems: "center",
+      justifyContent: "center",
+      gap: SPACING.lg,
+    },
+    bigAnswerButton: {
+      width: 200,
+      height: 200,
+      borderRadius: 100,
+      backgroundColor: COLORS.accent,
+      alignItems: "center",
+      justifyContent: "center",
+      shadowColor: COLORS.accent,
+      shadowOffset: { width: 0, height: 12 },
+      shadowOpacity: 0.5,
+      shadowRadius: 24,
+      elevation: 12,
+      borderWidth: 8,
+      borderColor: "rgba(109,94,247,0.3)",
+    },
+    bigAnswerButtonText: {
+      fontSize: 28,
+      fontWeight: "900",
+      color: "#FFFFFF",
+      letterSpacing: 1,
+    },
+    bigAnswerButtonDisabled: {
+      opacity: 0.6,
+    },
+    answerButton: {
+      marginTop: SPACING.lg,
+      height: 56,
+      borderRadius: 999,
+      backgroundColor: COLORS.accent,
+      alignItems: "center",
+      justifyContent: "center",
+      shadowColor: COLORS.accent,
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.4,
+      shadowRadius: 20,
+      elevation: 8,
+    },
+    answerButtonText: {
+      fontSize: 18,
+      fontWeight: "900",
+      color: "#FFFFFF",
+      letterSpacing: 0.5,
+    },
+    questionContainer: {
+      marginTop: SPACING.lg,
+      gap: SPACING.md,
+    },
+    streakBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      alignSelf: "center",
+      backgroundColor: "rgba(245,158,11,0.15)",
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: "rgba(245,158,11,0.3)",
+    },
+    streakText: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: "#F59E0B",
+    },
+    timerBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      alignSelf: "center",
+      backgroundColor: "rgba(109,94,247,0.15)",
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: COLORS.borderSubtle,
+    },
+    questionTimerText: {
+      fontSize: 16,
+      fontWeight: "800",
+      color: COLORS.textPrimary,
+    },
+    timerTextUrgent: {
+      color: "#EF4444",
+    },
+    questionText: {
+      fontSize: 15,
+      fontWeight: "600",
+      color: COLORS.textPrimary,
+      lineHeight: 22,
+      marginTop: SPACING.sm,
+      marginBottom: SPACING.sm,
+    },
+    optionsContainer: {
+      gap: SPACING.sm,
+    },
+    optionButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: SPACING.sm,
+      padding: SPACING.md,
+      borderRadius: 12,
+      borderWidth: 1.5,
+      borderColor: COLORS.borderSubtle,
+      backgroundColor: COLORS.card,
+    },
+    optionButtonSelected: {
+      borderColor: COLORS.accent,
+      backgroundColor: "rgba(109,94,247,0.15)",
+    },
+    optionButtonCorrect: {
+      borderColor: COLORS.success,
+      backgroundColor: "rgba(16,185,129,0.15)",
+    },
+    optionButtonWrong: {
+      borderColor: COLORS.danger,
+      backgroundColor: "rgba(239,68,68,0.15)",
+    },
+    optionKeyCircle: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: COLORS.accent,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    optionKeyText: {
+      fontSize: 14,
+      fontWeight: "800",
+      color: "#FFFFFF",
+    },
+    optionLabel: {
+      flex: 1,
+      fontSize: 14,
+      fontWeight: "600",
+      color: COLORS.textPrimary,
+      lineHeight: 20,
+    },
+    submitButton: {
+      marginTop: SPACING.sm,
+      height: 48,
+      borderRadius: 999,
+      backgroundColor: COLORS.accent,
+      alignItems: "center",
+      justifyContent: "center",
+      shadowColor: COLORS.accent,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.3,
+      shadowRadius: 12,
+      elevation: 5,
+    },
+    submitButtonDisabled: {
+      opacity: 0.5,
+    },
+    submitButtonText: {
+      fontSize: 15,
+      fontWeight: "800",
+      color: "#FFFFFF",
+    },
+  });
