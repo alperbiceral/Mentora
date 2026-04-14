@@ -654,7 +654,7 @@ export default function HomeScreen() {
               const endMins = eh * 60 + em;
               if (endMins > nowMins && startMins < nowMins + 180) {
                 upcoming.push({
-                  courseName: c.name,
+                  courseName: (c.name as string).split(" - ")[0]?.trim() || c.name,
                   color: c.color || "#6D5EF7",
                   start: b.start,
                   end: b.end,

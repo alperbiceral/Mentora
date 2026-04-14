@@ -580,6 +580,7 @@ async def create_course(payload: CourseCreate, db: Session = Depends(get_db)):
     course = Course(
         username=payload.username,
         name=payload.name,
+        section=(payload.section or "").strip() or None,
         description=payload.description,
         instructor=payload.instructor,
         location=payload.location,
@@ -616,6 +617,7 @@ async def update_course(
         )
 
     course.name = payload.name
+    course.section = (payload.section or "").strip() or None
     course.description = payload.description
     course.instructor = payload.instructor
     course.location = payload.location
@@ -664,18 +666,21 @@ async def import_schedule(
     prompt = (
         "You are given a university timetable/schedule image. Extract ALL courses and return "
         "ONLY valid JSON with this exact schema: "
-        "[{\"name\": string, \"location\": string, \"description\": string, "
+        "[{\"name\": string, \"section\": string, \"location\": string, \"description\": string, "
         "\"blocks\": [{\"day\": \"Mon|Tue|Wed|Thu|Fri|Sat|Sun\", "
         "\"start\": \"HH:MM\", \"end\": \"HH:MM\"}]}]. "
         "IMPORTANT: "
-        "1. Each course should appear ONLY ONCE in the array. "
+        "1. Each distinct (course code + section) pair should appear ONLY ONCE in the array; "
+        "if the same code has different sections, use separate objects. "
         "2. If a course has multiple time slots (e.g., Tuesday and Friday), include ALL blocks in the same course object. "
         "3. Use 24-hour time format, always pad hours and minutes with 0 (e.g., 09:30, not 9:30). "
         "4. Read time intervals carefully from the schedule grid. "
         "5. Days must be one of: Mon, Tue, Wed, Thu, Fri, Sat, Sun. "
         "6. Merge adjacent blocks if they are the same course with <=15 minutes gap. "
-        "7. Extract course codes (e.g., CS464, MATH101) as the name field. "
-        "Do NOT include extra fields. Return ONLY the JSON array, no markdown formatting."
+        "7. \"name\" must be the course CODE ONLY (e.g., CS458, MATH101). "
+        "Do NOT put section, lab group, or lecture number text in name; use \"section\" only. "
+        "8. \"section\" is optional: use a short section identifier if visible (e.g., 2, A, B1); otherwise \"\". "
+        "9. No extra fields beyond the schema. Return ONLY the JSON array, no markdown formatting."
     )
 
     image_part = types.Part.from_bytes(
@@ -709,37 +714,40 @@ async def import_schedule(
             db.delete(course)
         db.commit()
 
-    # Merge courses with the same name
+    # Merge courses with the same (code, section) key
     merged_courses: dict[str, dict[str, Any]] = {}
     for payload in parsed_courses:
         name = str(payload.get("name", "")).strip()
         if not name:
             continue
-        
+        section_raw = str(payload.get("section", "") or "").strip()
+        merge_key = f"{name.lower()}|{section_raw.lower()}"
+
         raw_blocks = payload.get("blocks") or []
         blocks = _clean_blocks(raw_blocks)
         if not blocks:
             continue
-        
-        if name in merged_courses:
-            # Merge blocks for the same course
-            merged_courses[name]["blocks"].extend(blocks)
+
+        if merge_key in merged_courses:
+            merged_courses[merge_key]["blocks"].extend(blocks)
             if OCR_DEBUG:
-                logger.info(f"Merging course '{name}' - Added {len(blocks)} blocks")
+                logger.info(f"Merging course '{name}' (section={section_raw!r}) - Added {len(blocks)} blocks")
         else:
-            merged_courses[name] = {
+            merged_courses[merge_key] = {
                 "name": name,
+                "section": section_raw or None,
                 "description": str(payload.get("description", "")).strip(),
                 "location": str(payload.get("location", "")).strip(),
                 "blocks": blocks,
             }
-    
+
     # Create Course objects from merged data
     created_courses = []
-    for index, (course_name, course_data) in enumerate(merged_courses.items()):
+    for index, (_merge_key, course_data) in enumerate(merged_courses.items()):
         course = Course(
             username=username,
             name=course_data["name"],
+            section=course_data.get("section"),
             description=course_data["description"],
             instructor="",
             location=course_data["location"],

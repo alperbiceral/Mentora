@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 
-from database import engine
+from database import engine, ensure_schema_patches
 from routers.auth_router import router as auth_router
 from routers.chat_router import router as chat_router
 from routers.courses_router import router as courses_router
@@ -18,8 +18,9 @@ from routers.ai_assistant_router import router as ai_assistant_router
 from routers.notification_router import router as notification_router
 import models
 
-# Create tables
+# Create tables, then apply idempotent patches for existing DBs
 models.Base.metadata.create_all(bind=engine)
+ensure_schema_patches()
 
 logging.basicConfig(level=logging.INFO)
 app = FastAPI(title="Mentora API")

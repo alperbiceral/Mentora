@@ -102,6 +102,7 @@ class CourseBlockCreate(BaseModel):
 class CourseCreate(BaseModel):
     username: str
     name: str
+    section: Optional[str] = None
     description: Optional[str] = None
     instructor: Optional[str] = None
     location: Optional[str] = None
@@ -112,6 +113,7 @@ class CourseCreate(BaseModel):
 class CourseUpdate(BaseModel):
     username: str
     name: str
+    section: Optional[str] = None
     description: Optional[str] = None
     instructor: Optional[str] = None
     location: Optional[str] = None
@@ -133,6 +135,7 @@ class CourseResponse(BaseModel):
     course_id: int
     username: str
     name: str
+    section: Optional[str] = None
     description: Optional[str]
     instructor: Optional[str]
     location: Optional[str]

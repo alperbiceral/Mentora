@@ -16,6 +16,7 @@ import {
   TextInput,
   UIManager,
   View,
+  type ViewStyle,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
@@ -44,6 +45,7 @@ type Mode = "courses" | "study";
 type Course = {
   id: string;
   name: string;
+  section?: string;
   description: string;
   instructor: string;
   location: string;
@@ -100,6 +102,7 @@ type CourseApi = {
   course_id: number;
   username: string;
   name: string;
+  section?: string | null;
   description?: string | null;
   instructor?: string | null;
   location?: string | null;
@@ -112,8 +115,11 @@ const DAYS: WeekdayKey[] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const START_HOUR = 6;
 const END_HOUR = 24;
 const SLOT_MINUTES = 30;
-const SLOT_HEIGHT = 22;
-const GRID_MAX_HEIGHT = 820;
+/** Weekly / draft grid: one row per half-hour (readability). */
+const SLOT_HEIGHT = 30;
+const DAY_COLUMN_WIDTH = 82;
+const TIME_COLUMN_WIDTH = 42;
+const GRID_MAX_HEIGHT = 1100;
 const DRAFT_GRID_MAX_HEIGHT = 640;
 const HOUR_HEIGHT = 80;
 const TIMELINE_LEFT_WIDTH = 50;
@@ -121,6 +127,18 @@ const COMPLETED_SESSIONS_KEY = "mentora.completedSessions";
 const SHORT_DAY_NAMES = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 
 const TIME_SLOTS = buildTimeSlots(START_HOUR, END_HOUR, SLOT_MINUTES);
+
+/** Subtle elevation for weekly course/study blocks (theme-agnostic shadow). */
+const WEEKLY_BLOCK_CARD_EXTRAS = Platform.select<ViewStyle>({
+  web: { boxShadow: "0 1px 3px rgba(0,0,0,0.14)" } as ViewStyle,
+  ios: {
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.12,
+    shadowRadius: 2,
+  },
+  default: { elevation: 2 },
+});
 
 const INITIAL_COURSES: Course[] = [];
 const INITIAL_BLOCKS: CourseBlock[] = [];
@@ -184,6 +202,7 @@ export default function ScheduleScreen() {
   );
   const [modalCourseForm, setModalCourseForm] = useState({
     name: "",
+    section: "",
     description: "",
     instructor: "",
     location: "",
@@ -247,6 +266,7 @@ export default function ScheduleScreen() {
       const mappedCourses: Course[] = data.map((course) => ({
         id: String(course.course_id),
         name: course.name,
+        section: course.section ?? undefined,
         description: course.description ?? "",
         instructor: course.instructor ?? "",
         location: course.location ?? "",
@@ -494,6 +514,7 @@ export default function ScheduleScreen() {
       const mappedCourses: Course[] = data.map((course) => ({
         id: String(course.course_id),
         name: course.name,
+        section: course.section ?? undefined,
         description: course.description ?? "",
         instructor: course.instructor ?? "",
         location: course.location ?? "",
@@ -577,6 +598,7 @@ export default function ScheduleScreen() {
       const payload = {
         username,
         name: modalCourseForm.name.trim(),
+        section: modalCourseForm.section.trim() || null,
         description: modalCourseForm.description.trim(),
         instructor: modalCourseForm.instructor.trim() || "Instructor TBD",
         location: modalCourseForm.location.trim() || "Location TBD",
@@ -606,6 +628,7 @@ export default function ScheduleScreen() {
       const mappedCourse: Course = {
         id: String(savedCourse.course_id),
         name: savedCourse.name,
+        section: savedCourse.section ?? undefined,
         description: savedCourse.description ?? "",
         instructor: savedCourse.instructor ?? "",
         location: savedCourse.location ?? "",
@@ -636,6 +659,7 @@ export default function ScheduleScreen() {
       }
       setModalCourseForm({
         name: "",
+        section: "",
         description: "",
         instructor: "",
         location: "",
@@ -714,6 +738,7 @@ export default function ScheduleScreen() {
     setEditingCourseId(null);
     setModalCourseForm({
       name: "",
+      section: "",
       description: "",
       instructor: "",
       location: "",
@@ -727,8 +752,10 @@ export default function ScheduleScreen() {
   function handleEditCourse(course: Course) {
     setModalMode("edit");
     setEditingCourseId(course.id);
+    const legacySection = getLegacySectionFromCourseName(course.name);
     setModalCourseForm({
-      name: course.name,
+      name: getCourseCodeLabel(course),
+      section: (course.section?.trim() || legacySection) ?? "",
       description: course.description,
       instructor: course.instructor,
       location: course.location,
@@ -1111,6 +1138,7 @@ type CourseModalProps = {
   mode: "add" | "edit";
   courseForm: {
     name: string;
+    section: string;
     description: string;
     instructor: string;
     location: string;
@@ -1182,7 +1210,7 @@ const CourseModal: React.FC<CourseModalProps> = ({
               onChangeText={(text) =>
                 onChangeCourseForm({ ...courseForm, name: text })
               }
-              placeholder="Course name"
+              placeholder="Course code (e.g. CS 458)"
               placeholderTextColor={COLORS.textMuted}
               style={styles.input}
             />
@@ -1197,6 +1225,15 @@ const CourseModal: React.FC<CourseModalProps> = ({
             />
           </View>
           <View style={styles.formRow}>
+            <TextInput
+              value={courseForm.section}
+              onChangeText={(text) =>
+                onChangeCourseForm({ ...courseForm, section: text })
+              }
+              placeholder="Section (optional)"
+              placeholderTextColor={COLORS.textMuted}
+              style={styles.input}
+            />
             <TextInput
               value={courseForm.location}
               onChangeText={(text) =>
@@ -1324,7 +1361,7 @@ const CourseLegend: React.FC<CourseLegendProps> = ({ courses, loading }) => {
           <View key={course.id} style={styles.legendItem}>
             <View style={[styles.legendDot, { backgroundColor: course.color }]} />
             <Text style={styles.legendLabel} numberOfLines={1}>
-              {course.name.split(" - ")[0]}
+              {getCourseCodeLabel(course)}
             </Text>
           </View>
         ))
@@ -1393,14 +1430,70 @@ const TimeColumn: React.FC<{ height: number }> = ({ height }) => {
 
   return (
     <View style={[styles.timeColumn, { height }]}>
-      {TIME_SLOTS.map((slot) => (
-        <View key={`time-${slot}`} style={styles.timeSlot}>
-          <Text style={styles.timeText}>{slot}</Text>
-        </View>
-      ))}
+      {TIME_SLOTS.map((slot) => {
+        const onHour = isTimeSlotOnHour(slot);
+        return (
+          <View
+            key={`time-${slot}`}
+            style={[
+              styles.timeSlot,
+              onHour ? styles.timeSlotHourBoundary : styles.timeSlotHalf,
+            ]}
+          >
+            <Text style={onHour ? styles.timeTextHour : styles.timeTextHalf}>
+              {slot}
+            </Text>
+          </View>
+        );
+      })}
     </View>
   );
 };
+
+type WeeklyStudyLabelsProps = {
+  block: StudyBlock;
+  slotSpan: number;
+};
+
+function WeeklyStudyLabels({ block, slotSpan }: WeeklyStudyLabelsProps) {
+  const { styles } = useScheduleTheme();
+  const showFocus = shouldShowStudyFocus(block.focus);
+  const compact = slotSpan === 1;
+
+  if (compact) {
+    const line =
+      showFocus && block.focus?.trim()
+        ? `${block.title} · ${block.focus.trim()}`
+        : block.title;
+    return (
+      <View style={{ alignItems: "center", width: "100%", gap: 2 }}>
+        <Text
+          style={styles.planBlockTitleCompact}
+          numberOfLines={2}
+          adjustsFontSizeToFit
+          minimumFontScale={0.72}
+        >
+          {line}
+        </Text>
+        <Text style={styles.weeklyBlockKind}>Study</Text>
+      </View>
+    );
+  }
+
+  return (
+    <>
+      <Text style={styles.planBlockTitle} numberOfLines={2}>
+        {block.title}
+      </Text>
+      {showFocus ? (
+        <Text style={styles.planBlockFocus} numberOfLines={1}>
+          {block.focus}
+        </Text>
+      ) : null}
+      <Text style={styles.weeklyBlockKind}>Study</Text>
+    </>
+  );
+}
 
 type CourseDayColumnProps = {
   day: WeekdayKey;
@@ -1432,7 +1525,15 @@ const CourseDayColumn: React.FC<CourseDayColumnProps> = ({
   return (
     <View style={[styles.dayColumn, { height }]}>
       {TIME_SLOTS.map((slot) => (
-        <View key={`${day}-${slot}`} style={styles.gridSlot} />
+        <View
+          key={`${day}-${slot}`}
+          style={[
+            styles.gridSlot,
+            isTimeSlotOnHour(slot)
+              ? styles.gridSlotHourLine
+              : styles.gridSlotHalfLine,
+          ]}
+        />
       ))}
 
       {dayBlocks.map((block) => {
@@ -1460,11 +1561,9 @@ const CourseDayColumn: React.FC<CourseDayColumnProps> = ({
             ]}
           >
             <Text style={styles.courseBlockCode} numberOfLines={1}>
-              {course.name.split(" - ")[0]}
+              {getCourseCodeLabel(course)}
             </Text>
-            <Text style={styles.courseBlockName} numberOfLines={2}>
-              {course.location}
-            </Text>
+            <Text style={styles.weeklyBlockKind}>Course</Text>
           </View>
         );
       })}
@@ -1473,6 +1572,8 @@ const CourseDayColumn: React.FC<CourseDayColumnProps> = ({
         const { startIndex, endIndex } = block as any;
         if (startIndex < 0 || endIndex <= startIndex) return null;
         const blockHeight = (endIndex - startIndex) * SLOT_HEIGHT;
+        const slotSpan = endIndex - startIndex;
+        const compact = slotSpan === 1;
 
         // If no column data (col/cols) exists, render full-width like plan blocks.
         const maybeCol = (block as any).col;
@@ -1485,6 +1586,7 @@ const CourseDayColumn: React.FC<CourseDayColumnProps> = ({
               key={`study-${block.id}`}
               style={[
                 styles.planBlock,
+                compact && styles.planBlockCompact,
                 {
                   top: startIndex * SLOT_HEIGHT,
                   height: blockHeight,
@@ -1492,19 +1594,14 @@ const CourseDayColumn: React.FC<CourseDayColumnProps> = ({
                 },
               ]}
             >
-              <Text style={styles.planBlockTitle} numberOfLines={1}>
-                {block.title}
-              </Text>
-              <Text style={styles.planBlockFocus} numberOfLines={1}>
-                {block.focus}
-              </Text>
+              <WeeklyStudyLabels block={block} slotSpan={slotSpan} />
             </View>
           );
         }
 
         const col = maybeCol as number;
         const cols = maybeCols as number;
-        const columnTotalPx = 57;
+        const columnTotalPx = DAY_COLUMN_WIDTH;
         const sidePad = 4; // matches left/right padding used elsewhere
         const innerWidth = Math.max(8, columnTotalPx - sidePad * 2);
         const gap = 4; // gap between split columns
@@ -1516,6 +1613,7 @@ const CourseDayColumn: React.FC<CourseDayColumnProps> = ({
             key={`study-${block.id}`}
             style={[
               styles.planBlock,
+              compact && styles.planBlockCompact,
               {
                 top: startIndex * SLOT_HEIGHT,
                 height: blockHeight,
@@ -1525,12 +1623,7 @@ const CourseDayColumn: React.FC<CourseDayColumnProps> = ({
               },
             ]}
           >
-            <Text style={styles.planBlockTitle} numberOfLines={1}>
-              {block.title}
-            </Text>
-            <Text style={styles.planBlockFocus} numberOfLines={1}>
-              {block.focus}
-            </Text>
+            <WeeklyStudyLabels block={block} slotSpan={slotSpan} />
           </View>
         );
       })}
@@ -1616,6 +1709,9 @@ const DraftScheduleGrid: React.FC<DraftScheduleGridProps> = ({
                         key={`${day}-${slot}`}
                         style={[
                           styles.gridSlot,
+                          isTimeSlotOnHour(slot)
+                            ? styles.gridSlotHourLine
+                            : styles.gridSlotHalfLine,
                           isDisabled && styles.gridSlotDisabled,
                         ]}
                         onPress={() => onSlotPress(day, index)}
@@ -1753,9 +1849,12 @@ const CourseCardList: React.FC<CourseCardListProps> = ({
                     ]}
                   />
                   <Text style={styles.courseCardTitle} numberOfLines={1}>
-                    {course.name.split(" - ")[0]}
+                    {getCourseCodeLabel(course)}
                   </Text>
                 </View>
+                <Text style={styles.courseCardMeta} numberOfLines={1}>
+                  Section: {getCourseSectionDisplay(course) || "—"}
+                </Text>
                 <Text style={styles.courseCardMeta} numberOfLines={1}>
                   {course.location || "Location TBD"}
                 </Text>
@@ -1993,7 +2092,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({
               <Ionicons name="school-outline" size={14} color={course.color} />
               <View style={styles.timelineCourseCardContent}>
                 <Text style={styles.timelineCourseTitle} numberOfLines={1}>
-                  {course.name.split(" - ")[0]}
+                  {getCourseCodeLabel(course)}
                 </Text>
                 <Text style={styles.timelineCourseTime}>
                   {block.start} - {block.end}
@@ -2210,6 +2309,39 @@ function buildTimeSlots(
     }
   }
   return slots;
+}
+
+function isTimeSlotOnHour(slot: string): boolean {
+  return slot.endsWith(":00");
+}
+
+/** Hide low-value second line on tiny weekly study cells. */
+function shouldShowStudyFocus(focus: string | undefined): boolean {
+  const f = (focus ?? "").trim().toLowerCase();
+  if (!f) return false;
+  if (f === "study" || f === "normal" || f === "ad_hoc" || f === "ad hoc") {
+    return false;
+  }
+  return true;
+}
+
+/** Text after first " - " in legacy `name` (used when `section` column empty). */
+function getLegacySectionFromCourseName(name: string): string {
+  const parts = name.split(" - ");
+  if (parts.length < 2) return "";
+  return parts.slice(1).join(" - ").trim();
+}
+
+/** Course code for weekly grid / legend (never append section from `name`). */
+function getCourseCodeLabel(course: Pick<Course, "name">): string {
+  return (course.name.split(" - ")[0] ?? course.name).trim();
+}
+
+/** Section for course card: DB field, else legacy suffix from `name`. */
+function getCourseSectionDisplay(course: Course): string {
+  const s = course.section?.trim();
+  if (s) return s;
+  return getLegacySectionFromCourseName(course.name);
 }
 
 function timeToIndex(time: string) {
@@ -2600,10 +2732,10 @@ const createStyles = (COLORS: ThemeColors) =>
     backgroundColor: COLORS.subtleCard,
   },
   timeHeaderSpacer: {
-    width: 35,
+    width: TIME_COLUMN_WIDTH,
   },
   dayHeaderCell: {
-    width: 57,
+    width: DAY_COLUMN_WIDTH,
     paddingVertical: 10,
     borderLeftWidth: 1,
     borderLeftColor: COLORS.borderSoft,
@@ -2621,22 +2753,37 @@ const createStyles = (COLORS: ThemeColors) =>
     flexDirection: "row",
   },
   timeColumn: {
-    width: 35,
+    width: TIME_COLUMN_WIDTH,
     backgroundColor: COLORS.subtleCard,
   },
   timeSlot: {
     height: SLOT_HEIGHT,
     justifyContent: "center",
-    paddingLeft: 6,
+    paddingLeft: 4,
+    paddingRight: 2,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderSoft,
   },
-  timeText: {
+  timeSlotHourBoundary: {
+    borderBottomColor: COLORS.borderSoft,
+    backgroundColor: COLORS.subtleCard,
+  },
+  timeSlotHalf: {
+    borderBottomColor: COLORS.borderSubtle,
+    backgroundColor: COLORS.inputBg,
+  },
+  timeTextHour: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: COLORS.textSecondary,
+  },
+  timeTextHalf: {
     fontSize: 8,
+    fontWeight: "500",
     color: COLORS.textMuted,
+    opacity: 0.85,
   },
   dayColumn: {
-    width: 57,
+    width: DAY_COLUMN_WIDTH,
     borderLeftWidth: 1,
     borderLeftColor: COLORS.borderSoft,
     position: "relative",
@@ -2644,7 +2791,14 @@ const createStyles = (COLORS: ThemeColors) =>
   gridSlot: {
     height: SLOT_HEIGHT,
     borderBottomWidth: 1,
+  },
+  gridSlotHourLine: {
     borderBottomColor: COLORS.borderSoft,
+    backgroundColor: "transparent",
+  },
+  gridSlotHalfLine: {
+    borderBottomColor: COLORS.borderSubtle,
+    backgroundColor: "rgba(148,163,184,0.04)",
   },
   gridSlotDisabled: {
     backgroundColor: COLORS.subtleCard,
@@ -2683,6 +2837,9 @@ const createStyles = (COLORS: ThemeColors) =>
     gap: 4,
     alignItems: "center",
     justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(11,18,32,0.14)",
+    ...WEEKLY_BLOCK_CARD_EXTRAS,
   },
   courseBlockCode: {
     fontSize: 11,
@@ -2699,6 +2856,14 @@ const createStyles = (COLORS: ThemeColors) =>
     fontSize: 9,
     color: "rgba(11,18,32,0.7)",
   },
+  weeklyBlockKind: {
+    fontSize: 9,
+    fontWeight: "700",
+    color: "rgba(11,18,32,0.55)",
+    textAlign: "center",
+    textTransform: "uppercase",
+    letterSpacing: 0.7,
+  },
   planBlock: {
     position: "absolute",
     left: 4,
@@ -2707,6 +2872,15 @@ const createStyles = (COLORS: ThemeColors) =>
     padding: 6,
     gap: 4,
     alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(11,18,32,0.14)",
+    ...WEEKLY_BLOCK_CARD_EXTRAS,
+  },
+  planBlockCompact: {
+    paddingVertical: 3,
+    paddingHorizontal: 4,
+    gap: 0,
     justifyContent: "center",
   },
   planCourseBlock: {
@@ -2717,6 +2891,13 @@ const createStyles = (COLORS: ThemeColors) =>
     fontWeight: "700",
     color: "#0B1220",
     textAlign: "center",
+  },
+  planBlockTitleCompact: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#0B1220",
+    textAlign: "center",
+    width: "100%",
   },
   planBlockFocus: {
     fontSize: 10,

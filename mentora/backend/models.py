@@ -338,6 +338,7 @@ class Course(Base):
     course_id: Mapped[int] = mapped_column(primary_key=True)
     username: Mapped[str] = mapped_column(String(50), nullable=False)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
+    section: Mapped[Optional[str]] = mapped_column(String(64))
     description: Mapped[Optional[str]] = mapped_column(Text)
     instructor: Mapped[Optional[str]] = mapped_column(String(120))
     location: Mapped[Optional[str]] = mapped_column(String(120))
