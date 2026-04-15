@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from datetime import date, datetime, timedelta
+import math
 import json
 import logging
 import random
@@ -345,13 +346,17 @@ async def create_local_schedule(username: str, db: Session = Depends(get_db)):
     # --- Constants ---
     MINUTES_PER_ECTS_TOTAL = 1500
     WEEKS_PER_TERM = 15
-    MIN_SESSIONS_PER_DAY = 2
+    MIN_SESSIONS_PER_DAY = 1
     MAX_SESSIONS_PER_DAY = 6
-    MIN_FOCUS_PER_SESSION = 30   # minutes
-    MAX_FOCUS_PER_SESSION = 90   # minutes
+    SESSION_DURATION_MINUTES = 60
     DEFAULT_DAY_START = 8
     DEFAULT_DAY_END = 22
     SLOT_MINUTES = 30
+    SESSION_BLOCKS = SESSION_DURATION_MINUTES // SLOT_MINUTES  # 2 blocks of 30 minutes
+    MIN_FOCUS_PER_SESSION = 15
+    MAX_FOCUS_PER_SESSION = 45
+    MIN_BREAK_PER_SESSION = 15
+    MAX_BREAK_PER_SESSION = 45
 
     import re
 
@@ -390,11 +395,33 @@ async def create_local_schedule(username: str, db: Session = Depends(get_db)):
 
         return 0.0
 
-    def get_personality(name: str, default: float = 3.0) -> float:
+    def normalize_trait(value, default: float = 0.5) -> float:
+        """Normalize personality values from common scales into 0..1."""
         try:
-            return float(personality_scores.get(name, default))
+            v = float(value)
         except Exception:
             return default
+
+        # Stored format in this project is usually -1..1
+        if -1.0 <= v <= 1.0:
+            return (v + 1.0) / 2.0
+
+        # Sometimes traits may already be 0..1
+        if 0.0 <= v <= 1.0:
+            return v
+
+        # 1..5 scale
+        if 1.0 <= v <= 5.0:
+            return (v - 1.0) / 4.0
+
+        # 0..100 scale
+        if 0.0 <= v <= 100.0:
+            return v / 100.0
+
+        return default
+
+    def get_personality(name: str, default: float = 0.5) -> float:
+        return normalize_trait(personality_scores.get(name), default)
 
     def compute_daily_energy(em: dict) -> float:
         if not em:
@@ -467,13 +494,21 @@ async def create_local_schedule(username: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="No weekly minutes to schedule")
 
     # --- Personality / energy ---
-    C = get_personality("conscientiousness", 3.0)
-    N = get_personality("neuroticism",       3.0)
+    O = get_personality("openness",          0.5)
+    C = get_personality("conscientiousness", 0.5)
+    E = get_personality("extraversion",      0.5)
+    N = get_personality("neuroticism",       0.5)
     daily_energy = compute_daily_energy(emotion_scores)
+    energy_norm = max(-1.0, min(1.0, daily_energy / 6.0))
 
-    # Focus duration per session (minutes)
-    raw_focus  = int(round((C - N + 0.5 * daily_energy) * 10))
-    focus_base = max(MIN_FOCUS_PER_SESSION, min(MAX_FOCUS_PER_SESSION, raw_focus))
+    # Personality/emotion-driven base split inside a fixed 60-minute session.
+    raw_focus_base = int(round(30 + 12 * (C - 0.5) - 10 * (N - 0.5) + 6 * energy_norm + 3 * (E - 0.5)))
+    focus_base = max(MIN_FOCUS_PER_SESSION, min(MAX_FOCUS_PER_SESSION, raw_focus_base))
+    focus_variance = int(round(2 + 6 * O))
+
+    # Personality/emotion modifies planning efficiency too.
+    effective_focus_credit = int(round(focus_base * (0.85 + 0.45 * C - 0.25 * N + 0.2 * max(0.0, energy_norm))))
+    effective_focus_credit = max(15, min(40, effective_focus_credit))
 
     # --- Build slot maps for each day ---
     day_start_and_slots: dict = {}
@@ -493,15 +528,40 @@ async def create_local_schedule(username: str, db: Session = Depends(get_db)):
         available_days = week_days[:]
 
     # =========================================================
-    # PHASE 1 – Calculate total study sessions for the week
+    # PHASE 1 – Calculate per-day session targets for the week
     # =========================================================
-    # Per-day session count driven by personality + emotion
-    raw_count = int(round(C + 0.5 * daily_energy))
-    sessions_per_day = max(MIN_SESSIONS_PER_DAY, min(MAX_SESSIONS_PER_DAY, raw_count))
+    day_session_targets: dict[str, int] = {}
+    base_daily = 1.2 + (3.2 * C) + (0.9 * E) + (0.5 * O) - (1.8 * N) + (0.6 * energy_norm)
 
-    total_sessions = sessions_per_day * len(available_days)
-    logger.info("Scheduling %d total sessions across %d days (%d/day) for %s",
-                total_sessions, len(available_days), sessions_per_day, username)
+    # Higher conscientiousness keeps weekend consistency; lower values reduce it.
+    weekend_adjust = 0.2 if C >= 0.7 else (-0.15 if C <= 0.35 else 0.0)
+    day_multiplier = {
+        "Mon": 1.05,
+        "Tue": 1.05,
+        "Wed": 1.0,
+        "Thu": 1.0,
+        "Fri": 0.95,
+        "Sat": 0.85 + weekend_adjust,
+        "Sun": 0.9 + weekend_adjust,
+    }
+
+    for d in available_days:
+        openness_variation = 0.0
+        if O >= 0.7:
+            openness_variation = 0.35 if d in {"Tue", "Thu", "Sat"} else -0.2
+
+        day_raw = base_daily * day_multiplier.get(d, 1.0) + openness_variation
+        day_count = int(round(day_raw))
+        day_session_targets[d] = max(MIN_SESSIONS_PER_DAY, min(MAX_SESSIONS_PER_DAY, day_count))
+
+    total_sessions = sum(day_session_targets.values())
+    logger.info(
+        "Scheduling %d total sessions across %d days for %s with per-day targets=%s",
+        total_sessions,
+        len(available_days),
+        username,
+        day_session_targets,
+    )
 
     # =========================================================
     # PHASE 2 – Distribute courses among those sessions
@@ -509,17 +569,32 @@ async def create_local_schedule(username: str, db: Session = Depends(get_db)):
     # Each course gets a share of sessions proportional to its weekly_minutes budget.
     course_records.sort(key=lambda x: x["weekly_minutes"], reverse=True)
 
-    # Compute session counts per course (proportional, at least 1 each)
+    # Compute session counts per course (proportional)
     raw_shares = [
-        max(1, round(cr["weekly_minutes"] / total_week_minutes * total_sessions))
+        int(round(cr["weekly_minutes"] / total_week_minutes * total_sessions))
         for cr in course_records
     ]
-    # Adjust so sum equals total_sessions
+
+    # Ensure at least one session if we have budgeted time
+    if total_sessions > 0 and sum(raw_shares) == 0:
+        raw_shares[0] = 1
+
+    # Adjust so sum equals total_sessions while preserving non-negative counts
     share_sum = sum(raw_shares)
-    if share_sum != total_sessions:
-        diff = total_sessions - share_sum
-        # Add/remove from the course with the largest budget
-        raw_shares[0] = max(1, raw_shares[0] + diff)
+    if share_sum < total_sessions:
+        idx = 0
+        while share_sum < total_sessions and raw_shares:
+            raw_shares[idx % len(raw_shares)] += 1
+            share_sum += 1
+            idx += 1
+    elif share_sum > total_sessions:
+        idx = len(raw_shares) - 1
+        while share_sum > total_sessions and raw_shares:
+            j = idx % len(raw_shares)
+            if raw_shares[j] > 0:
+                raw_shares[j] -= 1
+                share_sum -= 1
+            idx -= 1
 
     # Build flat ordered list of (course_record, focus_minutes) assignments
     # =========================================================
@@ -527,13 +602,19 @@ async def create_local_schedule(username: str, db: Session = Depends(get_db)):
     # =========================================================
     session_assignments = []  # list of dicts: {course, focus}
     for cr, n_sessions in zip(course_records, raw_shares):
-        # Spread the course budget evenly across its allocated sessions
-        per_session = max(
-            MIN_FOCUS_PER_SESSION,
-            min(focus_base, cr["weekly_minutes"] // max(1, n_sessions))
-        )
-        for _ in range(n_sessions):
-            session_assignments.append({"course": cr, "focus": per_session})
+        # Do not allocate more sessions than the course can support at minimum focus.
+        # Upper bound by minimum focus in a session.
+        max_sessions_for_course = cr["weekly_minutes"] // MIN_FOCUS_PER_SESSION
+        if max_sessions_for_course <= 0:
+            continue
+
+        # Personality/emotion-adjusted estimate of how many sessions this course needs.
+        dynamic_needed = max(1, math.ceil(cr["weekly_minutes"] / max(1, effective_focus_credit)))
+        effective_sessions = min(max_sessions_for_course, max(1, min(n_sessions, dynamic_needed)))
+
+        base_break = SESSION_DURATION_MINUTES - focus_base
+        for _ in range(effective_sessions):
+            session_assignments.append({"course": cr, "focus": focus_base, "break": base_break})
 
     # Shuffle to avoid same-course clustering on the same day
     random.shuffle(session_assignments)
@@ -541,9 +622,32 @@ async def create_local_schedule(username: str, db: Session = Depends(get_db)):
     # Distribute sessions across available days (round-robin by day order)
     day_session_map: dict = {d: [] for d in available_days}
     day_cycle = list(available_days)
-    for idx, sa in enumerate(session_assignments):
-        target_day = day_cycle[idx % len(day_cycle)]
-        day_session_map[target_day].append(sa)
+
+    # First pass: satisfy each day's personality-driven target count fairly.
+    # This prevents weekend starvation when assignments are fewer than total quotas.
+    cursor = 0
+    remaining_quota = {d: max(0, day_session_targets.get(d, 0)) for d in day_cycle}
+    while cursor < len(session_assignments) and any(q > 0 for q in remaining_quota.values()):
+        progressed = False
+        for d in day_cycle:
+            if cursor >= len(session_assignments):
+                break
+            if remaining_quota[d] <= 0:
+                continue
+            day_session_map[d].append(session_assignments[cursor])
+            cursor += 1
+            remaining_quota[d] -= 1
+            progressed = True
+        if not progressed:
+            break
+
+    # Second pass: distribute any leftovers round-robin.
+    rr = 0
+    while cursor < len(session_assignments) and day_cycle:
+        target_day = day_cycle[rr % len(day_cycle)]
+        day_session_map[target_day].append(session_assignments[cursor])
+        cursor += 1
+        rr += 1
 
     # =========================================================
     # PHASE 4 – Place sessions as consecutive blocks, randomly in the day
@@ -559,15 +663,14 @@ async def create_local_schedule(username: str, db: Session = Depends(get_db)):
     def resolve_session_slots(sa: dict) -> dict | None:
         """Resolve final focus minutes and slot count for a session assignment.
         Returns a dict {course, focus, blocks} or None if it cannot fit at all."""
-        cr    = sa["course"]
+        cr = sa["course"]
         focus = sa["focus"]
         if cr["remaining"] <= 0:
             return None
         focus = min(focus, cr["remaining"])
         if focus < MIN_FOCUS_PER_SESSION:
             return None
-        break_min = 5
-        bk = max(1, (focus + break_min + SLOT_MINUTES - 1) // SLOT_MINUTES)
+        bk = SESSION_BLOCKS
         return {"course": cr, "focus": focus, "blocks": bk}
 
     def commit_session(cr: dict, fit: int, bk: int, slots: list, start_dt: datetime, day: str):
@@ -577,15 +680,18 @@ async def create_local_schedule(username: str, db: Session = Depends(get_db)):
         session_start     = start_dt + timedelta(minutes=fit * SLOT_MINUTES)
         session_end       = session_start + timedelta(minutes=bk * SLOT_MINUTES)
         allocated_minutes = bk * SLOT_MINUTES
-        actual_focus      = min(cr["focus"], allocated_minutes)
-        actual_break      = allocated_minutes - actual_focus
+        max_focus_allowed = min(MAX_FOCUS_PER_SESSION, allocated_minutes - MIN_BREAK_PER_SESSION)
+        actual_focus = max(MIN_FOCUS_PER_SESSION, min(cr["focus"], max_focus_allowed))
+        actual_break = allocated_minutes - actual_focus
+        actual_break = max(MIN_BREAK_PER_SESSION, min(MAX_BREAK_PER_SESSION, actual_break))
+        actual_focus = allocated_minutes - actual_break
         cr["course"]["remaining"] -= actual_focus
         try:
             ns = StudySession(
                 username=username,
                 mode="study",
                 timer_type=cr["course"]["name"],
-                duration_minutes=allocated_minutes,
+                duration_minutes=SESSION_DURATION_MINUTES,
                 focus_minutes=actual_focus,
                 break_minutes=actual_break,
                 cycles=None,
@@ -620,6 +726,20 @@ async def create_local_schedule(username: str, db: Session = Depends(get_db)):
         # Shuffle within the day for variety
         random.shuffle(sessions_today)
 
+        # Apply per-session dynamic split for this day based on personality and emotion.
+        day_bias = 0
+        if d in {"Mon", "Tue"} and energy_norm >= 0:
+            day_bias = 1
+        elif d in {"Sat", "Sun"} and (energy_norm < 0 or N >= 0.6):
+            day_bias = -1
+
+        for sa in sessions_today:
+            jitter = random.randint(-focus_variance, focus_variance)
+            target_focus = sa["focus"] + day_bias + jitter
+            target_focus = max(MIN_FOCUS_PER_SESSION, min(MAX_FOCUS_PER_SESSION, target_focus))
+            sa["focus"] = target_focus
+            sa["break"] = SESSION_DURATION_MINUTES - target_focus
+
         # Resolve slot sizes for all sessions upfront
         resolved = [r for sa in sessions_today if (r := resolve_session_slots(sa)) is not None]
         if not resolved:
@@ -633,6 +753,12 @@ async def create_local_schedule(username: str, db: Session = Depends(get_db)):
             num_blocks = 2
         else:
             num_blocks = 3
+
+        # Dynamic pacing by personality/emotion while keeping each session fixed at 60 mins.
+        if energy_norm < -0.4 or N >= 0.65:
+            num_blocks = min(3, num_blocks + 1)
+        elif C >= 0.75 and energy_norm > 0.2:
+            num_blocks = max(1, num_blocks - 1)
 
         # Split resolved sessions into num_blocks consecutive groups
         block_size = (n + num_blocks - 1) // num_blocks
@@ -659,21 +785,9 @@ async def create_local_schedule(username: str, db: Session = Depends(get_db)):
                 for s_info in block:
                     bk = s_info["blocks"]
                     vs = find_all_fits(slots, bk)
-                    # Shrink if needed
                     if not vs:
-                        shrunk = False
-                        for f in range(s_info["focus"] - SLOT_MINUTES, MIN_FOCUS_PER_SESSION - 1, -SLOT_MINUTES):
-                            new_bk = max(1, (f + 5 + SLOT_MINUTES - 1) // SLOT_MINUTES)
-                            vs = find_all_fits(slots, new_bk)
-                            if vs:
-                                s_info["focus"]  = f
-                                s_info["blocks"] = new_bk
-                                bk               = new_bk
-                                shrunk           = True
-                                break
-                        if not shrunk:
-                            logger.debug("No slot for %s on %s; skipping", s_info["course"]["name"], d)
-                            continue
+                        logger.debug("No 60-minute slot for %s on %s; skipping", s_info["course"]["name"], d)
+                        continue
                     fit    = random.choice(vs)
                     result = commit_session(s_info, fit, bk, slots, start_dt, d)
                     if result:
