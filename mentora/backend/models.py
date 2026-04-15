@@ -340,6 +340,7 @@ class Course(Base):
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     section: Mapped[Optional[str]] = mapped_column(String(64))
     description: Mapped[Optional[str]] = mapped_column(Text)
+    importance_level: Mapped[Optional[float]] = mapped_column(Float)
     instructor: Mapped[Optional[str]] = mapped_column(String(120))
     location: Mapped[Optional[str]] = mapped_column(String(120))
     color: Mapped[Optional[str]] = mapped_column(String(20))

@@ -104,6 +104,7 @@ class CourseCreate(BaseModel):
     name: str
     section: Optional[str] = None
     description: Optional[str] = None
+    importance_level: Optional[float] = None
     instructor: Optional[str] = None
     location: Optional[str] = None
     color: Optional[str] = None
@@ -115,6 +116,7 @@ class CourseUpdate(BaseModel):
     name: str
     section: Optional[str] = None
     description: Optional[str] = None
+    importance_level: Optional[float] = None
     instructor: Optional[str] = None
     location: Optional[str] = None
     color: Optional[str] = None
@@ -137,6 +139,7 @@ class CourseResponse(BaseModel):
     name: str
     section: Optional[str] = None
     description: Optional[str]
+    importance_level: Optional[float] = None
     instructor: Optional[str]
     location: Optional[str]
     color: Optional[str]

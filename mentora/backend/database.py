@@ -21,3 +21,8 @@ def ensure_schema_patches() -> None:
                 "ALTER TABLE courses ADD COLUMN IF NOT EXISTS section VARCHAR(64)"
             )
         )
+        conn.execute(
+            text(
+                "ALTER TABLE courses ADD COLUMN IF NOT EXISTS importance_level DOUBLE PRECISION"
+            )
+        )

@@ -116,6 +116,28 @@ def _extract_times(line_text: str) -> list[str]:
     return [f"{int(h):02d}:{int(m):02d}" for h, m in loose]
 
 
+def _extract_ects_value(description: str | None) -> float | None:
+    if not description:
+        return None
+    patterns = [
+        r"ECTS\s+Credits?[^0-9\n\r]{0,30}([0-9]+(?:[.,][0-9]+)?)",
+        r"AKTS[^0-9\n\r]{0,30}([0-9]+(?:[.,][0-9]+)?)",
+        r"([0-9]+(?:[.,][0-9]+)?)\s*ECTS",
+        r"([0-9]+(?:[.,][0-9]+)?)\s*AKTS",
+    ]
+    for pat in patterns:
+        m = re.search(pat, description, re.I)
+        if not m:
+            continue
+        try:
+            value = float(m.group(1).replace(",", "."))
+        except Exception:
+            continue
+        if 0.0 <= value <= 60.0:
+            return value
+    return None
+
+
 def _normalize_course_code(value: str) -> str:
     cleaned = re.sub(r"\s+", " ", value.upper()).strip()
     cleaned = re.sub(r"\s*-\s*", "-", cleaned)
@@ -577,11 +599,13 @@ async def create_course(payload: CourseCreate, db: Session = Depends(get_db)):
             detail="Profile not found",
         )
 
+    derived_importance = _extract_ects_value(payload.description)
     course = Course(
         username=payload.username,
         name=payload.name,
         section=(payload.section or "").strip() or None,
         description=payload.description,
+        importance_level=payload.importance_level if payload.importance_level is not None else derived_importance,
         instructor=payload.instructor,
         location=payload.location,
         color=payload.color,
@@ -619,6 +643,10 @@ async def update_course(
     course.name = payload.name
     course.section = (payload.section or "").strip() or None
     course.description = payload.description
+    if payload.importance_level is not None:
+        course.importance_level = payload.importance_level
+    elif payload.description is not None:
+        course.importance_level = _extract_ects_value(payload.description)
     course.instructor = payload.instructor
     course.location = payload.location
     if payload.color is not None:
@@ -749,6 +777,7 @@ async def import_schedule(
             name=course_data["name"],
             section=course_data.get("section"),
             description=course_data["description"],
+            importance_level=_extract_ects_value(course_data["description"]),
             instructor="",
             location=course_data["location"],
             color=COURSE_COLORS[index % len(COURSE_COLORS)],
@@ -852,6 +881,7 @@ async def import_syllabus(
         )
 
     course.description = description
+    course.importance_level = _extract_ects_value(description)
     db.commit()
     db.refresh(course)
     return course
