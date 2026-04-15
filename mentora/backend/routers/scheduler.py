@@ -189,31 +189,30 @@ async def create_local_schedule(username: str, db: Session = Depends(get_db)):
 
     # --- Build course records with weekly time budget ---
     # course_importance_level is the priority signal used by the scheduler.
-    # For now, it is derived from ECTS until a dedicated importance source is added.
+    # Prefer the Course table value, and fall back to parsed ECTS from the description.
     course_records = []
     for c in courses:
         ects = extract_ects(c.description or "")
-        course_importance_level = ects
-        weekly_minutes = int(round((course_importance_level * MINUTES_PER_ECTS_TOTAL) / max(1, WEEKS_PER_TERM)))
+        course_importance_level = getattr(c, "importance_level", None)
+        if course_importance_level is None or course_importance_level <= 0:
+            course_importance_level = ects
         course_records.append(
             {
                 "name": c.name,
                 "ects": ects,
                 "course_importance_level": course_importance_level,
-                "weekly_minutes": weekly_minutes,
-                "remaining": weekly_minutes,
+                    "weekly_minutes": 0,
+                    "remaining": 10**9,
             }
         )
 
-    if course_records and all(cr["weekly_minutes"] == 0 for cr in course_records):
-        DEFAULT_WEEKLY_PER_COURSE = 120
-        for cr in course_records:
-            cr["weekly_minutes"] = DEFAULT_WEEKLY_PER_COURSE
-            cr["remaining"]      = DEFAULT_WEEKLY_PER_COURSE
 
-    total_week_minutes = sum(cr["weekly_minutes"] for cr in course_records)
-    if total_week_minutes <= 0:
-        raise HTTPException(status_code=400, detail="No weekly minutes to schedule")
+        if not course_records:
+            raise HTTPException(status_code=400, detail="No courses to schedule")
+
+        total_importance = sum(max(1.0, cr["course_importance_level"]) for cr in course_records)
+        if total_importance <= 0:
+            raise HTTPException(status_code=400, detail="No course importance to schedule")
 
     # --- Personality / energy ---
     O = get_personality("openness",          0.5)
@@ -253,7 +252,25 @@ async def create_local_schedule(username: str, db: Session = Depends(get_db)):
     # PHASE 1 – Calculate per-day session targets for the week
     # =========================================================
     day_session_targets: dict[str, int] = {}
-    base_daily = 1.2 + (3.2 * C) + (0.9 * E) + (0.5 * O) - (1.8 * N) + (0.6 * energy_norm)
+    # Calculate a weekly session target first so personality has enough spread.
+    # This avoids collapsing most profiles into the same 15-session band.
+    high_drive = max(0.0, (C + O) - N - 0.75)
+    weekly_session_target = (
+        6
+        + (10 * C)
+        + (8 * O)
+        + (3 * E)
+        - (6 * N)
+        + (2 * max(0.0, energy_norm))
+        + (6 * high_drive)
+    )
+
+    if C >= 0.75 and O >= 0.75 and N <= 0.35:
+        weekly_session_target += 4
+    elif N >= 0.65:
+        weekly_session_target -= 3
+
+    weekly_session_target = max(7, min(42, int(round(weekly_session_target))))
 
     # Higher conscientiousness keeps weekend consistency; lower values reduce it.
     weekend_adjust = 0.2 if C >= 0.7 else (-0.15 if C <= 0.35 else 0.0)
@@ -267,14 +284,49 @@ async def create_local_schedule(username: str, db: Session = Depends(get_db)):
         "Sun": 0.9 + weekend_adjust,
     }
 
+    # Convert the weekly target into per-day quotas using day weights.
+    total_weight = sum(day_multiplier.get(d, 1.0) for d in available_days) or 1.0
     for d in available_days:
         openness_variation = 0.0
         if O >= 0.7:
             openness_variation = 0.35 if d in {"Tue", "Thu", "Sat"} else -0.2
 
-        day_raw = base_daily * day_multiplier.get(d, 1.0) + openness_variation
-        day_count = int(round(day_raw))
+        day_share = weekly_session_target * (day_multiplier.get(d, 1.0) / total_weight)
+        day_raw = day_share + openness_variation
+        if C >= 0.75 and O >= 0.75 and N <= 0.35:
+            day_raw += 0.6 if d in {"Mon", "Tue", "Wed", "Thu", "Fri"} else 0.3
+        elif N >= 0.65:
+            day_raw -= 0.2 if d in {"Sat", "Sun"} else 0.05
+        day_count = int(math.ceil(day_raw))
         day_session_targets[d] = max(MIN_SESSIONS_PER_DAY, min(MAX_SESSIONS_PER_DAY, day_count))
+
+    # Normalize if rounding pushed the total too high or too low.
+    def _rebalance_day_targets(targets: dict[str, int], desired_total: int) -> dict[str, int]:
+        current_total = sum(targets.values())
+        ordered_days = sorted(
+            targets.keys(),
+            key=lambda day: (targets[day], day_multiplier.get(day, 1.0)),
+            reverse=True,
+        )
+        if current_total > desired_total:
+            idx = 0
+            while current_total > desired_total and ordered_days:
+                day = ordered_days[idx % len(ordered_days)]
+                if targets[day] > MIN_SESSIONS_PER_DAY:
+                    targets[day] -= 1
+                    current_total -= 1
+                idx += 1
+        elif current_total < desired_total:
+            idx = 0
+            while current_total < desired_total and ordered_days:
+                day = ordered_days[idx % len(ordered_days)]
+                if targets[day] < MAX_SESSIONS_PER_DAY:
+                    targets[day] += 1
+                    current_total += 1
+                idx += 1
+        return targets
+
+    day_session_targets = _rebalance_day_targets(day_session_targets, weekly_session_target)
 
     total_sessions = sum(day_session_targets.values())
     logger.info(
@@ -296,7 +348,7 @@ async def create_local_schedule(username: str, db: Session = Depends(get_db)):
 
     # Compute session counts per course (proportional)
     raw_shares = [
-        int(round(cr["weekly_minutes"] / total_week_minutes * total_sessions))
+            int(round(max(1.0, cr["course_importance_level"]) / total_importance * total_sessions))
         for cr in course_records
     ]
 
@@ -327,19 +379,19 @@ async def create_local_schedule(username: str, db: Session = Depends(get_db)):
     # =========================================================
     session_assignments = []  # list of dicts: {course, focus}
     for cr, n_sessions in zip(course_records, raw_shares):
-        # Do not allocate more sessions than the course can support at minimum focus.
-        # Upper bound by minimum focus in a session.
-        max_sessions_for_course = cr["weekly_minutes"] // MIN_FOCUS_PER_SESSION
-        if max_sessions_for_course <= 0:
-            continue
-
-        # Personality/emotion-adjusted estimate of how many sessions this course needs.
-        dynamic_needed = max(1, math.ceil(cr["weekly_minutes"] / max(1, effective_focus_credit)))
-        effective_sessions = min(max_sessions_for_course, max(1, min(n_sessions, dynamic_needed)))
+        # No course-minute cap: importance determines the share, not a max minute budget.
+        dynamic_needed = max(1, math.ceil((cr["course_importance_level"] * 12) / max(1, effective_focus_credit)))
+        effective_sessions = max(1, max(n_sessions, dynamic_needed))
 
         base_break = SESSION_DURATION_MINUTES - focus_base
         for _ in range(effective_sessions):
             session_assignments.append({"course": cr, "focus": focus_base, "break": base_break})
+
+    logger.info(
+        "Session allocation after course budget limits: %d assignments from %d requested",
+        len(session_assignments),
+        total_sessions,
+    )
 
     # Shuffle to avoid same-course clustering on the same day
     random.shuffle(session_assignments)
@@ -390,9 +442,6 @@ async def create_local_schedule(username: str, db: Session = Depends(get_db)):
         Returns a dict {course, focus, blocks} or None if it cannot fit at all."""
         cr = sa["course"]
         focus = sa["focus"]
-        if cr["remaining"] <= 0:
-            return None
-        focus = min(focus, cr["remaining"])
         if focus < MIN_FOCUS_PER_SESSION:
             return None
         bk = SESSION_BLOCKS
@@ -410,7 +459,6 @@ async def create_local_schedule(username: str, db: Session = Depends(get_db)):
         actual_break = allocated_minutes - actual_focus
         actual_break = max(MIN_BREAK_PER_SESSION, min(MAX_BREAK_PER_SESSION, actual_break))
         actual_focus = allocated_minutes - actual_break
-        cr["course"]["remaining"] -= actual_focus
         try:
             ns = StudySession(
                 username=username,
