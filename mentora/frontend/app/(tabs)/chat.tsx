@@ -108,7 +108,6 @@ export default function ChatScreen() {
 
   const wsRef = useRef<WebSocket | null>(null);
   const lastFriendOpenRef = useRef<string | null>(null);
-  const lastThreadOpenRef = useRef<number | null>(null);
   const isChatFocusedRef = useRef(false);
   const activeThreadIdRef = useRef<number | null>(null);
 
@@ -120,11 +119,25 @@ export default function ChatScreen() {
     () => new Map(friends.map((friend) => [friend.username, friend])),
     [friends],
   );
-  const friendParam = typeof params.friend === "string" ? params.friend : null;
-  const threadParam = typeof params.thread === "string" ? params.thread : null;
+  const rawFriendParam = params.friend;
+  const rawThreadParam = params.thread;
+  const friendParam =
+    typeof rawFriendParam === "string"
+      ? rawFriendParam
+      : Array.isArray(rawFriendParam) && typeof rawFriendParam[0] === "string"
+        ? rawFriendParam[0]
+        : null;
+  const threadParam =
+    typeof rawThreadParam === "string"
+      ? rawThreadParam
+      : Array.isArray(rawThreadParam) && typeof rawThreadParam[0] === "string"
+        ? rawThreadParam[0]
+        : null;
   const threadParamId = threadParam ? Number(threadParam) : null;
   const normalizedThreadParamId =
-    threadParamId && Number.isFinite(threadParamId) ? threadParamId : null;
+    threadParamId && Number.isFinite(threadParamId) && threadParamId > 0
+      ? threadParamId
+      : null;
   const isGroupThread = activeThread?.is_group ?? false;
   const activeFriend =
     !isGroupThread && activeThread?.friend_username
@@ -273,11 +286,14 @@ export default function ChatScreen() {
     useCallback(() => {
       isChatFocusedRef.current = true;
       AsyncStorage.setItem(CHATS_NOTIF_LAST_SEEN_KEY, String(Date.now()));
+      if (normalizedThreadParamId) {
+        setActiveThreadId(normalizedThreadParamId);
+      }
       return () => {
         isChatFocusedRef.current = false;
         AsyncStorage.setItem(CHATS_NOTIF_LAST_SEEN_KEY, String(Date.now()));
       };
-    }, []),
+    }, [normalizedThreadParamId]),
   );
 
   useEffect(() => {
@@ -367,21 +383,11 @@ export default function ChatScreen() {
   }, [friendParam, username]);
 
   useEffect(() => {
-    if (!normalizedThreadParamId || threads.length === 0) {
+    if (!normalizedThreadParamId) {
       return;
     }
-    if (lastThreadOpenRef.current === normalizedThreadParamId) {
-      return;
-    }
-    const exists = threads.some(
-      (thread) => thread.thread_id === normalizedThreadParamId,
-    );
-    if (!exists) {
-      return;
-    }
-    lastThreadOpenRef.current = normalizedThreadParamId;
     setActiveThreadId(normalizedThreadParamId);
-  }, [normalizedThreadParamId, threads]);
+  }, [normalizedThreadParamId]);
 
   const handleStartChat = async (friendUsername: string) => {
     if (!username) {
@@ -1268,7 +1274,7 @@ export default function ChatScreen() {
                       <View style={styles.memberInfo}>
                         <Text style={styles.friendName}>{displayName}</Text>
                         <Text style={styles.friendMeta}>
-                          {isOwner ? "Owner" : member}
+                          {isOwner ? "Creator" : member}
                         </Text>
                       </View>
                       <View
@@ -1748,7 +1754,9 @@ const createStyles = (COLORS: ThemeColors) =>
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(15,23,42,0.7)",
+    backgroundColor: COLORS.inputBg,
+    borderWidth: 1,
+    borderColor: COLORS.borderSoft,
   },
   modalList: {
     gap: SPACING.sm,
@@ -1766,7 +1774,7 @@ const createStyles = (COLORS: ThemeColors) =>
     borderRadius: 24,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(15,23,42,0.8)",
+    backgroundColor: COLORS.card,
     borderWidth: 1,
     borderColor: COLORS.borderSoft,
   },
@@ -1870,13 +1878,15 @@ const createStyles = (COLORS: ThemeColors) =>
     borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(15,23,42,0.8)",
+    backgroundColor: COLORS.card,
     marginRight: SPACING.sm,
+    borderWidth: 1,
+    borderColor: COLORS.borderSubtle,
   },
   friendAvatarImage: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 33,
+    height: 33,
+    borderRadius: 16.5,
   },
   friendInfo: {
     flex: 1,

@@ -7,6 +7,7 @@ from models import Friend, FriendRequest, Profile
 from schemas import (
     FriendListResponse,
     FriendProfile,
+    FriendRemoveAction,
     FriendRequestAction,
     FriendRequestCreate,
     FriendRequestResponse,
@@ -212,3 +213,28 @@ async def list_friends(username: str, db: Session = Depends(get_db)):
 
     profiles = db.query(Profile).filter(Profile.username.in_(friend_usernames)).all()
     return {"friends": [_to_profile_item(p) for p in profiles]}
+
+
+@router.post("/remove")
+async def remove_friend(payload: FriendRemoveAction, db: Session = Depends(get_db)):
+    if payload.username == payload.friend_username:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot remove yourself",
+        )
+
+    friendship = db.query(Friend).filter(
+        or_(
+            (Friend.user_a == payload.username) & (Friend.user_b == payload.friend_username),
+            (Friend.user_a == payload.friend_username) & (Friend.user_b == payload.username),
+        )
+    ).first()
+    if not friendship:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Friendship not found",
+        )
+
+    db.delete(friendship)
+    db.commit()
+    return {"status": "removed"}

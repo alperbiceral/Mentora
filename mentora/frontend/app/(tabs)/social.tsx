@@ -2,8 +2,10 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { LinearGradient } from "expo-linear-gradient";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Image,
   Modal,
@@ -134,6 +136,7 @@ type GroupLeaderboardEntry = {
   streak_count: number;
   profile_photo?: string | null;
 };
+type GroupVisibilityTab = "public" | "private";
 
 export default function SocialScreen() {
   const { colors: COLORS } = useTheme();
@@ -167,6 +170,13 @@ export default function SocialScreen() {
   const [groupSettingsOpen, setGroupSettingsOpen] = useState(false);
   const [activeGroup, setActiveGroup] = useState<GroupListItem | null>(null);
   const [groupMembers, setGroupMembers] = useState<GroupMemberItem[]>([]);
+  const [groupMembersViewOpen, setGroupMembersViewOpen] = useState(false);
+  const [groupMembersViewLoading, setGroupMembersViewLoading] = useState(false);
+  const [groupMembersViewGroup, setGroupMembersViewGroup] =
+    useState<GroupListItem | null>(null);
+  const [groupMembersViewList, setGroupMembersViewList] = useState<
+    GroupMemberItem[]
+  >([]);
   const [groupLeaderboardOpen, setGroupLeaderboardOpen] = useState(false);
   const [groupLeaderboardEntries, setGroupLeaderboardEntries] = useState<
     GroupLeaderboardEntry[]
@@ -179,6 +189,7 @@ export default function SocialScreen() {
     LeaderboardEntry[]
   >([]);
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
+  const [leaderboardRefreshing, setLeaderboardRefreshing] = useState(false);
   const [groupNameDraft, setGroupNameDraft] = useState("");
   const [groupDescriptionDraft, setGroupDescriptionDraft] = useState("");
   const [groupPhotoDraft, setGroupPhotoDraft] = useState("");
@@ -186,7 +197,12 @@ export default function SocialScreen() {
   const [groupAddMembers, setGroupAddMembers] = useState<string[]>([]);
   const [groupRemoveMembers, setGroupRemoveMembers] = useState<string[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
+  const [groupVisibilityTab, setGroupVisibilityTab] =
+    useState<GroupVisibilityTab>("public");
   const [transferOwnerUsername, setTransferOwnerUsername] = useState<
+    string | null
+  >(null);
+  const [removingFriendUsername, setRemovingFriendUsername] = useState<
     string | null
   >(null);
 
@@ -279,9 +295,13 @@ export default function SocialScreen() {
 
   useFocusEffect(loadSocialData);
 
-  useEffect(() => {
-    const run = async () => {
-      setLeaderboardLoading(true);
+  const fetchLeaderboard = useCallback(
+    async (isManualRefresh: boolean = false) => {
+      if (isManualRefresh) {
+        setLeaderboardRefreshing(true);
+      } else {
+        setLeaderboardLoading(true);
+      }
       try {
         const response = await fetch(
           `${API_BASE_URL}/profile/leaderboard?metric=${leaderboardMetric}`,
@@ -292,14 +312,21 @@ export default function SocialScreen() {
         const data = (await response.json()) as LeaderboardEntry[];
         setLeaderboardEntries(data);
       } catch (error) {
-        setLeaderboardEntries([]);
+        // Keep current data on fetch errors to avoid UI jumps.
       } finally {
-        setLeaderboardLoading(false);
+        if (isManualRefresh) {
+          setLeaderboardRefreshing(false);
+        } else {
+          setLeaderboardLoading(false);
+        }
       }
-    };
+    },
+    [leaderboardMetric],
+  );
 
-    run();
-  }, [leaderboardMetric]);
+  useEffect(() => {
+    fetchLeaderboard(false);
+  }, [fetchLeaderboard]);
 
   useEffect(() => {
     if (!addFriendOpen) {
@@ -336,9 +363,65 @@ export default function SocialScreen() {
     return () => clearTimeout(handle);
   }, [addFriendOpen, searchQuery, currentUsername]);
 
+  const removeFriend = useCallback(
+    (friendUsername: string) => {
+      if (!currentUsername) {
+        Alert.alert("Missing user", "Please login again.");
+        return;
+      }
+
+      Alert.alert(
+        "Remove friend",
+        `Are you sure you want to remove @${friendUsername} from your friends?`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Remove",
+            style: "destructive",
+            onPress: async () => {
+              setRemovingFriendUsername(friendUsername);
+              try {
+                const response = await fetch(`${API_BASE_URL}/friends/remove`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    username: currentUsername,
+                    friend_username: friendUsername,
+                  }),
+                });
+                if (!response.ok) {
+                  const message = (await response.json().catch(() => null)) as
+                    | { detail?: string }
+                    | null;
+                  throw new Error(message?.detail ?? "Failed to remove friend");
+                }
+                setFriends((prev) =>
+                  prev.filter((friend) => friend.username !== friendUsername),
+                );
+              } catch (error) {
+                const message =
+                  error instanceof Error
+                    ? error.message
+                    : "Failed to remove friend";
+                Alert.alert("Error", message);
+              } finally {
+                setRemovingFriendUsername(null);
+              }
+            },
+          },
+        ],
+      );
+    },
+    [currentUsername],
+  );
+
   const onlineFriendsCount = 0;
   const currentUserStreak = profile?.streak_count ?? 0;
   const friendUsernames = new Set(friends.map((friend) => friend.username));
+  const friendByUsername = useMemo(
+    () => new Map(friends.map((friend) => [friend.username, friend])),
+    [friends],
+  );
   const outgoingPending = new Set(
     outgoingRequests.map((request) => request.to_username),
   );
@@ -361,6 +444,9 @@ export default function SocialScreen() {
   );
   const addableFriends = friends.filter(
     (friend) => !memberUsernames.has(friend.username),
+  );
+  const filteredGroups = groups.filter((group) =>
+    groupVisibilityTab === "public" ? group.is_public : !group.is_public,
   );
 
   const resetGroupForm = () => {
@@ -455,10 +541,22 @@ export default function SocialScreen() {
     }
   };
 
-  const handleOpenGroupChat = (threadId: number) => {
+  const handleOpenGroupChat = (threadId?: number | null) => {
+    const normalizedThreadId =
+      typeof threadId === "number" && Number.isFinite(threadId) && threadId > 0
+        ? threadId
+        : null;
+    if (!normalizedThreadId) {
+      console.warn("[Social] Missing/invalid group threadId", { threadId });
+      Alert.alert("Chat unavailable", "This group has no valid chat thread yet.");
+      return;
+    }
     router.push({
       pathname: "/(tabs)/chat",
-      params: { thread: String(threadId) },
+      params: {
+        thread: String(normalizedThreadId),
+        openAt: String(Date.now()),
+      },
     });
   };
 
@@ -505,6 +603,31 @@ export default function SocialScreen() {
       }
     } finally {
       setLoadingMembers(false);
+    }
+  };
+
+  const openGroupMembersView = async (group: GroupListItem) => {
+    setGroupMembersViewGroup(group);
+    setGroupMembersViewOpen(true);
+    setGroupMembersViewLoading(true);
+    setGroupMembersViewList([]);
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/groups/${group.group_id}/members`,
+      );
+      if (!response.ok) {
+        const message = await response.json().catch(() => null);
+        throw new Error(message?.detail ?? "Members fetch failed");
+      }
+      const data = await response.json();
+      setGroupMembersViewList(data.members ?? []);
+    } catch (error) {
+      setGroupMembersViewList([]);
+      const message =
+        error instanceof Error ? error.message : "Failed to load members.";
+      Alert.alert("Error", message);
+    } finally {
+      setGroupMembersViewLoading(false);
     }
   };
 
@@ -805,21 +928,51 @@ export default function SocialScreen() {
                           {friend.streak_count} day streak
                         </Text>
                       </View>
-                      <Pressable
-                        style={styles.messageButton}
-                        onPress={() =>
-                          router.push({
-                            pathname: "/(tabs)/chat",
-                            params: { friend: friend.username },
-                          })
-                        }
-                      >
-                        <Ionicons
-                          name="chatbubble-ellipses-outline"
-                          size={16}
-                          color={COLORS.accent}
-                        />
-                      </Pressable>
+                      <View style={styles.friendActions}>
+                        <Pressable
+                          style={({ pressed }) => [
+                            styles.messageButton,
+                            pressed && styles.iconButtonPressed,
+                          ]}
+                          onPress={() =>
+                            router.push({
+                              pathname: "/(tabs)/chat",
+                              params: { friend: friend.username },
+                            })
+                          }
+                        >
+                          {({ pressed }) => (
+                            <Ionicons
+                              name="chatbubble-ellipses-outline"
+                              size={15}
+                              color={pressed ? COLORS.accent : COLORS.textSecondary}
+                            />
+                          )}
+                        </Pressable>
+                        <Pressable
+                          style={({ pressed }) => [
+                            styles.removeFriendButton,
+                            pressed && styles.iconButtonPressed,
+                          ]}
+                          onPress={() => removeFriend(friend.username)}
+                          disabled={removingFriendUsername === friend.username}
+                        >
+                          {({ pressed }) =>
+                            removingFriendUsername === friend.username ? (
+                              <ActivityIndicator
+                                size="small"
+                                color={pressed ? COLORS.danger : COLORS.textSecondary}
+                              />
+                            ) : (
+                              <Ionicons
+                                name="trash-outline"
+                                size={15}
+                                color={pressed ? "#B91C1C" : "#DC2626"}
+                              />
+                            )
+                          }
+                        </Pressable>
+                      </View>
                     </View>
                   ))
                 )}
@@ -831,10 +984,10 @@ export default function SocialScreen() {
           <View style={styles.section}>
             <View style={styles.sectionHeaderRow}>
               <Text style={styles.sectionTitle}>Study Groups</Text>
-              <View style={styles.headerTabs}>
+              <View style={styles.sectionHeaderControls}>
                 <Pressable
                   hitSlop={8}
-                  style={styles.headerTab}
+                  style={styles.headerTabCompact}
                   onPress={() => {
                     resetGroupForm();
                     setGroupCreateOpen(true);
@@ -842,23 +995,63 @@ export default function SocialScreen() {
                 >
                   <Text style={styles.headerTabText}>Create group +</Text>
                 </Pressable>
+                <View style={styles.leaderboardToggle}>
+                  <Pressable
+                    style={[
+                      styles.toggleButtonCompact,
+                      groupVisibilityTab === "public" && styles.toggleButtonActive,
+                    ]}
+                    onPress={() => setGroupVisibilityTab("public")}
+                  >
+                    <Text
+                      style={[
+                        styles.toggleText,
+                        groupVisibilityTab === "public" && styles.toggleTextActive,
+                      ]}
+                    >
+                      Public
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    hitSlop={8}
+                    style={[
+                      styles.toggleButtonCompact,
+                      groupVisibilityTab === "private" && styles.toggleButtonActive,
+                    ]}
+                    onPress={() => setGroupVisibilityTab("private")}
+                  >
+                    <Text
+                      style={[
+                        styles.toggleText,
+                        groupVisibilityTab === "private" && styles.toggleTextActive,
+                      ]}
+                    >
+                      Private
+                    </Text>
+                  </Pressable>
+                </View>
               </View>
             </View>
             <View style={styles.listPanel}>
               <ScrollView
                 style={styles.listScrollGroups}
                 contentContainerStyle={
-                  groups.length === 0
+                  filteredGroups.length === 0
                     ? [styles.groupsList, styles.listEmptyContent]
                     : styles.groupsList
                 }
                 nestedScrollEnabled
-                showsVerticalScrollIndicator={false}
+                showsVerticalScrollIndicator
+                persistentScrollbar
               >
-                {groups.length === 0 ? (
-                  <Text style={styles.emptyText}>No groups yet</Text>
+                {filteredGroups.length === 0 ? (
+                  <Text style={styles.emptyText}>
+                    {groupVisibilityTab === "public"
+                      ? "No public groups available"
+                      : "No private groups available"}
+                  </Text>
                 ) : (
-                  groups.map((group) => {
+                  filteredGroups.map((group) => {
                     const hasInvite = incomingInviteGroupIds.has(
                       group.group_id,
                     );
@@ -905,9 +1098,14 @@ export default function SocialScreen() {
                                 </Text>
                               </View>
                             </View>
-                            <Text style={styles.groupMembers}>
-                              {group.members_count} members
-                            </Text>
+                            <Pressable
+                              hitSlop={8}
+                              onPress={() => openGroupMembersView(group)}
+                            >
+                              <Text style={styles.groupMembers}>
+                                {group.members_count} members
+                              </Text>
+                            </Pressable>
                           </View>
                           {group.is_member ? (
                             <Pressable
@@ -996,7 +1194,7 @@ export default function SocialScreen() {
                             </View>
                           )}
                           {group.is_owner ? (
-                            <Text style={styles.groupOwnerTag}>Owner</Text>
+                            <Text style={styles.groupOwnerTag}>Creator</Text>
                           ) : null}
                         </View>
                       </Pressable>
@@ -1011,38 +1209,56 @@ export default function SocialScreen() {
           <View style={styles.section}>
             <View style={styles.sectionHeaderRow}>
               <Text style={styles.sectionTitle}>Leaderboards</Text>
-              <View style={styles.leaderboardToggle}>
-                <Pressable
-                  style={[
-                    styles.toggleButton,
-                    leaderboardMetric === "hours" && styles.toggleButtonActive,
-                  ]}
-                  onPress={() => setLeaderboardMetric("hours")}
-                >
-                  <Text
+              <View style={styles.leaderboardHeaderControls}>
+                <View style={styles.leaderboardToggle}>
+                  <Pressable
                     style={[
-                      styles.toggleText,
-                      leaderboardMetric === "hours" && styles.toggleTextActive,
+                      styles.toggleButton,
+                      leaderboardMetric === "hours" && styles.toggleButtonActive,
                     ]}
+                    onPress={() => setLeaderboardMetric("hours")}
                   >
-                    Study hours
-                  </Text>
-                </Pressable>
-                <Pressable
-                  style={[
-                    styles.toggleButton,
-                    leaderboardMetric === "streak" && styles.toggleButtonActive,
-                  ]}
-                  onPress={() => setLeaderboardMetric("streak")}
-                >
-                  <Text
+                    <Text
+                      style={[
+                        styles.toggleText,
+                        leaderboardMetric === "hours" && styles.toggleTextActive,
+                      ]}
+                    >
+                      Study hours
+                    </Text>
+                  </Pressable>
+                  <Pressable
                     style={[
-                      styles.toggleText,
-                      leaderboardMetric === "streak" && styles.toggleTextActive,
+                      styles.toggleButton,
+                      leaderboardMetric === "streak" && styles.toggleButtonActive,
                     ]}
+                    onPress={() => setLeaderboardMetric("streak")}
                   >
-                    Streak
-                  </Text>
+                    <Text
+                      style={[
+                        styles.toggleText,
+                        leaderboardMetric === "streak" && styles.toggleTextActive,
+                      ]}
+                    >
+                      Streak
+                    </Text>
+                  </Pressable>
+                </View>
+                <Pressable
+                  hitSlop={8}
+                  style={styles.refreshButton}
+                  onPress={() => fetchLeaderboard(true)}
+                  disabled={leaderboardRefreshing}
+                >
+                  {leaderboardRefreshing ? (
+                    <ActivityIndicator size="small" color={COLORS.accent} />
+                  ) : (
+                    <Ionicons
+                      name="refresh"
+                      size={16}
+                      color={COLORS.textSecondary}
+                    />
+                  )}
                 </Pressable>
               </View>
             </View>
@@ -1055,9 +1271,11 @@ export default function SocialScreen() {
                     : styles.leaderboardList
                 }
                 nestedScrollEnabled
-                showsVerticalScrollIndicator={false}
+                showsVerticalScrollIndicator
+                persistentScrollbar
+                decelerationRate="normal"
               >
-                {leaderboardLoading ? (
+                {leaderboardLoading && leaderboardEntries.length === 0 ? (
                   <Text style={styles.emptyText}>Loading...</Text>
                 ) : leaderboardEntries.length === 0 ? (
                   <Text style={styles.emptyText}>No leaderboard data yet</Text>
@@ -1107,7 +1325,7 @@ export default function SocialScreen() {
                       </View>
                       <View style={styles.leaderboardInfo}>
                         <Text style={styles.leaderboardName}>
-                          {entry.full_name || entry.username}
+                          @{entry.username}
                         </Text>
                         <Text style={styles.leaderboardStats}>
                           {entry.university ?? `@${entry.username}`}
@@ -1133,6 +1351,13 @@ export default function SocialScreen() {
                   ))
                 )}
               </ScrollView>
+              {!leaderboardLoading && leaderboardEntries.length > 0 ? (
+                <LinearGradient
+                  pointerEvents="none"
+                  colors={["rgba(15,23,42,0)", "rgba(15,23,42,0.32)"]}
+                  style={styles.leaderboardBottomFade}
+                />
+              ) : null}
             </View>
           </View>
         </ScrollView>
@@ -1248,7 +1473,7 @@ export default function SocialScreen() {
                       </View>
                       <View style={styles.leaderboardInfo}>
                         <Text style={styles.leaderboardName}>
-                          {entry.full_name || entry.username}
+                          @{entry.username}
                         </Text>
                         <Text style={styles.leaderboardStats}>
                           {entry.university ?? `@${entry.username}`}
@@ -1260,6 +1485,91 @@ export default function SocialScreen() {
                     </View>
                   ))}
                 </View>
+              )}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={groupMembersViewOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setGroupMembersViewOpen(false)}
+      >
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => setGroupMembersViewOpen(false)}
+        >
+          <Pressable
+            style={styles.groupMembersModalCard}
+            onPress={() => {
+              // noop
+            }}
+          >
+            <View style={styles.groupMembersHeaderRow}>
+              <View style={styles.groupMembersHeaderTextWrap}>
+                <Text style={styles.groupMembersTitle}>
+                  {groupMembersViewGroup?.name ?? "Group"}
+                </Text>
+                <Text style={styles.groupMembersSubtitle}>
+                  {groupMembersViewList.length} members
+                </Text>
+              </View>
+              <Pressable
+                hitSlop={8}
+                style={styles.groupMembersCloseButton}
+                onPress={() => setGroupMembersViewOpen(false)}
+              >
+                <Ionicons name="close" size={15} color={COLORS.textSecondary} />
+              </Pressable>
+            </View>
+
+            <ScrollView
+              style={styles.groupMembersScroll}
+              contentContainerStyle={styles.groupMembersList}
+              showsVerticalScrollIndicator
+            >
+              {groupMembersViewLoading ? (
+                <Text style={styles.emptyText}>Loading members...</Text>
+              ) : groupMembersViewList.length === 0 ? (
+                <Text style={styles.emptyText}>No members found.</Text>
+              ) : (
+                groupMembersViewList.map((member) => {
+                  const isCreator = member.role === "owner";
+                  const profilePhoto =
+                    member.username === currentUsername
+                      ? profile?.profile_photo
+                      : friendByUsername.get(member.username)?.profile_photo;
+                  return (
+                    <View key={member.username} style={styles.groupMemberListItem}>
+                      <View style={styles.groupMemberAvatar}>
+                        {profilePhoto ? (
+                          <Image
+                            source={{
+                              uri: `data:image/jpeg;base64,${profilePhoto}`,
+                            }}
+                            style={styles.groupMemberAvatarImage}
+                          />
+                        ) : (
+                          <Ionicons
+                            name="person"
+                            size={16}
+                            color={COLORS.textMuted}
+                          />
+                        )}
+                      </View>
+                      <View style={styles.groupMemberTextWrap}>
+                        <Text style={styles.groupMemberUsername}>
+                          @{member.username}
+                        </Text>
+                        <Text style={styles.groupMemberRole}>
+                          {isCreator ? "Creator" : "Member"}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })
               )}
             </ScrollView>
           </Pressable>
@@ -1601,23 +1911,37 @@ export default function SocialScreen() {
               <Text style={styles.emptyText}>No group selected</Text>
             ) : (
               <ScrollView showsVerticalScrollIndicator={false}>
-                <TextInput
-                  value={groupNameDraft}
-                  onChangeText={setGroupNameDraft}
-                  style={styles.groupInput}
-                  placeholder="Group name"
-                  placeholderTextColor={COLORS.textMuted}
-                  editable={isGroupOwner}
-                />
-                <TextInput
-                  value={groupDescriptionDraft}
-                  onChangeText={setGroupDescriptionDraft}
-                  style={styles.groupTextArea}
-                  placeholder="Description"
-                  placeholderTextColor={COLORS.textMuted}
-                  multiline
-                  editable={isGroupOwner}
-                />
+                {isGroupOwner ? (
+                  <TextInput
+                    value={groupNameDraft}
+                    onChangeText={setGroupNameDraft}
+                    style={styles.groupInput}
+                    placeholder="Group name"
+                    placeholderTextColor={COLORS.textMuted}
+                  />
+                ) : (
+                  <View style={styles.readOnlyField}>
+                    <Text style={styles.readOnlyLabel}>Group name</Text>
+                    <Text style={styles.readOnlyValue}>{groupNameDraft}</Text>
+                  </View>
+                )}
+                {isGroupOwner ? (
+                  <TextInput
+                    value={groupDescriptionDraft}
+                    onChangeText={setGroupDescriptionDraft}
+                    style={styles.groupTextArea}
+                    placeholder="Description"
+                    placeholderTextColor={COLORS.textMuted}
+                    multiline
+                  />
+                ) : (
+                  <View style={styles.readOnlyField}>
+                    <Text style={styles.readOnlyLabel}>Description</Text>
+                    <Text style={styles.readOnlyValue}>
+                      {groupDescriptionDraft || "No description"}
+                    </Text>
+                  </View>
+                )}
 
                 <View style={styles.groupPhotoRow}>
                   <View style={styles.groupPhotoPreview}>
@@ -1636,66 +1960,70 @@ export default function SocialScreen() {
                       />
                     )}
                   </View>
-                  <View style={styles.groupPhotoActions}>
-                    <Pressable
-                      style={styles.secondaryButton}
-                      onPress={handlePickSettingsPhoto}
-                      disabled={!isGroupOwner}
-                    >
-                      <Text style={styles.secondaryButtonText}>
-                        Update photo
-                      </Text>
-                    </Pressable>
-                    {groupPhotoDraft ? (
+                  {isGroupOwner ? (
+                    <View style={styles.groupPhotoActions}>
                       <Pressable
                         style={styles.secondaryButton}
-                        onPress={() => setGroupPhotoDraft("")}
-                        disabled={!isGroupOwner}
+                        onPress={handlePickSettingsPhoto}
                       >
-                        <Text style={styles.secondaryButtonText}>Remove</Text>
+                        <Text style={styles.secondaryButtonText}>
+                          Update photo
+                        </Text>
                       </Pressable>
-                    ) : null}
-                  </View>
+                      {groupPhotoDraft ? (
+                        <Pressable
+                          style={styles.secondaryButton}
+                          onPress={() => setGroupPhotoDraft("")}
+                        >
+                          <Text style={styles.secondaryButtonText}>Remove</Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
+                  ) : null}
                 </View>
 
                 <View style={styles.privacyRow}>
                   <Text style={styles.privacyLabel}>Privacy</Text>
-                  <View style={styles.privacyToggle}>
-                    <Pressable
-                      style={[
-                        styles.privacyOption,
-                        groupIsPublicDraft && styles.privacyOptionActive,
-                      ]}
-                      onPress={() => setGroupIsPublicDraft(true)}
-                      disabled={!isGroupOwner}
-                    >
-                      <Text
+                  {isGroupOwner ? (
+                    <View style={styles.privacyToggle}>
+                      <Pressable
                         style={[
-                          styles.privacyOptionText,
-                          groupIsPublicDraft && styles.privacyOptionTextActive,
+                          styles.privacyOption,
+                          groupIsPublicDraft && styles.privacyOptionActive,
                         ]}
+                        onPress={() => setGroupIsPublicDraft(true)}
                       >
-                        Public
-                      </Text>
-                    </Pressable>
-                    <Pressable
-                      style={[
-                        styles.privacyOption,
-                        !groupIsPublicDraft && styles.privacyOptionActive,
-                      ]}
-                      onPress={() => setGroupIsPublicDraft(false)}
-                      disabled={!isGroupOwner}
-                    >
-                      <Text
+                        <Text
+                          style={[
+                            styles.privacyOptionText,
+                            groupIsPublicDraft && styles.privacyOptionTextActive,
+                          ]}
+                        >
+                          Public
+                        </Text>
+                      </Pressable>
+                      <Pressable
                         style={[
-                          styles.privacyOptionText,
-                          !groupIsPublicDraft && styles.privacyOptionTextActive,
+                          styles.privacyOption,
+                          !groupIsPublicDraft && styles.privacyOptionActive,
                         ]}
+                        onPress={() => setGroupIsPublicDraft(false)}
                       >
-                        Private
-                      </Text>
-                    </Pressable>
-                  </View>
+                        <Text
+                          style={[
+                            styles.privacyOptionText,
+                            !groupIsPublicDraft && styles.privacyOptionTextActive,
+                          ]}
+                        >
+                          Private
+                        </Text>
+                      </Pressable>
+                    </View>
+                  ) : (
+                    <Text style={styles.readOnlyValue}>
+                      {groupIsPublicDraft ? "Public" : "Private"}
+                    </Text>
+                  )}
                 </View>
 
                 <View style={styles.settingsSection}>
@@ -1725,7 +2053,7 @@ export default function SocialScreen() {
                             @{member.username}
                           </Text>
                           {isOwner ? (
-                            <Text style={styles.ownerPill}>Owner</Text>
+                            <Text style={styles.ownerPill}>Creator</Text>
                           ) : isGroupOwner ? (
                             <View style={styles.memberActions}>
                               <Pressable
@@ -1735,7 +2063,7 @@ export default function SocialScreen() {
                                 }
                               >
                                 <Text style={styles.ownerActionText}>
-                                  Make owner
+                                  Make creator
                                 </Text>
                               </Pressable>
                               <Ionicons
@@ -1756,14 +2084,14 @@ export default function SocialScreen() {
                 {isGroupOwner && transferOwnerUsername ? (
                   <View style={styles.ownerTransferRow}>
                     <Text style={styles.ownerTransferText}>
-                      New owner: @{transferOwnerUsername}
+                      New creator: @{transferOwnerUsername}
                     </Text>
                     <Pressable
                       style={styles.primaryButton}
                       onPress={handleTransferOwner}
                     >
                       <Text style={styles.primaryButtonText}>
-                        Transfer owner
+                        Transfer creator
                       </Text>
                     </Pressable>
                   </View>
@@ -1939,7 +2267,100 @@ const createStyles = (COLORS: ThemeColors) =>
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: COLORS.inputBg,
+    borderWidth: 1,
+    borderColor: COLORS.borderSoft,
+  },
+  groupMembersModalCard: {
+    width: "100%",
+    maxWidth: 360,
+    maxHeight: 420,
+    backgroundColor: COLORS.card,
+    borderRadius: 18,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.borderSoft,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 6,
+  },
+  groupMembersHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: SPACING.sm,
+  },
+  groupMembersHeaderTextWrap: {
+    flex: 1,
+    paddingRight: SPACING.sm,
+  },
+  groupMembersTitle: {
+    color: COLORS.textPrimary,
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  groupMembersSubtitle: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    marginTop: 2,
+    fontWeight: "500",
+  },
+  groupMembersCloseButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
     backgroundColor: COLORS.subtleCard,
+    borderWidth: 1,
+    borderColor: COLORS.borderSoft,
+  },
+  groupMembersScroll: {
+    maxHeight: 320,
+  },
+  groupMembersList: {
+    gap: 8,
+    paddingBottom: 4,
+  },
+  groupMemberListItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.subtleCard,
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: COLORS.borderSoft,
+  },
+  groupMemberAvatar: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+    backgroundColor: COLORS.inputBg,
+  },
+  groupMemberAvatarImage: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+  },
+  groupMemberTextWrap: {
+    flex: 1,
+  },
+  groupMemberUsername: {
+    color: COLORS.textPrimary,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  groupMemberRole: {
+    color: COLORS.textSecondary,
+    fontSize: 11,
+    marginTop: 1,
+    fontWeight: "500",
   },
   scrollContent: {
     paddingTop: SPACING.lg,
@@ -2014,6 +2435,14 @@ const createStyles = (COLORS: ThemeColors) =>
     borderColor: COLORS.borderSoft,
     backgroundColor: COLORS.subtleCard,
   },
+  headerTabCompact: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: COLORS.borderSoft,
+    backgroundColor: COLORS.subtleCard,
+  },
   headerTabActive: {
     backgroundColor: COLORS.accent,
     borderColor: COLORS.accent,
@@ -2055,6 +2484,15 @@ const createStyles = (COLORS: ThemeColors) =>
   listScrollLeaderboard: {
     height: LEADERBOARD_LIST_HEIGHT,
   },
+  leaderboardBottomFade: {
+    position: "absolute",
+    left: SPACING.sm,
+    right: SPACING.sm,
+    bottom: SPACING.sm,
+    height: 28,
+    borderBottomLeftRadius: 12,
+    borderBottomRightRadius: 12,
+  },
   listEmptyContent: {
     flexGrow: 1,
     justifyContent: "center",
@@ -2089,6 +2527,26 @@ const createStyles = (COLORS: ThemeColors) =>
     backgroundColor: COLORS.inputBg,
     marginBottom: SPACING.sm,
     textAlignVertical: "top",
+  },
+  readOnlyField: {
+    borderWidth: 1,
+    borderColor: COLORS.borderSoft,
+    borderRadius: 12,
+    backgroundColor: COLORS.subtleCard,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    marginBottom: SPACING.sm,
+  },
+  readOnlyLabel: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    marginBottom: 4,
+    fontWeight: "600",
+  },
+  readOnlyValue: {
+    color: COLORS.textPrimary,
+    fontSize: 13,
+    lineHeight: 19,
   },
   searchStatus: {
     color: COLORS.textMuted,
@@ -2161,7 +2619,7 @@ const createStyles = (COLORS: ThemeColors) =>
     borderRadius: 24,
     borderWidth: 1,
     borderColor: COLORS.borderSoft,
-    backgroundColor: COLORS.subtleCard,
+    backgroundColor: COLORS.inputBg,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -2406,10 +2864,39 @@ const createStyles = (COLORS: ThemeColors) =>
     color: COLORS.textSecondary,
     marginTop: 2,
   },
+  friendActions: {
+    marginLeft: SPACING.sm,
+    flexDirection: "row",
+    flexWrap: "nowrap",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 8,
+    minWidth: 64,
+    flexShrink: 0,
+  },
+  removeFriendButton: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: COLORS.inputBg,
+    borderWidth: 1,
+    borderColor: COLORS.borderSoft,
+  },
   messageButton: {
-    padding: 8,
-    borderRadius: 16,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: COLORS.inputBg,
+    borderWidth: 1,
+    borderColor: COLORS.borderSoft,
+  },
+  iconButtonPressed: {
     backgroundColor: COLORS.subtleCard,
+    transform: [{ scale: 0.95 }],
   },
   groupsList: {
     gap: SPACING.sm,
@@ -2513,7 +3000,7 @@ const createStyles = (COLORS: ThemeColors) =>
     backgroundColor: COLORS.accent,
   },
   groupActionPrimaryText: {
-    color: "#0B1020",
+    color: "#FFFFFF",
     fontWeight: "700",
     fontSize: 12,
   },
@@ -2647,11 +3134,39 @@ const createStyles = (COLORS: ThemeColors) =>
     borderColor: COLORS.borderSubtle,
     alignSelf: "flex-start",
   },
+  leaderboardHeaderControls: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.xs,
+  },
+  refreshButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: COLORS.subtleCard,
+    borderWidth: 1,
+    borderColor: COLORS.borderSubtle,
+  },
+  sectionHeaderControls: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.xs,
+    marginLeft: "auto",
+  },
   toggleButton: {
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 6,
     paddingHorizontal: SPACING.md,
+    borderRadius: 14,
+  },
+  toggleButtonCompact: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 6,
+    paddingHorizontal: 10,
     borderRadius: 14,
   },
   toggleButtonActive: {

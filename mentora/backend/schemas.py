@@ -170,6 +170,11 @@ class FriendRequestAction(BaseModel):
     username: str
 
 
+class FriendRemoveAction(BaseModel):
+    username: str
+    friend_username: str
+
+
 class FriendRequestResponse(BaseModel):
     request_id: int
     from_username: str
