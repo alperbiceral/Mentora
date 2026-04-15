@@ -76,6 +76,20 @@ type Profile = {
 
 const EMOJI_SET = ["🙂", "😂", "😍", "🥳", "👍", "🔥", "👏", "😮", "😢", "🙏"];
 
+function parseApiTimestamp(value: string) {
+  const raw = String(value ?? "").trim();
+  if (!raw) {
+    return new Date(NaN);
+  }
+  // If API doesn't include timezone info, treat it as UTC (common for backend DB timestamps).
+  const hasTimezone = /[Zz]|[+-]\d{2}:\d{2}$/.test(raw);
+  if (hasTimezone) {
+    return new Date(raw);
+  }
+  const normalized = raw.includes("T") ? raw : raw.replace(" ", "T");
+  return new Date(`${normalized}Z`);
+}
+
 export default function ChatScreen() {
   const { colors: COLORS } = useTheme();
   const styles = useMemo(() => createStyles(COLORS), [COLORS]);
@@ -711,7 +725,7 @@ export default function ChatScreen() {
                   }
                 }}
               >
-                <Ionicons name="trash" size={18} color={COLORS.danger} />
+                <Text style={styles.deleteButtonText}>Delete</Text>
               </Pressable>
             </View>
 
@@ -823,7 +837,9 @@ export default function ChatScreen() {
                               isMine && styles.messageTimeMine,
                             ]}
                           >
-                            {new Date(message.created_at).toLocaleTimeString(
+                            {parseApiTimestamp(
+                              message.created_at,
+                            ).toLocaleTimeString(
                               [],
                               {
                                 hour: "2-digit",
@@ -1460,16 +1476,19 @@ const createStyles = (COLORS: ThemeColors) =>
     sectionAction: {
       flexDirection: "row",
       alignItems: "center",
-      paddingHorizontal: 10,
-      paddingVertical: 6,
+      justifyContent: "center",
+      height: 30,
+      paddingHorizontal: 12,
+      paddingVertical: 0,
       borderRadius: 999,
       backgroundColor: COLORS.accent,
-      gap: 6,
+      gap: 5,
     },
     sectionActionText: {
       color: "#FFFFFF",
-      fontWeight: "700",
+      fontWeight: "600",
       fontSize: 12,
+      lineHeight: 14,
     },
     newChatButton: {
       flexDirection: "row",
@@ -1526,7 +1545,12 @@ const createStyles = (COLORS: ThemeColors) =>
       marginTop: 2,
     },
     threadDelete: {
-      padding: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: "rgba(239,68,68,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(239,68,68,0.35)",
     },
     chatHeader: {
       flexDirection: "row",
@@ -1583,13 +1607,20 @@ const createStyles = (COLORS: ThemeColors) =>
       backgroundColor: COLORS.subtleCard,
     },
     deleteButton: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
+    paddingHorizontal: 12,
+    height: 32,
+    borderRadius: 999,
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: COLORS.subtleCard,
+    backgroundColor: "rgba(239,68,68,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(239,68,68,0.35)",
     },
+  deleteButtonText: {
+    color: COLORS.danger,
+    fontWeight: "600",
+    fontSize: 12,
+  },
     messagesScroll: {
       flex: 1,
     },

@@ -136,7 +136,7 @@ type GroupLeaderboardEntry = {
   streak_count: number;
   profile_photo?: string | null;
 };
-type GroupVisibilityTab = "public" | "private";
+type GroupVisibilityTab = "my" | "all";
 
 export default function SocialScreen() {
   const { colors: COLORS } = useTheme();
@@ -198,7 +198,7 @@ export default function SocialScreen() {
   const [groupRemoveMembers, setGroupRemoveMembers] = useState<string[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [groupVisibilityTab, setGroupVisibilityTab] =
-    useState<GroupVisibilityTab>("public");
+    useState<GroupVisibilityTab>("my");
   const [transferOwnerUsername, setTransferOwnerUsername] = useState<
     string | null
   >(null);
@@ -445,9 +445,13 @@ export default function SocialScreen() {
   const addableFriends = friends.filter(
     (friend) => !memberUsernames.has(friend.username),
   );
-  const filteredGroups = groups.filter((group) =>
-    groupVisibilityTab === "public" ? group.is_public : !group.is_public,
-  );
+  const filteredGroups = useMemo(() => {
+    if (groupVisibilityTab === "my") {
+      return groups.filter((group) => group.is_member);
+    }
+    // "All groups" shows public groups the user can join (not already a member).
+    return groups.filter((group) => group.is_public && !group.is_member);
+  }, [groups, groupVisibilityTab]);
 
   const resetGroupForm = () => {
     setGroupName("");
@@ -999,34 +1003,34 @@ export default function SocialScreen() {
                   <Pressable
                     style={[
                       styles.toggleButtonCompact,
-                      groupVisibilityTab === "public" && styles.toggleButtonActive,
+                      groupVisibilityTab === "my" && styles.toggleButtonActive,
                     ]}
-                    onPress={() => setGroupVisibilityTab("public")}
+                    onPress={() => setGroupVisibilityTab("my")}
                   >
                     <Text
                       style={[
                         styles.toggleText,
-                        groupVisibilityTab === "public" && styles.toggleTextActive,
+                        groupVisibilityTab === "my" && styles.toggleTextActive,
                       ]}
                     >
-                      Public
+                      Joined
                     </Text>
                   </Pressable>
                   <Pressable
                     hitSlop={8}
                     style={[
                       styles.toggleButtonCompact,
-                      groupVisibilityTab === "private" && styles.toggleButtonActive,
+                      groupVisibilityTab === "all" && styles.toggleButtonActive,
                     ]}
-                    onPress={() => setGroupVisibilityTab("private")}
+                    onPress={() => setGroupVisibilityTab("all")}
                   >
                     <Text
                       style={[
                         styles.toggleText,
-                        groupVisibilityTab === "private" && styles.toggleTextActive,
+                        groupVisibilityTab === "all" && styles.toggleTextActive,
                       ]}
                     >
-                      Private
+                      All
                     </Text>
                   </Pressable>
                 </View>
@@ -1046,9 +1050,9 @@ export default function SocialScreen() {
               >
                 {filteredGroups.length === 0 ? (
                   <Text style={styles.emptyText}>
-                    {groupVisibilityTab === "public"
-                      ? "No public groups available"
-                      : "No private groups available"}
+                    {groupVisibilityTab === "my"
+                      ? "You haven't joined any groups yet"
+                      : "No public groups available"}
                   </Text>
                 ) : (
                   filteredGroups.map((group) => {
