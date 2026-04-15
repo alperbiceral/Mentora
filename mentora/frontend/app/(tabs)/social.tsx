@@ -2653,7 +2653,7 @@ const createStyles = (COLORS: ThemeColors) =>
     alignItems: "center",
   },
   primaryButtonText: {
-    color: "#0B1020",
+    color: "#FFFFFF",
     fontWeight: "700",
     fontSize: 13,
   },
@@ -2690,7 +2690,7 @@ const createStyles = (COLORS: ThemeColors) =>
     fontWeight: "600",
   },
   privacyOptionTextActive: {
-    color: "#0B1020",
+    color: "#FFFFFF",
     fontWeight: "700",
   },
   inviteSection: {

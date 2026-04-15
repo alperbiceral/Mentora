@@ -253,7 +253,7 @@ export default function OceanQuestionScreen() {
                 <ActivityIndicator color={COLORS.background} />
               ) : (
                 <Text style={styles.primaryButtonText}>
-                  {isLast ? "Submit" : "Submit & next"}
+                  {isLast ? "Submit" : "Submit and Next"}
                 </Text>
               )}
             </Pressable>
@@ -265,14 +265,14 @@ export default function OceanQuestionScreen() {
               onPress={handleSkipQuestion}
               disabled={status === "saving"}
             >
-              <Text style={styles.secondaryButtonText}>Skip question</Text>
+              <Text style={styles.secondaryButtonText}>Skip Question</Text>
             </Pressable>
             <Pressable
               style={styles.skipLink}
               onPress={handleSkipTest}
               disabled={status === "saving"}
             >
-              <Text style={styles.skipLinkText}>Skip test</Text>
+              <Text style={styles.skipLinkText}>Skip Test</Text>
             </Pressable>
           </View>
         </View>
@@ -416,7 +416,7 @@ const createStyles = (COLORS: ThemeColors) =>
     paddingVertical: 14,
   },
   primaryButtonText: {
-    color: COLORS.textPrimary,
+    color: "#FFFFFF",
     fontSize: 16,
   },
   secondaryButton: {
@@ -425,7 +425,7 @@ const createStyles = (COLORS: ThemeColors) =>
     paddingVertical: 12,
     borderWidth: 1,
     borderColor: COLORS.borderSoft,
-    backgroundColor: "rgba(2,6,23,0.5)",
+    backgroundColor: "rgba(2,6,23,0.15)",
   },
   secondaryButtonText: {
     color: COLORS.textSecondary,

@@ -35,7 +35,7 @@ const EXAMPLE_PROMPTS = [
 
 export default function AIAgentScreen() {
   const router = useRouter();
-  const { colors: COLORS } = useTheme();
+  const { colors: COLORS, mode } = useTheme();
   const styles = useMemo(() => createStyles(COLORS), [COLORS]);
 
   const [draft, setDraft] = useState("");
@@ -45,6 +45,20 @@ export default function AIAgentScreen() {
   const flatListRef = useRef<FlatList<Message>>(null);
 
   const hasMessages = messages.length > 0;
+
+  const robotColorFilters = useMemo(() => {
+    if (mode !== "light") {
+      return [];
+    }
+    // The "FaceDots" fill controls the eye dots; in light mode they are near-white
+    // and can disappear against light backgrounds.
+    return [
+      {
+        keypath: "**.FaceDots.Fill 1",
+        color: COLORS.textPrimary,
+      },
+    ];
+  }, [mode, COLORS.textPrimary]);
 
   useEffect(() => {
     (async () => {
@@ -222,6 +236,7 @@ export default function AIAgentScreen() {
                   <LottieView
                     key="mentora_ai_friendly"
                     source={require("../assets/lottie/mentora_ai_friendly.json")}
+                    colorFilters={robotColorFilters}
                     autoPlay
                     loop
                     resizeMode="contain"
@@ -380,9 +395,17 @@ const createStyles = (COLORS: ThemeColors) =>
       paddingVertical: 12,
       paddingHorizontal: 14,
       borderRadius: 14,
-      backgroundColor: COLORS.card,
+      // Light gray card that still contrasts with the screen background.
+      backgroundColor:
+        COLORS.card === "#FFFFFF" ? "rgba(15,23,42,0.04)" : COLORS.subtleCard,
       borderWidth: 1,
-      borderColor: COLORS.borderSoft,
+      borderColor:
+        COLORS.card === "#FFFFFF" ? "rgba(15,23,42,0.10)" : COLORS.borderSoft,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: COLORS.card === "#FFFFFF" ? 0.08 : 0.18,
+      shadowRadius: 12,
+      elevation: 4,
     },
     promptText: {
       fontSize: 14,

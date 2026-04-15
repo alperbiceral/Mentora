@@ -259,7 +259,7 @@ export default function AuthScreen() {
                 ? "Please wait..."
                 : isRegister
                   ? "Create account"
-                  : "Log in"}
+                  : "Login"}
             </Text>
           </Pressable>
 
@@ -333,7 +333,8 @@ const createStyles = (COLORS: ThemeColors) =>
   },
   toggleRow: {
     flexDirection: "row",
-    backgroundColor: "rgba(2,6,23,0.6)",
+    // Soft grey (less harsh than dark navy).
+    backgroundColor: "rgba(148,163,184,0.40)",
     borderRadius: 999,
     padding: 6,
     marginBottom: 18,
@@ -352,7 +353,7 @@ const createStyles = (COLORS: ThemeColors) =>
     fontWeight: "600",
   },
   toggleTextActive: {
-    color: "#0B1020",
+    color: "#FFFFFF",
   },
   card: {
     backgroundColor: COLORS.card,
@@ -391,7 +392,7 @@ const createStyles = (COLORS: ThemeColors) =>
     opacity: 0.6,
   },
   primaryButtonText: {
-    color: "#0B1020",
+    color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "700",
   },

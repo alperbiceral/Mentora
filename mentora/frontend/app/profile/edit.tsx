@@ -127,12 +127,20 @@ export default function EditProfileScreen() {
 
   const handleSave = async () => {
     const nextErrors = {
-      fullName: fullName.trim() ? "" : "Required",
+      fullName: fullName.trim()
+        ? fullName.length <= 25
+          ? ""
+          : "Full name cannot exceed 25 characters."
+        : "Required",
       phone:
         phoneDigits.length === 0 || phoneDigits.length === 10
           ? ""
           : "Phone number must be exactly 10 digits.",
-      university: university.trim() ? "" : "Required",
+      university: university.trim()
+        ? university.length <= 30
+          ? ""
+          : "University cannot exceed 30 characters."
+        : "Required",
       department: department.trim() ? "" : "Required",
     };
     setFieldErrors(nextErrors);
@@ -156,13 +164,13 @@ export default function EditProfileScreen() {
         : `${API_BASE_URL}/profile`;
       const body = profile
         ? {
-            full_name: payload.full_name,
-            email: payload.email,
-            phone_number: payload.phone_number,
-            university: payload.university,
-            department: payload.department,
-            profile_photo: payload.profile_photo,
-          }
+          full_name: payload.full_name,
+          email: payload.email,
+          phone_number: payload.phone_number,
+          university: payload.university,
+          department: payload.department,
+          profile_photo: payload.profile_photo,
+        }
         : payload;
       const response = await fetch(url, {
         method: profile ? "PUT" : "POST",
@@ -236,12 +244,22 @@ export default function EditProfileScreen() {
             label="Full Name"
             value={fullName}
             onChangeText={(text) => {
+              if (text.length > 25) {
+                const truncated = text.slice(0, 25);
+                setFullName(truncated);
+                setFieldErrors((prev) => ({
+                  ...prev,
+                  fullName: "Full name cannot exceed 25 characters.",
+                }));
+                return;
+              }
               setFullName(text);
               if (fieldErrors.fullName) {
                 setFieldErrors((prev) => ({ ...prev, fullName: "" }));
               }
             }}
             error={fieldErrors.fullName}
+            maxLength={25}
             styles={styles}
             colors={COLORS}
           />
@@ -278,12 +296,22 @@ export default function EditProfileScreen() {
             label="University"
             value={university}
             onChangeText={(text) => {
+              if (text.length > 30) {
+                const truncated = text.slice(0, 30);
+                setUniversity(truncated);
+                setFieldErrors((prev) => ({
+                  ...prev,
+                  university: "University cannot exceed 30 characters.",
+                }));
+                return;
+              }
               setUniversity(text);
               if (fieldErrors.university) {
                 setFieldErrors((prev) => ({ ...prev, university: "" }));
               }
             }}
             error={fieldErrors.university}
+            maxLength={30}
             styles={styles}
             colors={COLORS}
           />
@@ -372,14 +400,15 @@ type FieldProps = {
   error?: string;
   autoCapitalize?: "none" | "sentences" | "words" | "characters";
   keyboardType?:
-    | "default"
-    | "email-address"
-    | "numeric"
-    | "phone-pad"
-    | "number-pad";
+  | "default"
+  | "email-address"
+  | "numeric"
+  | "phone-pad"
+  | "number-pad";
   editable?: boolean;
   multiline?: boolean;
   placeholder?: string;
+  maxLength?: number;
   styles: any;
   colors: ThemeColors;
 };
@@ -394,6 +423,7 @@ const Field: React.FC<FieldProps> = ({
   editable = true,
   multiline = false,
   placeholder,
+  maxLength,
   styles,
   colors,
 }) => (
@@ -409,6 +439,7 @@ const Field: React.FC<FieldProps> = ({
       keyboardType={keyboardType}
       editable={editable}
       multiline={multiline}
+      maxLength={maxLength}
     />
     {error ? <Text style={styles.fieldErrorText}>{error}</Text> : null}
   </View>
@@ -434,145 +465,147 @@ function formatPhoneNumber(digits: string) {
 
 const createStyles = (COLORS: ThemeColors) =>
   StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  scroll: {
-    flex: 1,
-  },
-  contentContainer: {
-    paddingHorizontal: SPACING.lg,
-    paddingTop: SPACING.lg,
-    paddingBottom: SPACING.xl,
-  },
-  topBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: SPACING.lg,
-  },
-  backButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(15,23,42,0.8)",
-  },
-  topTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-  },
-  formCard: {
-    backgroundColor: COLORS.card,
-    borderRadius: 20,
-    paddingHorizontal: SPACING.md,
-    paddingTop: SPACING.md,
-    paddingBottom: SPACING.lg,
-    borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
-    shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.14,
-    shadowRadius: 16,
-    elevation: 5,
-  },
-  fieldContainer: {
-    marginBottom: SPACING.md,
-  },
-  fieldLabel: {
-    fontSize: 12,
-    color: COLORS.textMuted,
-    marginBottom: 6,
-  },
-  fieldErrorText: {
-    color: COLORS.danger,
-    fontSize: 12,
-    marginTop: 6,
-  },
-  textInput: {
-    minHeight: 44,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
-    paddingHorizontal: SPACING.md,
-    fontSize: 14,
-    color: COLORS.textPrimary,
-    backgroundColor: COLORS.inputBg,
-    textAlignVertical: "top",
-  },
-  photoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.md,
-    marginBottom: SPACING.md,
-  },
-  photoPreview: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    safeArea: {
+      flex: 1,
+      backgroundColor: COLORS.background,
+    },
+    scroll: {
+      flex: 1,
+    },
+    contentContainer: {
+      paddingHorizontal: SPACING.lg,
+      paddingTop: SPACING.lg,
+      paddingBottom: SPACING.xl,
+    },
+    topBar: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: SPACING.lg,
+    },
+    backButton: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: "center",
+      justifyContent: "center",
     backgroundColor: COLORS.subtleCard,
     borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  photoImage: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-  },
-  photoButton: {
-    flex: 1,
-    height: 44,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
-    backgroundColor: COLORS.inputBg,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  photoButtonText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: COLORS.textPrimary,
-  },
-  bottomButtonsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: SPACING.lg,
-    gap: SPACING.sm,
-  },
-  cancelButton: {
-    flex: 1,
-    height: 46,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: COLORS.card,
-  },
-  cancelButtonText: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: COLORS.textSecondary,
-  },
-  saveButton: {
-    flex: 1,
-    height: 46,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: COLORS.accentSoft,
-  },
-  saveButtonText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#FFFFFF",
-  },
-});
+    borderColor: COLORS.borderSoft,
+    },
+    topTitle: {
+      fontSize: 18,
+      fontWeight: "700",
+      color: COLORS.textPrimary,
+    },
+    formCard: {
+      backgroundColor: COLORS.card,
+      borderRadius: 20,
+      paddingHorizontal: SPACING.md,
+      paddingTop: SPACING.md,
+      paddingBottom: SPACING.lg,
+      borderWidth: 1,
+      borderColor: COLORS.borderSubtle,
+      shadowColor: COLORS.shadow,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.14,
+      shadowRadius: 16,
+      elevation: 5,
+    },
+    fieldContainer: {
+      marginBottom: SPACING.md,
+    },
+    fieldLabel: {
+      fontSize: 12,
+      color: COLORS.textMuted,
+      marginBottom: 6,
+    },
+    fieldErrorText: {
+      color: COLORS.danger,
+      fontSize: 12,
+      marginTop: 6,
+    },
+    textInput: {
+      minHeight: 44,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: COLORS.borderSubtle,
+      paddingHorizontal: SPACING.md,
+      fontSize: 14,
+      color: COLORS.textPrimary,
+      backgroundColor: COLORS.inputBg,
+      textAlignVertical: "top",
+    },
+    photoRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: SPACING.md,
+      marginBottom: SPACING.md,
+    },
+    photoPreview: {
+      width: 52,
+      height: 52,
+      borderRadius: 26,
+      backgroundColor: COLORS.subtleCard,
+      borderWidth: 1,
+      borderColor: COLORS.borderSubtle,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    photoImage: {
+      width: 52,
+      height: 52,
+      borderRadius: 26,
+    },
+    photoButton: {
+      flex: 1,
+      height: 44,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: COLORS.borderSubtle,
+      backgroundColor: COLORS.inputBg,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    photoButtonText: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: COLORS.textPrimary,
+    },
+    bottomButtonsRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginTop: SPACING.lg,
+      gap: SPACING.sm,
+    },
+    cancelButton: {
+      flex: 1,
+      height: 46,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: COLORS.borderSubtle,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: COLORS.card,
+    },
+    cancelButtonText: {
+      fontSize: 14,
+      fontWeight: "500",
+      color: COLORS.textSecondary,
+    },
+    saveButton: {
+      flex: 1,
+      height: 46,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: COLORS.accentSoft,
+    },
+    saveButtonText: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: "#FFFFFF",
+    },
+  });

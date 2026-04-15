@@ -524,10 +524,10 @@ export default function HomeScreen() {
             prev.map((thread) =>
               thread.thread_id === message.thread_id
                 ? {
-                    ...thread,
-                    last_message: message.content,
-                    last_message_at: message.created_at,
-                  }
+                  ...thread,
+                  last_message: message.content,
+                  last_message_at: message.created_at,
+                }
                 : thread,
             ),
           );
@@ -539,14 +539,14 @@ export default function HomeScreen() {
           );
           const next = existing
             ? prev.map((thread) =>
-                thread.thread_id === message.thread_id
-                  ? {
-                      ...thread,
-                      last_message: message.content,
-                      last_message_at: message.created_at,
-                    }
-                  : thread,
-              )
+              thread.thread_id === message.thread_id
+                ? {
+                  ...thread,
+                  last_message: message.content,
+                  last_message_at: message.created_at,
+                }
+                : thread,
+            )
             : prev;
           return next;
         });
@@ -578,7 +578,7 @@ export default function HomeScreen() {
         await fetch(
           `${API_BASE_URL}/ai-assistant/history/${encodeURIComponent(logoutUsername)}`,
           { method: "DELETE" },
-        ).catch(() => {});
+        ).catch(() => { });
       }
       await AsyncStorage.multiRemove([
         "mentora.username",
@@ -764,7 +764,7 @@ export default function HomeScreen() {
                   style={[
                     styles.notificationTabText,
                     notificationTab === "friends" &&
-                      styles.notificationTabTextActive,
+                    styles.notificationTabTextActive,
                   ]}
                 >
                   Friend requests
@@ -785,7 +785,7 @@ export default function HomeScreen() {
                   style={[
                     styles.notificationTabText,
                     notificationTab === "groups" &&
-                      styles.notificationTabTextActive,
+                    styles.notificationTabTextActive,
                   ]}
                 >
                   Group requests
@@ -806,7 +806,7 @@ export default function HomeScreen() {
                   style={[
                     styles.notificationTabText,
                     notificationTab === "chats" &&
-                      styles.notificationTabTextActive,
+                    styles.notificationTabTextActive,
                   ]}
                 >
                   Chat messages
@@ -1004,7 +1004,7 @@ export default function HomeScreen() {
 
                   <Text style={styles.sectionTitle}>Pending outgoing</Text>
                   {groupRequests.outgoing_invites.length === 0 &&
-                  groupRequests.outgoing_join_requests.length === 0 ? (
+                    groupRequests.outgoing_join_requests.length === 0 ? (
                     <Text style={styles.emptyText}>No pending outgoing.</Text>
                   ) : (
                     <View style={styles.notificationSectionList}>
@@ -1114,75 +1114,87 @@ const HeaderCard: React.FC<{
   styles,
   colors,
 }) => {
-  const router = useRouter();
+    const router = useRouter();
 
-  return (
-    <Pressable
-      style={({ pressed }) => [
-        styles.card,
-        pressed && { opacity: 0.9, transform: [{ scale: 0.995 }] },
-      ]}
-      onPress={() => router.push("/profile")}
-    >
-      <View style={styles.headerRow}>
-        <View style={styles.headerLeftRow}>
-          <View style={styles.avatar}>
-            {profilePhoto ? (
-              <Image
-                source={{ uri: `data:image/jpeg;base64,${profilePhoto}` }}
-                style={styles.avatarImage}
+    return (
+      <Pressable
+        style={({ pressed }) => [
+          styles.card,
+          pressed && { opacity: 0.9, transform: [{ scale: 0.995 }] },
+        ]}
+        onPress={() => router.push("/profile")}
+      >
+        <View style={styles.headerRow}>
+          <View style={styles.headerLeftRow}>
+            <View style={styles.avatar}>
+              {profilePhoto ? (
+                <Image
+                  source={{ uri: `data:image/jpeg;base64,${profilePhoto}` }}
+                  style={styles.avatarImage}
+                />
+              ) : (
+                <Ionicons name="person" size={26} color={colors.textMuted} />
+              )}
+            </View>
+
+            <View style={styles.headerTextWrap}>
+              <Text
+                style={styles.nameText}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.75}
+              >
+                {loading ? "Loading..." : title}
+              </Text>
+              <Text
+                style={styles.subtitleText}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}
+              >
+                {subtitle}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.headerRightRow}>
+            <Pressable
+              hitSlop={12}
+              style={styles.notificationButton}
+              onPress={onOpenNotifications}
+            >
+              <Ionicons
+                name="notifications-outline"
+                size={20}
+                color={colors.textSecondary}
               />
-            ) : (
-              <Ionicons name="person" size={26} color={colors.textMuted} />
-            )}
-          </View>
+              {notificationCount > 0 ? (
+                <View style={styles.notificationBadge}>
+                  <Text style={styles.notificationBadgeText}>
+                    {notificationCount}
+                  </Text>
+                </View>
+              ) : null}
+            </Pressable>
 
-          <View>
-            <Text style={styles.nameText}>
-              {loading ? "Loading..." : title}
-            </Text>
-            <Text style={styles.subtitleText}>{subtitle}</Text>
+            <Pressable
+              hitSlop={12}
+              style={styles.settingsButton}
+              onPress={() => {
+                onOpenSettings();
+              }}
+            >
+              <Ionicons
+                name="settings-outline"
+                size={20}
+                color={colors.textSecondary}
+              />
+            </Pressable>
           </View>
         </View>
-
-        <View style={styles.headerRightRow}>
-          <Pressable
-            hitSlop={12}
-            style={styles.notificationButton}
-            onPress={onOpenNotifications}
-          >
-            <Ionicons
-              name="notifications-outline"
-              size={20}
-              color={colors.textSecondary}
-            />
-            {notificationCount > 0 ? (
-              <View style={styles.notificationBadge}>
-                <Text style={styles.notificationBadgeText}>
-                  {notificationCount}
-                </Text>
-              </View>
-            ) : null}
-          </Pressable>
-
-          <Pressable
-            hitSlop={12}
-            style={styles.settingsButton}
-            onPress={() => {
-              onOpenSettings();
-            }}
-          >
-            <Ionicons
-              name="settings-outline"
-              size={20}
-              color={colors.textSecondary}
-            />
-          </Pressable>
-        </View>
-      </View>
-    </Pressable>
-  );
-};
+      </Pressable>
+    );
+  };
 
 const GreetingCard = ({
   styles,
@@ -1209,7 +1221,14 @@ const GreetingCard = ({
           <Ionicons name="sparkles" size={20} color="#FFFFFF" />
         </View>
         <View style={styles.aiCardHeaderText}>
-          <Text style={styles.greetingTitle}>Hi {name}!</Text>
+          <Text
+            style={styles.greetingTitle}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.7}
+          >
+            Hi {name}!
+          </Text>
           <Text style={styles.aiCardBadge}>Mentora AI</Text>
         </View>
       </View>
@@ -1482,573 +1501,586 @@ const RecommendationCard = ({
 
 const createStyles = (COLORS: ThemeColors) =>
   StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  backgroundTop: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: "100%",
-    backgroundColor: COLORS.background,
-  },
-  backgroundBottom: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: "100%",
-    backgroundColor: COLORS.backgroundAlt,
-    opacity: 0.45,
-  },
-  glow: {
-    position: "absolute",
-    top: -120,
-    left: -60,
-    right: -60,
-    height: 260,
-    borderRadius: 260,
-    backgroundColor: "rgba(109,94,247,0.18)",
-    opacity: 0.25,
-  },
-  wrapper: {
-    flex: 1,
-    alignSelf: "center",
-    width: "100%",
-    maxWidth: 430,
-    paddingHorizontal: SPACING.lg,
-  },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(2,6,23,0.6)",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: SPACING.lg,
-  },
-  notificationsCard: {
-    width: "100%",
-    maxWidth: 420,
-    maxHeight: "82%",
-    backgroundColor: COLORS.card,
-    borderRadius: 20,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-  },
-  modalHeaderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: SPACING.sm,
-  },
-  modalTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-  },
-  modalClose: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: COLORS.subtleCard,
-  },
-  notificationTabsRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginBottom: SPACING.sm,
-  },
-  notificationTab: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-    backgroundColor: COLORS.subtleCard,
-  },
-  notificationTabActive: {
-    backgroundColor: COLORS.accent,
-    borderColor: COLORS.accent,
-  },
-  notificationTabText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: COLORS.textSecondary,
-  },
-  notificationTabTextActive: {
-    color: "#FFFFFF",
-  },
-  notificationsScroll: {
-    marginTop: SPACING.xs,
-  },
-  notificationsContent: {
-    paddingBottom: SPACING.lg,
-    gap: SPACING.md,
-  },
-  notificationSection: {
-    gap: SPACING.sm,
-  },
-  notificationSectionList: {
-    gap: SPACING.sm,
-  },
-  notificationItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: COLORS.subtleCard,
-    borderRadius: 12,
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.md,
-    gap: SPACING.sm,
-  },
-  notificationInfo: {
-    flex: 1,
-  },
-  notificationTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-  },
-  notificationSubtitle: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginTop: 2,
-  },
-  notificationMeta: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-  },
-  actionRow: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  actionButtonPrimary: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
-    backgroundColor: COLORS.accent,
-  },
-  actionButtonTextPrimary: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#0B1020",
-  },
-  actionButton: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
-  },
-  actionButtonText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: COLORS.textPrimary,
-  },
-  emptyText: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-  },
-  scrollContent: {
-    paddingTop: SPACING.lg,
-    paddingBottom: SPACING.xl * 2,
-    gap: SPACING.md,
-  },
-  card: {
-    backgroundColor: COLORS.card,
-    borderRadius: 16,
-    paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.md,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-    shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  headerRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  headerLeftRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  headerRightRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: COLORS.subtleCard,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: SPACING.sm,
-  },
-  avatarImage: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-  },
-  nameText: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-  },
-  subtitleText: {
-    marginTop: 2,
-    fontSize: 13,
-    color: COLORS.textSecondary,
-  },
-  notificationButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: COLORS.subtleCard,
-    marginRight: SPACING.xs,
-    position: "relative",
-  },
-  notificationBadge: {
-    position: "absolute",
-    top: -4,
-    right: -4,
-    minWidth: 18,
-    height: 18,
-    paddingHorizontal: 4,
-    borderRadius: 9,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#EF4444",
-  },
-  notificationBadgeText: {
-    fontSize: 10,
-    fontWeight: "700",
-    color: "#FFFFFF",
-  },
-  settingsButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: COLORS.subtleCard,
-  },
-  aiCard: {
-    backgroundColor: COLORS.card,
-    borderRadius: 20,
-    padding: SPACING.lg,
-    borderWidth: 1,
-    borderColor: COLORS.accent + "30",
-    shadowColor: COLORS.accent,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 5,
-  },
-  aiCardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: SPACING.sm,
-    gap: SPACING.sm,
-  },
-  aiCardIconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: COLORS.accent,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  aiCardHeaderText: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  aiCardBadge: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: COLORS.accent,
-    backgroundColor: COLORS.accent + "18",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-    overflow: "hidden",
-  },
-  aiFeatureRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: SPACING.sm,
-  },
-  aiFeatureChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: COLORS.accent + "14",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
-  },
-  aiFeatureChipText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: COLORS.accent,
-  },
-  aiCardFooter: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: SPACING.sm,
-    paddingTop: SPACING.sm,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.borderSubtle,
-  },
-  aiCardCta: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: COLORS.accent,
-  },
-  greetingTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: COLORS.textPrimary,
-  },
-  greetingSubtitle: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: COLORS.textSecondary,
-  },
-  section: {
-    marginTop: SPACING.xs,
-  },
-  sectionHeaderRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: SPACING.sm,
-    paddingHorizontal: 2,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-    marginBottom: SPACING.sm,
-  },
-  linkText: {
-    fontSize: 12,
-    color: COLORS.accentSoft,
-    fontWeight: "500",
-  },
-  quickActionsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: SPACING.sm,
-  },
-  quickActionCard: {
-    flex: 1,
-    backgroundColor: COLORS.card,
-    borderRadius: 16,
-    paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.xs,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-  },
-  quickActionIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 8,
-  },
-  quickActionText: {
-    fontSize: 12,
-    color: COLORS.textPrimary,
-    fontWeight: "600",
-    textAlign: "center",
-    lineHeight: 16,
-  },
+    safeArea: {
+      flex: 1,
+      backgroundColor: COLORS.background,
+    },
+    backgroundTop: {
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: 0,
+      height: "100%",
+      backgroundColor: COLORS.background,
+    },
+    backgroundBottom: {
+      position: "absolute",
+      bottom: 0,
+      left: 0,
+      right: 0,
+      height: "100%",
+      backgroundColor: COLORS.backgroundAlt,
+      opacity: 0.45,
+    },
+    glow: {
+      position: "absolute",
+      top: -120,
+      left: -60,
+      right: -60,
+      height: 260,
+      borderRadius: 260,
+      backgroundColor: "rgba(109,94,247,0.18)",
+      opacity: 0.25,
+    },
+    wrapper: {
+      flex: 1,
+      alignSelf: "center",
+      width: "100%",
+      maxWidth: 430,
+      paddingHorizontal: SPACING.lg,
+    },
+    modalBackdrop: {
+      flex: 1,
+      backgroundColor: "rgba(2,6,23,0.6)",
+      justifyContent: "center",
+      alignItems: "center",
+      paddingHorizontal: SPACING.lg,
+    },
+    notificationsCard: {
+      width: "100%",
+      maxWidth: 420,
+      maxHeight: "82%",
+      backgroundColor: COLORS.card,
+      borderRadius: 20,
+      paddingHorizontal: SPACING.lg,
+      paddingVertical: SPACING.md,
+      borderWidth: 1,
+      borderColor: COLORS.borderSoft,
+    },
+    modalHeaderRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: SPACING.sm,
+    },
+    modalTitle: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: COLORS.textPrimary,
+    },
+    modalClose: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: COLORS.subtleCard,
+    },
+    notificationTabsRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+      marginBottom: SPACING.sm,
+    },
+    notificationTab: {
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: COLORS.borderSoft,
+      backgroundColor: COLORS.subtleCard,
+    },
+    notificationTabActive: {
+      backgroundColor: COLORS.accent,
+      borderColor: COLORS.accent,
+    },
+    notificationTabText: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: COLORS.textSecondary,
+    },
+    notificationTabTextActive: {
+      color: "#FFFFFF",
+    },
+    notificationsScroll: {
+      marginTop: SPACING.xs,
+    },
+    notificationsContent: {
+      paddingBottom: SPACING.lg,
+      gap: SPACING.md,
+    },
+    notificationSection: {
+      gap: SPACING.sm,
+    },
+    notificationSectionList: {
+      gap: SPACING.sm,
+    },
+    notificationItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      backgroundColor: COLORS.subtleCard,
+      borderRadius: 12,
+      paddingVertical: SPACING.sm,
+      paddingHorizontal: SPACING.md,
+      gap: SPACING.sm,
+    },
+    notificationInfo: {
+      flex: 1,
+    },
+    notificationTitle: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: COLORS.textPrimary,
+    },
+    notificationSubtitle: {
+      fontSize: 12,
+      color: COLORS.textSecondary,
+      marginTop: 2,
+    },
+    notificationMeta: {
+      fontSize: 11,
+      color: COLORS.textMuted,
+    },
+    actionRow: {
+      flexDirection: "row",
+      gap: 8,
+    },
+    actionButtonPrimary: {
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 10,
+      backgroundColor: COLORS.accent,
+    },
+    actionButtonTextPrimary: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: "#0B1020",
+    },
+    actionButton: {
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: COLORS.borderSubtle,
+    },
+    actionButtonText: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: COLORS.textPrimary,
+    },
+    emptyText: {
+      fontSize: 12,
+      color: COLORS.textSecondary,
+    },
+    scrollContent: {
+      paddingTop: SPACING.lg,
+      paddingBottom: SPACING.xl * 2,
+      gap: SPACING.md,
+    },
+    card: {
+      backgroundColor: COLORS.card,
+      borderRadius: 16,
+      paddingVertical: SPACING.md,
+      paddingHorizontal: SPACING.md,
+      borderWidth: 1,
+      borderColor: COLORS.borderSoft,
+      shadowColor: COLORS.shadow,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.08,
+      shadowRadius: 12,
+      elevation: 4,
+    },
+    headerRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    headerLeftRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      flex: 1,
+      minWidth: 0,
+    },
+    headerTextWrap: {
+      flex: 1,
+      minWidth: 0,
+      marginRight: SPACING.sm,
+    },
+    headerRightRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      flexShrink: 0,
+    },
+    avatar: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: COLORS.subtleCard,
+      alignItems: "center",
+      justifyContent: "center",
+      marginRight: SPACING.sm,
+    },
+    avatarImage: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+    },
+    nameText: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: COLORS.textPrimary,
+    },
+    subtitleText: {
+      marginTop: 2,
+      fontSize: 13,
+      color: COLORS.textSecondary,
+    },
+    notificationButton: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: COLORS.subtleCard,
+      marginRight: SPACING.xs,
+      position: "relative",
+    },
+    notificationBadge: {
+      position: "absolute",
+      top: -4,
+      right: -4,
+      minWidth: 18,
+      height: 18,
+      paddingHorizontal: 4,
+      borderRadius: 9,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: "#EF4444",
+    },
+    notificationBadgeText: {
+      fontSize: 10,
+      fontWeight: "700",
+      color: "#FFFFFF",
+    },
+    settingsButton: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: COLORS.subtleCard,
+    },
+    aiCard: {
+      backgroundColor: COLORS.card,
+      borderRadius: 20,
+      padding: SPACING.lg,
+      borderWidth: 1,
+      borderColor: COLORS.accent + "30",
+      shadowColor: COLORS.accent,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.12,
+      shadowRadius: 16,
+      elevation: 5,
+    },
+    aiCardHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginBottom: SPACING.sm,
+      gap: SPACING.sm,
+    },
+    aiCardIconWrap: {
+      width: 38,
+      height: 38,
+      borderRadius: 12,
+      backgroundColor: COLORS.accent,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    aiCardHeaderText: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      minWidth: 0,
+    },
+    aiCardBadge: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: COLORS.accent,
+      backgroundColor: COLORS.accent + "18",
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 8,
+      overflow: "hidden",
+      flexShrink: 0,
+    },
+    aiFeatureRow: {
+      flexDirection: "row",
+      gap: 8,
+      marginTop: SPACING.sm,
+    },
+    aiFeatureChip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      backgroundColor: COLORS.accent + "14",
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 20,
+    },
+    aiFeatureChipText: {
+      fontSize: 11,
+      fontWeight: "600",
+      color: COLORS.accent,
+    },
+    aiCardFooter: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginTop: SPACING.sm,
+      paddingTop: SPACING.sm,
+      borderTopWidth: 1,
+      borderTopColor: COLORS.borderSubtle,
+    },
+    aiCardCta: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: COLORS.accent,
+    },
+    greetingTitle: {
+      fontSize: 20,
+      fontWeight: "800",
+      color: COLORS.textPrimary,
+      flex: 1,
+      minWidth: 0,
+      marginRight: 10,
+    },
+    greetingSubtitle: {
+      fontSize: 14,
+      lineHeight: 20,
+      color: COLORS.textSecondary,
+    },
+    section: {
+      marginTop: SPACING.xs,
+    },
+    sectionHeaderRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: SPACING.sm,
+      paddingHorizontal: 2,
+    },
+    sectionTitle: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: COLORS.textPrimary,
+      marginBottom: SPACING.sm,
+    },
+    linkText: {
+      fontSize: 12,
+      color: COLORS.accentSoft,
+      fontWeight: "500",
+    },
+    quickActionsRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      gap: SPACING.sm,
+    },
+    quickActionCard: {
+      flex: 1,
+      backgroundColor: COLORS.card,
+      borderRadius: 16,
+      paddingVertical: SPACING.md,
+      paddingHorizontal: SPACING.xs,
+      alignItems: "center",
+      justifyContent: "center",
+      shadowColor: COLORS.shadow,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.06,
+      shadowRadius: 10,
+      elevation: 3,
+      borderWidth: 1,
+      borderColor: COLORS.borderSoft,
+    },
+    quickActionIconWrap: {
+      width: 44,
+      height: 44,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 8,
+    },
+    quickActionText: {
+      fontSize: 12,
+      color: COLORS.textPrimary,
+      fontWeight: "600",
+      textAlign: "center",
+      lineHeight: 16,
+    },
 
-  upcomingSection: {
-    marginTop: SPACING.sm,
-    backgroundColor: COLORS.card,
-    borderRadius: 16,
-    padding: SPACING.md,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-    shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 3,
-  },
-  upcomingSectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: SPACING.sm,
-  },
-  upcomingSectionLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  upcomingSectionTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-  },
-  upcomingSeeAll: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: COLORS.accent,
-  },
-  upcomingEmpty: {
-    alignItems: "center",
-    paddingVertical: SPACING.md,
-    gap: 6,
-  },
-  upcomingEmptyText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: COLORS.textPrimary,
-    marginTop: 4,
-  },
-  upcomingEmptyHint: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-  },
-  upcomingList: {
-    gap: SPACING.xs,
-  },
-  upcomingItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: COLORS.subtleCard,
-    borderRadius: 12,
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.md,
-    gap: SPACING.sm,
-  },
-  upcomingDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  upcomingItemContent: {
-    flex: 1,
-  },
-  upcomingCourseName: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-  },
-  upcomingTime: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginTop: 2,
-  },
-  upcomingNowBadge: {
-    backgroundColor: COLORS.success + "22",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-  },
-  upcomingNowText: {
-    fontSize: 10,
-    fontWeight: "800",
-    color: COLORS.success,
-    letterSpacing: 0.5,
-  },
+    upcomingSection: {
+      marginTop: SPACING.sm,
+      backgroundColor: COLORS.card,
+      borderRadius: 16,
+      padding: SPACING.md,
+      borderWidth: 1,
+      borderColor: COLORS.borderSoft,
+      shadowColor: COLORS.shadow,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.06,
+      shadowRadius: 10,
+      elevation: 3,
+    },
+    upcomingSectionHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: SPACING.sm,
+    },
+    upcomingSectionLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    upcomingSectionTitle: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: COLORS.textPrimary,
+    },
+    upcomingSeeAll: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: COLORS.accent,
+    },
+    upcomingEmpty: {
+      alignItems: "center",
+      paddingVertical: SPACING.md,
+      gap: 6,
+    },
+    upcomingEmptyText: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: COLORS.textPrimary,
+      marginTop: 4,
+    },
+    upcomingEmptyHint: {
+      fontSize: 12,
+      color: COLORS.textSecondary,
+    },
+    upcomingList: {
+      gap: SPACING.xs,
+    },
+    upcomingItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: COLORS.subtleCard,
+      borderRadius: 12,
+      paddingVertical: SPACING.sm,
+      paddingHorizontal: SPACING.md,
+      gap: SPACING.sm,
+    },
+    upcomingDot: {
+      width: 10,
+      height: 10,
+      borderRadius: 5,
+    },
+    upcomingItemContent: {
+      flex: 1,
+    },
+    upcomingCourseName: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: COLORS.textPrimary,
+    },
+    upcomingTime: {
+      fontSize: 12,
+      color: COLORS.textSecondary,
+      marginTop: 2,
+    },
+    upcomingNowBadge: {
+      backgroundColor: COLORS.success + "22",
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 8,
+    },
+    upcomingNowText: {
+      fontSize: 10,
+      fontWeight: "800",
+      color: COLORS.success,
+      letterSpacing: 0.5,
+    },
 
-  statsRow: {
-    flexDirection: "row",
-    gap: SPACING.sm,
-    marginTop: SPACING.sm,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: COLORS.card,
-    borderRadius: 14,
-    paddingVertical: SPACING.md,
-    paddingHorizontal: 6,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-    shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
-    elevation: 2,
-  },
-  statValue: {
-    fontSize: 17,
-    fontWeight: "800",
-    color: COLORS.textPrimary,
-    marginTop: 4,
-  },
-  statLabel: {
-    fontSize: 10,
-    fontWeight: "500",
-    color: COLORS.textSecondary,
-    marginTop: 2,
-  },
+    statsRow: {
+      flexDirection: "row",
+      gap: SPACING.sm,
+      marginTop: SPACING.sm,
+    },
+    statCard: {
+      flex: 1,
+      backgroundColor: COLORS.card,
+      borderRadius: 14,
+      paddingVertical: SPACING.md,
+      paddingHorizontal: 6,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 1,
+      borderColor: COLORS.borderSoft,
+      shadowColor: COLORS.shadow,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.05,
+      shadowRadius: 5,
+      elevation: 2,
+    },
+    statValue: {
+      fontSize: 17,
+      fontWeight: "800",
+      color: COLORS.textPrimary,
+      marginTop: 4,
+    },
+    statLabel: {
+      fontSize: 10,
+      fontWeight: "500",
+      color: COLORS.textSecondary,
+      marginTop: 2,
+    },
 
-  recommendationCard: {
-    marginTop: SPACING.xs,
-    backgroundColor: COLORS.card,
-    borderRadius: 16,
-    paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.md,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.sm,
-    shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-    borderLeftWidth: 3,
-    borderLeftColor: COLORS.accent,
-  },
-  recommendationIconWrapper: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: COLORS.accent + "22",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: SPACING.sm,
-  },
-  recommendationTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-    marginBottom: 2,
-  },
-  recommendationSubtitle: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-  },
-});
+    recommendationCard: {
+      marginTop: SPACING.xs,
+      backgroundColor: COLORS.card,
+      borderRadius: 16,
+      paddingVertical: SPACING.md,
+      paddingHorizontal: SPACING.md,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: SPACING.sm,
+      shadowColor: COLORS.shadow,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.06,
+      shadowRadius: 10,
+      elevation: 3,
+      borderWidth: 1,
+      borderColor: COLORS.borderSoft,
+      borderLeftWidth: 3,
+      borderLeftColor: COLORS.accent,
+    },
+    recommendationIconWrapper: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: COLORS.accent + "22",
+      alignItems: "center",
+      justifyContent: "center",
+      marginRight: SPACING.sm,
+    },
+    recommendationTitle: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: COLORS.textPrimary,
+      marginBottom: 2,
+    },
+    recommendationSubtitle: {
+      fontSize: 13,
+      color: COLORS.textSecondary,
+    },
+  });

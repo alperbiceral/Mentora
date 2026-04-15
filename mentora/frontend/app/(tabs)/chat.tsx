@@ -323,10 +323,10 @@ export default function ChatScreen() {
             const updated = prev.map((thread) =>
               thread.thread_id === message.thread_id
                 ? {
-                    ...thread,
-                    last_message: message.content,
-                    last_message_at: message.created_at,
-                  }
+                  ...thread,
+                  last_message: message.content,
+                  last_message_at: message.created_at,
+                }
                 : thread,
             );
             return updated.sort((a, b) =>
@@ -732,7 +732,7 @@ export default function ChatScreen() {
                       message.sender === username
                         ? currentProfile?.full_name || message.sender
                         : friendMap.get(message.sender)?.full_name ||
-                          message.sender;
+                        message.sender;
                     return (
                       <View
                         key={message.message_id}
@@ -917,8 +917,8 @@ export default function ChatScreen() {
                       >
                         <View style={styles.threadAvatar}>
                           {thread.friend_username &&
-                          friendMap.get(thread.friend_username)
-                            ?.profile_photo ? (
+                            friendMap.get(thread.friend_username)
+                              ?.profile_photo ? (
                             <Image
                               source={{
                                 uri: `data:image/jpeg;base64,${friendMap.get(thread.friend_username)?.profile_photo}`,
@@ -1035,7 +1035,7 @@ export default function ChatScreen() {
           style={styles.modalBackdrop}
           onPress={() => setNewChatOpen(false)}
         >
-          <Pressable style={styles.modalCard} onPress={() => {}}>
+          <Pressable style={styles.modalCard} onPress={() => { }}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Start a chat</Text>
               <Pressable
@@ -1099,7 +1099,7 @@ export default function ChatScreen() {
           style={styles.modalBackdrop}
           onPress={() => setGroupCreateOpen(false)}
         >
-          <Pressable style={styles.modalCard} onPress={() => {}}>
+          <Pressable style={styles.modalCard} onPress={() => { }}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Create group</Text>
               <Pressable
@@ -1202,7 +1202,7 @@ export default function ChatScreen() {
           style={styles.modalBackdrop}
           onPress={() => setGroupSettingsOpen(false)}
         >
-          <Pressable style={styles.modalCard} onPress={() => {}}>
+          <Pressable style={styles.modalCard} onPress={() => { }}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Group settings</Text>
               <Pressable
@@ -1343,562 +1343,562 @@ export default function ChatScreen() {
 
 const createStyles = (COLORS: ThemeColors) =>
   StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  backgroundTop: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: "100%",
-    backgroundColor: COLORS.background,
-  },
-  backgroundBottom: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: "100%",
-    backgroundColor: COLORS.backgroundAlt,
-    opacity: 0.45,
-  },
-  glow: {
-    position: "absolute",
-    top: -120,
-    left: -60,
-    right: -60,
-    height: 260,
-    borderRadius: 260,
-    backgroundColor: "rgba(109,94,247,0.18)",
-    opacity: 0.25,
-  },
-  wrapper: {
-    flex: 1,
-    alignSelf: "center",
-    width: "100%",
-    maxWidth: 430,
-    paddingHorizontal: SPACING.lg,
-    paddingTop: SPACING.lg,
-    paddingBottom: SPACING.lg,
-  },
-  listPane: {
-    flex: 1,
-    gap: SPACING.lg,
-  },
-  listPanels: {
-    gap: SPACING.md,
-  },
-  listPanel: {
-    backgroundColor: COLORS.card,
-    borderRadius: 18,
-    paddingHorizontal: SPACING.md,
-    paddingTop: SPACING.sm,
-    paddingBottom: SPACING.md,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-  },
-  listPanelPrivate: {
-    height: PRIVATE_PANEL_HEIGHT,
-  },
-  listPanelGroup: {
-    height: GROUP_PANEL_HEIGHT,
-  },
-  listScroll: {
-    flex: 1,
-  },
-  listScrollContent: {
-    gap: SPACING.sm,
-    paddingBottom: SPACING.sm,
-  },
-  chatPane: {
-    flex: 1,
-    gap: SPACING.md,
-  },
-  chatSurface: {
-    flex: 1,
-    backgroundColor: COLORS.card,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-    paddingHorizontal: SPACING.md,
-    paddingTop: SPACING.sm,
-    paddingBottom: SPACING.md,
-  },
-  headerCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: COLORS.card,
-    borderRadius: 16,
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.md,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: COLORS.textPrimary,
-  },
-  sectionHeader: {
-    marginTop: SPACING.md,
-    marginBottom: SPACING.sm,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  sectionHeaderCompact: {
-    marginTop: 0,
-  },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-  },
-  sectionAction: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: COLORS.accent,
-    gap: 6,
-  },
-  sectionActionText: {
-    color: "#FFFFFF",
-    fontWeight: "700",
-    fontSize: 12,
-  },
-  newChatButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: COLORS.accent,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    gap: 6,
-  },
-  newChatText: {
-    color: "#FFFFFF",
-    fontWeight: "700",
-    fontSize: 12,
-  },
-  listContent: {
-    paddingTop: SPACING.lg,
-    gap: SPACING.sm,
-  },
-  threadCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: COLORS.subtleCard,
-    borderRadius: 16,
-    padding: SPACING.md,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-  },
-  threadAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: COLORS.subtleCard,
-    marginRight: SPACING.sm,
-  },
-  threadAvatarImage: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-  },
-  threadInfo: {
-    flex: 1,
-  },
-  threadTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-  },
-  threadPreview: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginTop: 2,
-  },
-  threadDelete: {
-    padding: 6,
-  },
-  chatHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingBottom: SPACING.sm,
-  },
-  chatTitleRow: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-  },
-  groupTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  groupSettingsButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: COLORS.subtleCard,
-  },
-  chatHeaderAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: COLORS.subtleCard,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-  },
-  chatHeaderAvatarImage: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-  },
-  chatTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-  },
-  backButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: COLORS.subtleCard,
-  },
-  deleteButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: COLORS.subtleCard,
-  },
-  messagesScroll: {
-    flex: 1,
-  },
-  messagesContent: {
-    paddingVertical: SPACING.md,
-    gap: SPACING.sm,
-  },
-  messageRow: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    gap: 8,
-  },
-  messageRowMine: {
-    flexDirection: "row-reverse",
-  },
-  messageRowOther: {
-    flexDirection: "row",
-  },
-  messageAvatar: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: COLORS.subtleCard,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-  },
-  messageAvatarMine: {
-    marginLeft: 6,
-  },
-  messageAvatarOther: {
-    marginRight: 6,
-  },
-  messageAvatarImage: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-  },
-  messageBubble: {
-    maxWidth: "78%",
-    padding: SPACING.sm,
-    borderRadius: 16,
-  },
-  messageBubbleMine: {
-    backgroundColor: COLORS.accent,
-  },
-  messageBubbleOther: {
-    backgroundColor: COLORS.subtleCard,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-  },
-  messageSender: {
-    fontSize: 11,
-    color: COLORS.textSecondary,
-    marginBottom: 4,
-  },
-  messageText: {
-    color: COLORS.textPrimary,
-    fontSize: 14,
-  },
-  messageTextMine: {
-    color: "#FFFFFF",
-  },
-  messageTime: {
-    marginTop: 4,
-    fontSize: 10,
-    color: COLORS.textMuted,
-    textAlign: "right",
-  },
-  messageTimeMine: {
-    color: "rgba(255,255,255,0.8)",
-  },
-  inputRow: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    gap: SPACING.sm,
-    paddingTop: SPACING.sm,
-  },
-  emojiToggle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: COLORS.subtleCard,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  textInput: {
-    flex: 1,
-    minHeight: 40,
-    maxHeight: 110,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: 10,
-    color: COLORS.textPrimary,
-    backgroundColor: COLORS.inputBg,
-  },
-  sendButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.accent,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  emojiBar: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    paddingVertical: SPACING.sm,
-  },
-  emojiButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: COLORS.subtleCard,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  emojiText: {
-    fontSize: 18,
-  },
-  emptyText: {
-    color: COLORS.textMuted,
-    fontSize: 13,
-    textAlign: "center",
-    marginTop: SPACING.lg,
-  },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(2,6,23,0.6)",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: SPACING.lg,
-  },
-  modalCard: {
-    width: "100%",
-    maxWidth: 420,
-    maxHeight: "75%",
-    backgroundColor: COLORS.card,
-    borderRadius: 18,
-    padding: SPACING.md,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: SPACING.sm,
-  },
-  modalTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-  },
-  modalClose: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: COLORS.inputBg,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-  },
-  modalList: {
-    gap: SPACING.sm,
-    paddingBottom: SPACING.md,
-  },
-  groupPhotoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.sm,
-    marginBottom: SPACING.sm,
-  },
-  groupPhotoPreview: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: COLORS.card,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-  },
-  groupPhotoImage: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-  },
-  groupPhotoButton: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    height: 44,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
-    backgroundColor: COLORS.inputBg,
-  },
-  groupPhotoButtonText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: COLORS.textPrimary,
-  },
-  modalSectionLabel: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: COLORS.textSecondary,
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-    marginTop: SPACING.sm,
-    marginBottom: SPACING.xs,
-  },
-  groupInput: {
-    minHeight: 44,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
-    paddingHorizontal: SPACING.md,
-    color: COLORS.textPrimary,
-    backgroundColor: COLORS.inputBg,
-    marginBottom: SPACING.sm,
-  },
-  memberRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: COLORS.subtleCard,
-    borderRadius: 12,
-    padding: SPACING.sm,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-  },
-  memberInfo: {
-    flex: 1,
-    marginRight: SPACING.sm,
-  },
-  checkBadge: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: COLORS.subtleCard,
-  },
-  checkBadgeActive: {
-    backgroundColor: COLORS.accent,
-    borderColor: COLORS.accent,
-  },
-  checkBadgeRemove: {
-    backgroundColor: COLORS.danger,
-    borderColor: COLORS.danger,
-  },
-  primaryButton: {
-    marginTop: SPACING.sm,
-    paddingVertical: 12,
-    borderRadius: 14,
-    alignItems: "center",
-    backgroundColor: COLORS.accent,
-  },
-  primaryButtonText: {
-    color: "#FFFFFF",
-    fontWeight: "700",
-    fontSize: 14,
-  },
-  friendRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: COLORS.subtleCard,
-    borderRadius: 14,
-    padding: SPACING.sm,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-  },
-  friendAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: COLORS.card,
-    marginRight: SPACING.sm,
-    borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
-  },
-  friendAvatarImage: {
-    width: 33,
-    height: 33,
-    borderRadius: 16.5,
-  },
-  friendInfo: {
-    flex: 1,
-  },
-  friendName: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: COLORS.textPrimary,
-  },
-  friendMeta: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginTop: 2,
-  },
-});
+    safeArea: {
+      flex: 1,
+      backgroundColor: COLORS.background,
+    },
+    backgroundTop: {
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: 0,
+      height: "100%",
+      backgroundColor: COLORS.background,
+    },
+    backgroundBottom: {
+      position: "absolute",
+      bottom: 0,
+      left: 0,
+      right: 0,
+      height: "100%",
+      backgroundColor: COLORS.backgroundAlt,
+      opacity: 0.45,
+    },
+    glow: {
+      position: "absolute",
+      top: -120,
+      left: -60,
+      right: -60,
+      height: 260,
+      borderRadius: 260,
+      backgroundColor: "rgba(109,94,247,0.18)",
+      opacity: 0.25,
+    },
+    wrapper: {
+      flex: 1,
+      alignSelf: "center",
+      width: "100%",
+      maxWidth: 430,
+      paddingHorizontal: SPACING.lg,
+      paddingTop: SPACING.lg,
+      paddingBottom: SPACING.lg,
+    },
+    listPane: {
+      flex: 1,
+      gap: SPACING.lg,
+    },
+    listPanels: {
+      gap: SPACING.md,
+    },
+    listPanel: {
+      backgroundColor: COLORS.card,
+      borderRadius: 18,
+      paddingHorizontal: SPACING.md,
+      paddingTop: SPACING.sm,
+      paddingBottom: SPACING.md,
+      borderWidth: 1,
+      borderColor: COLORS.borderSoft,
+    },
+    listPanelPrivate: {
+      height: PRIVATE_PANEL_HEIGHT,
+    },
+    listPanelGroup: {
+      height: GROUP_PANEL_HEIGHT,
+    },
+    listScroll: {
+      flex: 1,
+    },
+    listScrollContent: {
+      gap: SPACING.sm,
+      paddingBottom: SPACING.sm,
+    },
+    chatPane: {
+      flex: 1,
+      gap: SPACING.md,
+    },
+    chatSurface: {
+      flex: 1,
+      backgroundColor: COLORS.card,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: COLORS.borderSoft,
+      paddingHorizontal: SPACING.md,
+      paddingTop: SPACING.sm,
+      paddingBottom: SPACING.md,
+    },
+    headerCard: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      backgroundColor: COLORS.card,
+      borderRadius: 16,
+      paddingVertical: SPACING.sm,
+      paddingHorizontal: SPACING.md,
+      borderWidth: 1,
+      borderColor: COLORS.borderSoft,
+    },
+    headerTitle: {
+      fontSize: 20,
+      fontWeight: "800",
+      color: COLORS.textPrimary,
+    },
+    sectionHeader: {
+      marginTop: SPACING.md,
+      marginBottom: SPACING.sm,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    sectionHeaderCompact: {
+      marginTop: 0,
+    },
+    sectionTitle: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: COLORS.textPrimary,
+    },
+    sectionAction: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 999,
+      backgroundColor: COLORS.accent,
+      gap: 6,
+    },
+    sectionActionText: {
+      color: "#FFFFFF",
+      fontWeight: "700",
+      fontSize: 12,
+    },
+    newChatButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: COLORS.accent,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 999,
+      gap: 6,
+    },
+    newChatText: {
+      color: "#FFFFFF",
+      fontWeight: "700",
+      fontSize: 12,
+    },
+    listContent: {
+      paddingTop: SPACING.lg,
+      gap: SPACING.sm,
+    },
+    threadCard: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: COLORS.subtleCard,
+      borderRadius: 16,
+      padding: SPACING.md,
+      borderWidth: 1,
+      borderColor: COLORS.borderSoft,
+    },
+    threadAvatar: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: COLORS.subtleCard,
+      marginRight: SPACING.sm,
+    },
+    threadAvatarImage: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+    },
+    threadInfo: {
+      flex: 1,
+    },
+    threadTitle: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: COLORS.textPrimary,
+    },
+    threadPreview: {
+      fontSize: 12,
+      color: COLORS.textSecondary,
+      marginTop: 2,
+    },
+    threadDelete: {
+      padding: 6,
+    },
+    chatHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingBottom: SPACING.sm,
+    },
+    chatTitleRow: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+    },
+    groupTitleRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    groupSettingsButton: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: COLORS.subtleCard,
+    },
+    chatHeaderAvatar: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: COLORS.subtleCard,
+      borderWidth: 1,
+      borderColor: COLORS.borderSoft,
+    },
+    chatHeaderAvatarImage: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+    },
+    chatTitle: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: COLORS.textPrimary,
+    },
+    backButton: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: COLORS.subtleCard,
+    },
+    deleteButton: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: COLORS.subtleCard,
+    },
+    messagesScroll: {
+      flex: 1,
+    },
+    messagesContent: {
+      paddingVertical: SPACING.md,
+      gap: SPACING.sm,
+    },
+    messageRow: {
+      flexDirection: "row",
+      alignItems: "flex-end",
+      gap: 8,
+    },
+    messageRowMine: {
+      flexDirection: "row-reverse",
+    },
+    messageRowOther: {
+      flexDirection: "row",
+    },
+    messageAvatar: {
+      width: 24,
+      height: 24,
+      borderRadius: 12,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: COLORS.subtleCard,
+      borderWidth: 1,
+      borderColor: COLORS.borderSoft,
+    },
+    messageAvatarMine: {
+      marginLeft: 6,
+    },
+    messageAvatarOther: {
+      marginRight: 6,
+    },
+    messageAvatarImage: {
+      width: 24,
+      height: 24,
+      borderRadius: 12,
+    },
+    messageBubble: {
+      maxWidth: "78%",
+      padding: SPACING.sm,
+      borderRadius: 16,
+    },
+    messageBubbleMine: {
+      backgroundColor: COLORS.accent,
+    },
+    messageBubbleOther: {
+      backgroundColor: COLORS.subtleCard,
+      borderWidth: 1,
+      borderColor: COLORS.borderSoft,
+    },
+    messageSender: {
+      fontSize: 11,
+      color: COLORS.textSecondary,
+      marginBottom: 4,
+    },
+    messageText: {
+      color: COLORS.textPrimary,
+      fontSize: 14,
+    },
+    messageTextMine: {
+      color: "#FFFFFF",
+    },
+    messageTime: {
+      marginTop: 4,
+      fontSize: 10,
+      color: COLORS.textMuted,
+      textAlign: "right",
+    },
+    messageTimeMine: {
+      color: "rgba(255,255,255,0.8)",
+    },
+    inputRow: {
+      flexDirection: "row",
+      alignItems: "flex-end",
+      gap: SPACING.sm,
+      paddingTop: SPACING.sm,
+    },
+    emojiToggle: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: COLORS.subtleCard,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    textInput: {
+      flex: 1,
+      minHeight: 40,
+      maxHeight: 110,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: COLORS.borderSubtle,
+      paddingHorizontal: SPACING.md,
+      paddingVertical: 10,
+      color: COLORS.textPrimary,
+      backgroundColor: COLORS.inputBg,
+    },
+    sendButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: COLORS.accent,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    emojiBar: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+      paddingVertical: SPACING.sm,
+    },
+    emojiButton: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: COLORS.subtleCard,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    emojiText: {
+      fontSize: 18,
+    },
+    emptyText: {
+      color: COLORS.textMuted,
+      fontSize: 13,
+      textAlign: "center",
+      marginTop: SPACING.lg,
+    },
+    modalBackdrop: {
+      flex: 1,
+      backgroundColor: "rgba(2,6,23,0.6)",
+      justifyContent: "center",
+      alignItems: "center",
+      paddingHorizontal: SPACING.lg,
+    },
+    modalCard: {
+      width: "100%",
+      maxWidth: 420,
+      maxHeight: "75%",
+      backgroundColor: COLORS.card,
+      borderRadius: 18,
+      padding: SPACING.md,
+      borderWidth: 1,
+      borderColor: COLORS.borderSoft,
+    },
+    modalHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: SPACING.sm,
+    },
+    modalTitle: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: COLORS.textPrimary,
+    },
+    modalClose: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: COLORS.subtleCard,
+      borderWidth: 1,
+      borderColor: COLORS.borderSoft,
+    },
+    modalList: {
+      gap: SPACING.sm,
+      paddingBottom: SPACING.md,
+    },
+    groupPhotoRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: SPACING.sm,
+      marginBottom: SPACING.sm,
+    },
+    groupPhotoPreview: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: COLORS.card,
+      borderWidth: 1,
+      borderColor: COLORS.borderSoft,
+    },
+    groupPhotoImage: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+    },
+    groupPhotoButton: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      height: 44,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: COLORS.borderSubtle,
+      backgroundColor: COLORS.inputBg,
+    },
+    groupPhotoButtonText: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: COLORS.textPrimary,
+    },
+    modalSectionLabel: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: COLORS.textSecondary,
+      textTransform: "uppercase",
+      letterSpacing: 0.6,
+      marginTop: SPACING.sm,
+      marginBottom: SPACING.xs,
+    },
+    groupInput: {
+      minHeight: 44,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: COLORS.borderSubtle,
+      paddingHorizontal: SPACING.md,
+      color: COLORS.textPrimary,
+      backgroundColor: COLORS.inputBg,
+      marginBottom: SPACING.sm,
+    },
+    memberRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      backgroundColor: COLORS.subtleCard,
+      borderRadius: 12,
+      padding: SPACING.sm,
+      borderWidth: 1,
+      borderColor: COLORS.borderSoft,
+    },
+    memberInfo: {
+      flex: 1,
+      marginRight: SPACING.sm,
+    },
+    checkBadge: {
+      width: 26,
+      height: 26,
+      borderRadius: 13,
+      borderWidth: 1,
+      borderColor: COLORS.borderSoft,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: COLORS.subtleCard,
+    },
+    checkBadgeActive: {
+      backgroundColor: COLORS.accent,
+      borderColor: COLORS.accent,
+    },
+    checkBadgeRemove: {
+      backgroundColor: COLORS.danger,
+      borderColor: COLORS.danger,
+    },
+    primaryButton: {
+      marginTop: SPACING.sm,
+      paddingVertical: 12,
+      borderRadius: 14,
+      alignItems: "center",
+      backgroundColor: COLORS.accent,
+    },
+    primaryButtonText: {
+      color: "#FFFFFF",
+      fontWeight: "700",
+      fontSize: 14,
+    },
+    friendRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: COLORS.subtleCard,
+      borderRadius: 14,
+      padding: SPACING.sm,
+      borderWidth: 1,
+      borderColor: COLORS.borderSoft,
+    },
+    friendAvatar: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: COLORS.card,
+      marginRight: SPACING.sm,
+      borderWidth: 1,
+      borderColor: COLORS.borderSubtle,
+    },
+    friendAvatarImage: {
+      width: 33,
+      height: 33,
+      borderRadius: 16.5,
+    },
+    friendInfo: {
+      flex: 1,
+    },
+    friendName: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: COLORS.textPrimary,
+    },
+    friendMeta: {
+      fontSize: 12,
+      color: COLORS.textSecondary,
+      marginTop: 2,
+    },
+  });
