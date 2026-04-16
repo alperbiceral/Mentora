@@ -68,14 +68,6 @@ const TRAIT_LABELS: Record<string, string> = {
   neuroticism: "Neuroticism",
 };
 
-const TRAIT_SHORT: Record<string, string> = {
-  openness: "O",
-  conscientiousness: "C",
-  extraversion: "E",
-  agreeableness: "A",
-  neuroticism: "N",
-};
-
 const OCEAN_KEYS: (keyof OceanProfile)[] = [
   "openness",
   "conscientiousness",
@@ -204,15 +196,21 @@ export default function ProfileScreen() {
           const token = await AsyncStorage.getItem("mentora.token");
           if (token) {
             // First try to fetch the most recently saved profile from the DB
-            let oceanResp = await fetch(`${API_BASE_URL}/ocean/profile/latest`, {
-              headers: { Authorization: `Bearer ${token}` },
-            });
+            let oceanResp = await fetch(
+              `${API_BASE_URL}/ocean/profile/latest`,
+              {
+                headers: { Authorization: `Bearer ${token}` },
+              },
+            );
 
             // If there is no saved profile, fall back to the calculated in-memory profile
             if (!oceanResp.ok) {
-              oceanResp = await fetch(`${API_BASE_URL}/ocean/profile/calculate`, {
-                headers: { Authorization: `Bearer ${token}` },
-              });
+              oceanResp = await fetch(
+                `${API_BASE_URL}/ocean/profile/calculate`,
+                {
+                  headers: { Authorization: `Bearer ${token}` },
+                },
+              );
             }
 
             if (oceanResp.ok) {
@@ -379,7 +377,7 @@ export default function ProfileScreen() {
               <Text style={styles.profileRowValue}>
                 {oceanProfile
                   ? getDominantOceanTrait(oceanProfile)
-                  : profile?.personality ?? "-"}
+                  : (profile?.personality ?? "-")}
               </Text>
               {oceanProfile && !isNeutralOcean(oceanProfile) && (
                 <Pressable
@@ -515,32 +513,22 @@ export default function ProfileScreen() {
                   return (
                     <View key={key} style={styles.oceanBarRow}>
                       <Text style={styles.oceanBarLabel}>
-                        {TRAIT_SHORT[key]}
+                        {key.charAt(0).toUpperCase() + key.slice(1)}
                       </Text>
-                      <View style={styles.oceanBarTrack}>
-                        <View
-                          style={[
-                            styles.oceanBarFill,
-                            { width: `${Math.max(2, val)}%` as `${number}%` },
-                          ]}
-                        />
+                      <View style={styles.oceanBarValueRow}>
+                        <View style={styles.oceanBarTrack}>
+                          <View
+                            style={[
+                              styles.oceanBarFill,
+                              { width: `${Math.max(2, val)}%` as `${number}%` },
+                            ]}
+                          />
+                        </View>
+                        <Text style={styles.oceanBarValue}>{val}</Text>
                       </View>
-                      <Text style={styles.oceanBarValue}>{val}</Text>
                     </View>
                   );
                 })}
-
-                <View style={styles.oceanLegend}>
-                  {OCEAN_KEYS.map((key) => (
-                    <Text key={key} style={styles.oceanLegendItem}>
-                      <Text style={styles.oceanLegendBold}>
-                        {TRAIT_SHORT[key]}
-                      </Text>
-                      {" — "}
-                      {TRAIT_LABELS[key]}
-                    </Text>
-                  ))}
-                </View>
               </View>
             )}
           </Pressable>
@@ -568,10 +556,10 @@ const formatStudyHours = (hours: number) => {
   return `${roundedText} h`;
 };
 
-const FOCUS_RANGES: Array<{
+const FOCUS_RANGES: {
   value: "hourly" | "daily" | "weekly" | "monthly";
   label: string;
-}> = [
+}[] = [
   { value: "hourly", label: "Hourly" },
   { value: "daily", label: "Daily" },
   { value: "weekly", label: "Weekly" },
@@ -789,365 +777,360 @@ const InsightRow: React.FC<InsightRowProps> = ({
 
 const createStyles = (COLORS: ThemeColors) =>
   StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  scroll: {
-    flex: 1,
-  },
-  contentContainer: {
-    paddingHorizontal: SPACING.lg,
-    paddingTop: SPACING.lg,
-    paddingBottom: SPACING.xl,
-    gap: SPACING.md,
-  },
-  topBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: SPACING.md,
-  },
-  backButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: COLORS.subtleCard,
-  },
-  topBarSpacer: {
-    flex: 1,
-  },
-  streakPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: COLORS.subtleCard,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 6,
-    borderRadius: 999,
-  },
-  streakText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: COLORS.accentSoft,
-  },
-  profileHeaderCard: {
-    backgroundColor: COLORS.card,
-    borderRadius: 20,
-    padding: SPACING.md,
-    borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
-    shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.16,
-    shadowRadius: 18,
-    elevation: 5,
-    marginBottom: SPACING.md,
-  },
-  profileHeaderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: SPACING.md,
-  },
-  avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: COLORS.subtleCard,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: SPACING.md,
-  },
-  avatarImage: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-  },
-  profileHeaderText: {
-    flex: 1,
-  },
-  profileName: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-    marginBottom: 4,
-  },
-  profileSubtitle: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-  },
-  editProfileButton: {
-    alignSelf: "flex-start",
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: SPACING.md,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: COLORS.accent,
-  },
-  editProfileButtonText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#FFFFFF",
-  },
-  sectionCard: {
-    backgroundColor: COLORS.card,
-    borderRadius: 20,
-    paddingHorizontal: SPACING.md,
-    paddingTop: SPACING.md,
-    paddingBottom: SPACING.md,
-    borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
-    shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.12,
-    shadowRadius: 14,
-    elevation: 4,
-    marginBottom: SPACING.md,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-  },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: COLORS.borderSubtle,
-    marginVertical: SPACING.sm,
-  },
-  profileRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 8,
-  },
-  profileRowLabel: {
-    fontSize: 11,
-    letterSpacing: 0.8,
-    fontWeight: "600",
-    color: COLORS.textMuted,
-  },
-  profileRowValue: {
-    fontSize: 14,
-    color: COLORS.textPrimary,
-    flexShrink: 1,
-    textAlign: "right",
-  },
-  insightRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 10,
-  },
-  insightLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  insightIconWrapper: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: COLORS.subtleCard,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: SPACING.sm,
-  },
-  insightLabel: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-  },
-  insightValue: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: COLORS.textPrimary,
-  },
-  focusHeaderRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: SPACING.sm,
-  },
-  focusToggle: {
-    flexDirection: "row",
-    gap: 6,
-    padding: 4,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
-    backgroundColor: COLORS.subtleCard,
-  },
-  focusToggleItem: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-  },
-  focusToggleItemActive: {
-    backgroundColor: COLORS.accent,
-  },
-  focusToggleText: {
-    fontSize: 11,
-    color: COLORS.textSecondary,
-    fontWeight: "600",
-  },
-  focusToggleTextActive: {
-    color: "#FFFFFF",
-  },
-  focusChart: {
-    marginTop: SPACING.sm,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
-    paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.md,
-    backgroundColor: COLORS.inputBg,
-    minHeight: 160,
-  },
-  focusChartGrid: {
-    position: "absolute",
-    top: SPACING.sm,
-    left: SPACING.md,
-    right: SPACING.md,
-    bottom: SPACING.lg,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: COLORS.borderSubtle,
-  },
-  focusChartBars: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    justifyContent: "space-between",
-    height: FOCUS_BAR_HEIGHT,
-    marginBottom: SPACING.sm,
-  },
-  focusBarItem: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "flex-end",
-  },
-  focusBar: {
-    width: 8,
-    borderRadius: 8,
-    backgroundColor: COLORS.accentSoft,
-  },
-  focusChartLabelsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  focusChartLabelItem: {
-    flex: 1,
-    alignItems: "center",
-  },
-  focusChartLabel: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-  },
-  focusEmptyText: {
-    textAlign: "center",
-    color: COLORS.textMuted,
-    fontSize: 12,
-    marginTop: SPACING.lg,
-    marginBottom: SPACING.sm,
-  },
-  profileActionsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginTop: SPACING.sm,
-  },
-  retakeButton: {
-    marginLeft: 12,
-    backgroundColor: "rgba(109,94,247,0.85)",
-  },
-  personalityValueRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    flexShrink: 0,
-    gap: 8,
-  },
-  personalityInfoBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: COLORS.subtleCard,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalCard: {
-    width: "88%",
-    backgroundColor: COLORS.card,
-    borderRadius: 20,
-    padding: SPACING.lg,
-    borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
-    shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
-    shadowRadius: 24,
-    elevation: 8,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: SPACING.md,
-  },
-  modalTitle: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-  },
-  oceanChartContainer: {
-    gap: 10,
-  },
-  oceanBarRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  oceanBarLabel: {
-    width: 18,
-    fontSize: 13,
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-    textAlign: "center",
-  },
-  oceanBarTrack: {
-    flex: 1,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: COLORS.subtleCard,
-    overflow: "hidden",
-  },
-  oceanBarFill: {
-    height: "100%",
-    borderRadius: 7,
-    backgroundColor: COLORS.accent,
-  },
-  oceanBarValue: {
-    width: 28,
-    fontSize: 12,
-    fontWeight: "600",
-    color: COLORS.textSecondary,
-    textAlign: "right",
-  },
-  oceanLegend: {
-    marginTop: SPACING.sm,
-    gap: 2,
-  },
-  oceanLegendItem: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-    lineHeight: 16,
-  },
-  oceanLegendBold: {
-    fontWeight: "700",
-    color: COLORS.textSecondary,
-  },
-});
+    safeArea: {
+      flex: 1,
+      backgroundColor: COLORS.background,
+    },
+    scroll: {
+      flex: 1,
+    },
+    contentContainer: {
+      paddingHorizontal: SPACING.lg,
+      paddingTop: SPACING.lg,
+      paddingBottom: SPACING.xl,
+      gap: SPACING.md,
+    },
+    topBar: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: SPACING.md,
+    },
+    backButton: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: COLORS.subtleCard,
+    },
+    topBarSpacer: {
+      flex: 1,
+    },
+    streakPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: COLORS.subtleCard,
+      paddingHorizontal: SPACING.sm,
+      paddingVertical: 6,
+      borderRadius: 999,
+    },
+    streakText: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: COLORS.accentSoft,
+    },
+    profileHeaderCard: {
+      backgroundColor: COLORS.card,
+      borderRadius: 20,
+      padding: SPACING.md,
+      borderWidth: 1,
+      borderColor: COLORS.borderSubtle,
+      shadowColor: COLORS.shadow,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.16,
+      shadowRadius: 18,
+      elevation: 5,
+      marginBottom: SPACING.md,
+    },
+    profileHeaderRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginBottom: SPACING.md,
+    },
+    avatar: {
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      backgroundColor: COLORS.subtleCard,
+      alignItems: "center",
+      justifyContent: "center",
+      marginRight: SPACING.md,
+    },
+    avatarImage: {
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+    },
+    profileHeaderText: {
+      flex: 1,
+    },
+    profileName: {
+      fontSize: 18,
+      fontWeight: "700",
+      color: COLORS.textPrimary,
+      marginBottom: 4,
+    },
+    profileSubtitle: {
+      fontSize: 13,
+      color: COLORS.textSecondary,
+    },
+    editProfileButton: {
+      alignSelf: "flex-start",
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: SPACING.md,
+      paddingVertical: 8,
+      borderRadius: 999,
+      backgroundColor: COLORS.accent,
+    },
+    editProfileButtonText: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: "#FFFFFF",
+    },
+    sectionCard: {
+      backgroundColor: COLORS.card,
+      borderRadius: 20,
+      paddingHorizontal: SPACING.md,
+      paddingTop: SPACING.md,
+      paddingBottom: SPACING.md,
+      borderWidth: 1,
+      borderColor: COLORS.borderSubtle,
+      shadowColor: COLORS.shadow,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.12,
+      shadowRadius: 14,
+      elevation: 4,
+      marginBottom: SPACING.md,
+    },
+    sectionTitle: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: COLORS.textPrimary,
+    },
+    divider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: COLORS.borderSubtle,
+      marginVertical: SPACING.sm,
+    },
+    profileRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingVertical: 8,
+    },
+    profileRowLabel: {
+      fontSize: 11,
+      letterSpacing: 0.8,
+      fontWeight: "600",
+      color: COLORS.textMuted,
+    },
+    profileRowValue: {
+      fontSize: 14,
+      color: COLORS.textPrimary,
+      flexShrink: 1,
+      textAlign: "right",
+    },
+    insightRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingVertical: 10,
+    },
+    insightLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+    },
+    insightIconWrapper: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: COLORS.subtleCard,
+      alignItems: "center",
+      justifyContent: "center",
+      marginRight: SPACING.sm,
+    },
+    insightLabel: {
+      fontSize: 13,
+      color: COLORS.textSecondary,
+    },
+    insightValue: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: COLORS.textPrimary,
+    },
+    focusHeaderRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: SPACING.sm,
+    },
+    focusToggle: {
+      flexDirection: "row",
+      gap: 6,
+      padding: 4,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: COLORS.borderSubtle,
+      backgroundColor: COLORS.subtleCard,
+    },
+    focusToggleItem: {
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 999,
+    },
+    focusToggleItemActive: {
+      backgroundColor: COLORS.accent,
+    },
+    focusToggleText: {
+      fontSize: 11,
+      color: COLORS.textSecondary,
+      fontWeight: "600",
+    },
+    focusToggleTextActive: {
+      color: "#FFFFFF",
+    },
+    focusChart: {
+      marginTop: SPACING.sm,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: COLORS.borderSubtle,
+      paddingVertical: SPACING.md,
+      paddingHorizontal: SPACING.md,
+      backgroundColor: COLORS.inputBg,
+      minHeight: 160,
+    },
+    focusChartGrid: {
+      position: "absolute",
+      top: SPACING.sm,
+      left: SPACING.md,
+      right: SPACING.md,
+      bottom: SPACING.lg,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderColor: COLORS.borderSubtle,
+    },
+    focusChartBars: {
+      flexDirection: "row",
+      alignItems: "flex-end",
+      justifyContent: "space-between",
+      height: FOCUS_BAR_HEIGHT,
+      marginBottom: SPACING.sm,
+    },
+    focusBarItem: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "flex-end",
+    },
+    focusBar: {
+      width: 8,
+      borderRadius: 8,
+      backgroundColor: COLORS.accentSoft,
+    },
+    focusChartLabelsRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+    },
+    focusChartLabelItem: {
+      flex: 1,
+      alignItems: "center",
+    },
+    focusChartLabel: {
+      fontSize: 11,
+      color: COLORS.textMuted,
+    },
+    focusEmptyText: {
+      textAlign: "center",
+      color: COLORS.textMuted,
+      fontSize: 12,
+      marginTop: SPACING.lg,
+      marginBottom: SPACING.sm,
+    },
+    profileActionsRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      marginTop: SPACING.sm,
+    },
+    retakeButton: {
+      marginLeft: 12,
+      backgroundColor: "rgba(109,94,247,0.85)",
+    },
+    personalityValueRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      flexShrink: 0,
+      gap: 8,
+    },
+    personalityInfoBtn: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: COLORS.subtleCard,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.5)",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    modalCard: {
+      width: "88%",
+      backgroundColor: COLORS.card,
+      borderRadius: 20,
+      padding: SPACING.lg,
+      borderWidth: 1,
+      borderColor: COLORS.borderSubtle,
+      shadowColor: COLORS.shadow,
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.2,
+      shadowRadius: 24,
+      elevation: 8,
+    },
+    modalHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: SPACING.md,
+    },
+    modalTitle: {
+      fontSize: 17,
+      fontWeight: "700",
+      color: COLORS.textPrimary,
+    },
+    oceanChartContainer: {
+      gap: 10,
+    },
+    oceanBarRow: {
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "flex-start",
+      gap: 8,
+    },
+    oceanBarValueRow: {
+      display: "flex",
+      flexDirection: "row",
+      width: "100%",
+    },
+    oceanBarLabel: {
+      fontSize: 13,
+      color: COLORS.textPrimary,
+      textAlign: "center",
+    },
+    oceanBarTrack: {
+      flex: 1,
+      height: 14,
+      borderRadius: 7,
+      backgroundColor: COLORS.subtleCard,
+      overflow: "hidden",
+    },
+    oceanBarFill: {
+      height: "100%",
+      borderRadius: 7,
+      backgroundColor: COLORS.accent,
+    },
+    oceanBarValue: {
+      width: 28,
+      fontSize: 12,
+      fontWeight: "600",
+      color: COLORS.textSecondary,
+      textAlign: "right",
+    },
+    oceanLegend: {
+      marginTop: SPACING.sm,
+      gap: 2,
+    },
+  });

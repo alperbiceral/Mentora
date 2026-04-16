@@ -14,7 +14,7 @@ import type { ThemeColors } from "../../theme/theme";
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
 const TOTAL_QUESTIONS = 20;
-const OPTIONS = [1, 2, 3, 4, 5];
+const OPTIONS = [5, 4, 3, 2, 1];
 
 type Status = "idle" | "saving" | "saved" | "error";
 
@@ -283,163 +283,163 @@ export default function OceanQuestionScreen() {
 
 const createStyles = (COLORS: ThemeColors) =>
   StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  backgroundTop: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: "55%",
-    backgroundColor: COLORS.background,
-  },
-  backgroundBottom: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: "55%",
-    backgroundColor: COLORS.backgroundAlt,
-  },
-  glow: {
-    position: "absolute",
-    top: 60,
-    right: -70,
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    backgroundColor: "rgba(109,94,247,0.3)",
-  },
-  container: {
-    flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 24,
-  },
-  header: {
-    marginBottom: 22,
-  },
-  eyebrow: {
-    color: COLORS.accent,
-    letterSpacing: 2,
-    fontSize: 12,
-    textTransform: "uppercase",
-  },
-  title: {
-    color: COLORS.textPrimary,
-    fontSize: 28,
-    marginTop: 8,
-  },
-  subtitle: {
-    color: COLORS.textSecondary,
-    marginTop: 8,
-    fontSize: 15,
-  },
-  card: {
-    backgroundColor: COLORS.card,
-    borderRadius: 22,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-    shadowColor: "#000",
-    shadowOpacity: 0.25,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-  },
-  questionText: {
-    color: COLORS.textPrimary,
-    fontSize: 18,
-  },
-  questionHint: {
-    color: COLORS.textMuted,
-    marginTop: 6,
-    fontSize: 13,
-  },
-  answerText: {
-    color: COLORS.textSecondary,
-    marginTop: 16,
-    fontSize: 14,
-  },
-  options: {
-    marginTop: 20,
-    gap: 12,
-  },
-  option: {
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    backgroundColor: COLORS.inputBg,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  optionSelected: {
-    backgroundColor: COLORS.accentSoft,
-    borderColor: COLORS.accentSoft,
-  },
-  optionPressed: {
-    transform: [{ scale: 0.98 }],
-  },
-  optionValue: {
-    fontSize: 18,
-    color: COLORS.textPrimary,
-  },
-  optionValueSelected: {
-    color: COLORS.background,
-  },
-  optionLabel: {
-    color: COLORS.textMuted,
-    fontSize: 14,
-  },
-  optionLabelSelected: {
-    color: COLORS.background,
-  },
-  errorText: {
-    color: COLORS.danger,
-    marginTop: 12,
-  },
-  successText: {
-    color: COLORS.accent,
-    marginTop: 12,
-  },
-  actions: {
-    marginTop: 18,
-    gap: 12,
-  },
-  primaryButton: {
-    backgroundColor: COLORS.accent,
-    borderRadius: 18,
-    alignItems: "center",
-    paddingVertical: 14,
-  },
-  primaryButtonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-  },
-  secondaryButton: {
-    borderRadius: 18,
-    alignItems: "center",
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-    backgroundColor: "rgba(2,6,23,0.15)",
-  },
-  secondaryButtonText: {
-    color: COLORS.textSecondary,
-    fontSize: 14,
-  },
-  skipLink: {
-    alignItems: "center",
-  },
-  skipLinkText: {
-    color: COLORS.textMuted,
-    fontSize: 13,
-    textDecorationLine: "underline",
-  },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-});
+    safeArea: {
+      flex: 1,
+      backgroundColor: COLORS.background,
+    },
+    backgroundTop: {
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: 0,
+      height: "55%",
+      backgroundColor: COLORS.background,
+    },
+    backgroundBottom: {
+      position: "absolute",
+      bottom: 0,
+      left: 0,
+      right: 0,
+      height: "55%",
+      backgroundColor: COLORS.backgroundAlt,
+    },
+    glow: {
+      position: "absolute",
+      top: 60,
+      right: -70,
+      width: 200,
+      height: 200,
+      borderRadius: 100,
+      backgroundColor: "rgba(109,94,247,0.3)",
+    },
+    container: {
+      flex: 1,
+      paddingHorizontal: 20,
+      paddingTop: 24,
+    },
+    header: {
+      marginBottom: 22,
+    },
+    eyebrow: {
+      color: COLORS.accent,
+      letterSpacing: 2,
+      fontSize: 12,
+      textTransform: "uppercase",
+    },
+    title: {
+      color: COLORS.textPrimary,
+      fontSize: 28,
+      marginTop: 8,
+    },
+    subtitle: {
+      color: COLORS.textSecondary,
+      marginTop: 8,
+      fontSize: 15,
+    },
+    card: {
+      backgroundColor: COLORS.card,
+      borderRadius: 22,
+      padding: 20,
+      borderWidth: 1,
+      borderColor: COLORS.borderSoft,
+      shadowColor: "#000",
+      shadowOpacity: 0.25,
+      shadowRadius: 18,
+      shadowOffset: { width: 0, height: 10 },
+    },
+    questionText: {
+      color: COLORS.textPrimary,
+      fontSize: 18,
+    },
+    questionHint: {
+      color: COLORS.textMuted,
+      marginTop: 6,
+      fontSize: 13,
+    },
+    answerText: {
+      color: COLORS.textSecondary,
+      marginTop: 16,
+      fontSize: 14,
+    },
+    options: {
+      marginTop: 20,
+      gap: 12,
+    },
+    option: {
+      borderWidth: 1,
+      borderColor: COLORS.borderSoft,
+      borderRadius: 16,
+      paddingVertical: 14,
+      paddingHorizontal: 16,
+      backgroundColor: COLORS.inputBg,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    optionSelected: {
+      backgroundColor: COLORS.accentSoft,
+      borderColor: COLORS.accentSoft,
+    },
+    optionPressed: {
+      transform: [{ scale: 0.98 }],
+    },
+    optionValue: {
+      fontSize: 18,
+      color: COLORS.textPrimary,
+    },
+    optionValueSelected: {
+      color: COLORS.background,
+    },
+    optionLabel: {
+      color: COLORS.textMuted,
+      fontSize: 14,
+    },
+    optionLabelSelected: {
+      color: COLORS.background,
+    },
+    errorText: {
+      color: COLORS.danger,
+      marginTop: 12,
+    },
+    successText: {
+      color: COLORS.accent,
+      marginTop: 12,
+    },
+    actions: {
+      marginTop: 18,
+      gap: 12,
+    },
+    primaryButton: {
+      backgroundColor: COLORS.accent,
+      borderRadius: 18,
+      alignItems: "center",
+      paddingVertical: 14,
+    },
+    primaryButtonText: {
+      color: "#FFFFFF",
+      fontSize: 16,
+    },
+    secondaryButton: {
+      borderRadius: 18,
+      alignItems: "center",
+      paddingVertical: 12,
+      borderWidth: 1,
+      borderColor: COLORS.borderSoft,
+      backgroundColor: "rgba(2,6,23,0.15)",
+    },
+    secondaryButtonText: {
+      color: COLORS.textSecondary,
+      fontSize: 14,
+    },
+    skipLink: {
+      alignItems: "center",
+    },
+    skipLinkText: {
+      color: COLORS.textMuted,
+      fontSize: 13,
+      textDecorationLine: "underline",
+    },
+    buttonDisabled: {
+      opacity: 0.5,
+    },
+  });

@@ -1,5 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import {
@@ -180,9 +186,13 @@ export default function ScheduleScreen() {
     d.setHours(0, 0, 0, 0);
     return d;
   });
-  const [completedSessions, setCompletedSessions] = useState<Set<string>>(new Set());
+  const [completedSessions, setCompletedSessions] = useState<Set<string>>(
+    new Set(),
+  );
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [selectedSession, setSelectedSession] = useState<StudyBlock | null>(null);
+  const [selectedSession, setSelectedSession] = useState<StudyBlock | null>(
+    null,
+  );
   const [isSessionSheetOpen, setIsSessionSheetOpen] = useState(false);
   const timelineScrollRef = useRef<ScrollView>(null);
   const [courses, setCourses] = useState<Course[]>(INITIAL_COURSES);
@@ -214,7 +224,8 @@ export default function ScheduleScreen() {
     endIndex: null as number | null,
   });
   const [modalMessage, setModalMessage] = useState<string | null>(null);
-  const [studyPlan, setStudyPlan] = useState<Record<WeekdayKey, StudyBlock[]>>(STUDY_PLAN);
+  const [studyPlan, setStudyPlan] =
+    useState<Record<WeekdayKey, StudyBlock[]>>(STUDY_PLAN);
   const [loadingStudyPlan, setLoadingStudyPlan] = useState(false);
   const draftColor = COURSE_COLORS[courses.length % COURSE_COLORS.length];
 
@@ -315,7 +326,8 @@ export default function ScheduleScreen() {
   };
 
   const pad = (n: number) => String(n).padStart(2, "0");
-  const timeFromDate = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const timeFromDate = (d: Date) =>
+    `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 
   const addMinutesToTime = (time: string, minutes: number) => {
     const [hh, mm] = time.split(":").map((v) => Number(v));
@@ -329,7 +341,10 @@ export default function ScheduleScreen() {
     if (Number.isNaN(hh) || Number.isNaN(mm)) return null;
     const total = hh * 60 + mm;
     const factor = SLOT_MINUTES;
-    const rounded = mode === "floor" ? Math.floor(total / factor) * factor : Math.ceil(total / factor) * factor;
+    const rounded =
+      mode === "floor"
+        ? Math.floor(total / factor) * factor
+        : Math.ceil(total / factor) * factor;
     const rHour = Math.floor(rounded / 60);
     const rMin = rounded % 60;
     if (rHour < START_HOUR || rHour > END_HOUR) return null;
@@ -346,14 +361,24 @@ export default function ScheduleScreen() {
           return;
         }
 
-        const res = await fetch(`${API_BASE_URL}/study-sessions/${encodeURIComponent(username)}`);
+        const res = await fetch(
+          `${API_BASE_URL}/study-sessions/${encodeURIComponent(username)}`,
+        );
         if (!res.ok) {
           setStudyPlan(STUDY_PLAN);
           return;
         }
         const sessions = (await res.json()) as StudySessionApi[];
 
-        const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+        const dayNames = [
+          "Sun",
+          "Mon",
+          "Tue",
+          "Wed",
+          "Thu",
+          "Fri",
+          "Sat",
+        ] as const;
 
         const newPlan: Record<WeekdayKey, StudyBlock[]> = {
           Mon: [],
@@ -365,7 +390,11 @@ export default function ScheduleScreen() {
           Sun: [],
         };
 
-        const AD_HOC_TIMER_TYPES = new Set(["countup", "countdown", "pomodoro"]);
+        const AD_HOC_TIMER_TYPES = new Set([
+          "countup",
+          "countdown",
+          "pomodoro",
+        ]);
 
         sessions.forEach((s) => {
           const timerType = (s.timer_type ?? "").toLowerCase().trim();
@@ -373,7 +402,9 @@ export default function ScheduleScreen() {
           if (sessionMode === "normal" || sessionMode === "pomodoro") return;
           if (AD_HOC_TIMER_TYPES.has(timerType)) return;
 
-          const dStart = parseTimestampToDate(s.started_at ?? s.session_date ?? null);
+          const dStart = parseTimestampToDate(
+            s.started_at ?? s.session_date ?? null,
+          );
           const dEnd = parseTimestampToDate(s.ended_at ?? null);
           if (!dStart) return;
 
@@ -391,8 +422,12 @@ export default function ScheduleScreen() {
           }
           if (endTotal === null) return;
 
-          const startIndex = Math.round((startTotal - START_HOUR * 60) / SLOT_MINUTES);
-          let endIndex = Math.round((endTotal - START_HOUR * 60) / SLOT_MINUTES);
+          const startIndex = Math.round(
+            (startTotal - START_HOUR * 60) / SLOT_MINUTES,
+          );
+          let endIndex = Math.round(
+            (endTotal - START_HOUR * 60) / SLOT_MINUTES,
+          );
 
           // Ensure at least one slot and clamp to grid bounds
           if (startIndex < 0) return;
@@ -405,7 +440,10 @@ export default function ScheduleScreen() {
           const timer = (s.timer_type ?? s.title ?? "").trim();
           let matchedCourse: Course | undefined = undefined;
           if (timer) {
-            matchedCourse = courses.find((c) => c.name && (c.name.includes(timer) || timer.includes(c.name)));
+            matchedCourse = courses.find(
+              (c) =>
+                c.name && (c.name.includes(timer) || timer.includes(c.name)),
+            );
           }
 
           const color = matchedCourse?.color ?? COURSE_COLORS[0];
@@ -781,7 +819,9 @@ export default function ScheduleScreen() {
         try {
           const arr = JSON.parse(raw) as string[];
           setCompletedSessions(new Set(arr));
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
       }
     });
   }, []);
@@ -938,7 +978,11 @@ export default function ScheduleScreen() {
                   style={styles.addCourseButton}
                   onPress={handleOpenCourseModal}
                 >
-                  <Ionicons name="add-circle-outline" size={15} color="#FFFFFF" />
+                  <Ionicons
+                    name="add-circle-outline"
+                    size={15}
+                    color="#FFFFFF"
+                  />
                   <Text style={styles.addCourseText}>Add Course</Text>
                 </Pressable>
               </View>
@@ -991,7 +1035,7 @@ export default function ScheduleScreen() {
                   <View style={styles.importModalCard}>
                     <View style={styles.importModalHeader}>
                       <Text style={styles.importModalTitle}>
-                        Syllabus import
+                        Weekly Schedule Import
                       </Text>
                       <Pressable
                         onPress={() => setIsImportModalOpen(false)}
@@ -1055,7 +1099,11 @@ export default function ScheduleScreen() {
               <SessionDetailSheet
                 visible={isSessionSheetOpen}
                 session={selectedSession}
-                isDone={selectedSession ? completedSessions.has(selectedSession.id) : false}
+                isDone={
+                  selectedSession
+                    ? completedSessions.has(selectedSession.id)
+                    : false
+                }
                 onToggleDone={handleToggleDone}
                 onClose={() => setIsSessionSheetOpen(false)}
               />
@@ -1098,7 +1146,10 @@ const SegmentedControl: React.FC<SegmentedProps> = ({ mode, setMode }) => {
       </Pressable>
 
       <Pressable
-        style={[styles.segmentItem, mode === "study" && styles.segmentItemActive]}
+        style={[
+          styles.segmentItem,
+          mode === "study" && styles.segmentItemActive,
+        ]}
         onPress={() => setMode("study")}
       >
         <Text
@@ -1185,144 +1236,144 @@ const CourseModal: React.FC<CourseModalProps> = ({
   const { styles, COLORS } = useScheduleTheme();
 
   return (
-  <Modal animationType="slide" transparent visible={visible}>
-    <View style={styles.modalBackdrop}>
-      <View style={styles.modalCard}>
-        <View style={styles.modalHeader}>
-          <Text style={styles.modalTitle}>
-            {mode === "edit" ? "Edit course" : "Add course"}
-          </Text>
-          <Pressable onPress={onClose} hitSlop={8}>
-            <Ionicons name="close" size={20} color={COLORS.textSecondary} />
-          </Pressable>
-        </View>
-
-        <ScrollView
-          style={styles.modalScrollBody}
-          contentContainerStyle={styles.modalBody}
-          showsVerticalScrollIndicator={true}
-          keyboardShouldPersistTaps="handled"
-          nestedScrollEnabled
-        >
-          <View style={styles.formRow}>
-            <TextInput
-              value={courseForm.name}
-              onChangeText={(text) =>
-                onChangeCourseForm({ ...courseForm, name: text })
-              }
-              placeholder="Course code (e.g. CS 458)"
-              placeholderTextColor={COLORS.textMuted}
-              style={styles.input}
-            />
-            <TextInput
-              value={courseForm.instructor}
-              onChangeText={(text) =>
-                onChangeCourseForm({ ...courseForm, instructor: text })
-              }
-              placeholder="Instructor"
-              placeholderTextColor={COLORS.textMuted}
-              style={styles.input}
-            />
-          </View>
-          <View style={styles.formRow}>
-            <TextInput
-              value={courseForm.section}
-              onChangeText={(text) =>
-                onChangeCourseForm({ ...courseForm, section: text })
-              }
-              placeholder="Section (optional)"
-              placeholderTextColor={COLORS.textMuted}
-              style={styles.input}
-            />
-            <TextInput
-              value={courseForm.location}
-              onChangeText={(text) =>
-                onChangeCourseForm({ ...courseForm, location: text })
-              }
-              placeholder="Location"
-              placeholderTextColor={COLORS.textMuted}
-              style={styles.input}
-            />
-          </View>
-          <TextInput
-            value={courseForm.description}
-            onChangeText={(text) =>
-              onChangeCourseForm({ ...courseForm, description: text })
-            }
-            placeholder="Description"
-            placeholderTextColor={COLORS.textMuted}
-            style={[styles.input, styles.descriptionInput]}
-            multiline
-            numberOfLines={6}
-            textAlignVertical="top"
-          />
-
-          <View style={styles.modalSectionHeader}>
-            <Text style={styles.formLabel}>Weekly time slots</Text>
-            <Pressable
-              style={[
-                styles.ghostButton,
-                !canAddDraftBlock && styles.buttonDisabled,
-              ]}
-              onPress={onAddDraftBlock}
-              disabled={!canAddDraftBlock}
-            >
-              <Text style={styles.ghostButtonText}>Add time block</Text>
+    <Modal animationType="slide" transparent visible={visible}>
+      <View style={styles.modalBackdrop}>
+        <View style={styles.modalCard}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>
+              {mode === "edit" ? "Edit course" : "Add course"}
+            </Text>
+            <Pressable onPress={onClose} hitSlop={8}>
+              <Ionicons name="close" size={20} color={COLORS.textSecondary} />
             </Pressable>
           </View>
 
-          <Text style={styles.selectionHint}>
-            Tap a start slot, then tap an end slot to add a range.
-          </Text>
-
-          <DraftScheduleGrid
-            draftBlocks={modalBlocks}
-            selection={selection}
-            onSlotPress={onSlotPress}
-            color={draftColor}
-            blockedBlocks={blockedBlocks}
-            courseLookup={courseLookup}
-          />
-
-          {modalBlocks.length > 0 ? (
-            <View style={styles.selectionList}>
-              {modalBlocks.map((block) => (
-                <View key={block.id} style={styles.selectionChip}>
-                  <Text style={styles.selectionChipText}>
-                    {block.day} · {block.start} - {block.end}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          ) : null}
-
-          {message ? <Text style={styles.formMessage}>{message}</Text> : null}
-        </ScrollView>
-
-        <View style={styles.modalFooter}>
-          <Pressable style={styles.ghostButton} onPress={onClose}>
-            <Text style={styles.ghostButtonText}>Cancel</Text>
-          </Pressable>
-          <Pressable
-            style={[
-              styles.primaryButton,
-              (!canAddCourse || saving) && styles.buttonDisabled,
-            ]}
-            onPress={onAddCourse}
-            disabled={!canAddCourse || saving}
+          <ScrollView
+            style={styles.modalScrollBody}
+            contentContainerStyle={styles.modalBody}
+            showsVerticalScrollIndicator={true}
+            keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled
           >
-            <Text style={styles.primaryButtonText}>
-              {saving
-                ? "Saving..."
-                : mode === "edit"
-                  ? "Save changes"
-                  : "Save course"}
+            <View style={styles.formRow}>
+              <TextInput
+                value={courseForm.name}
+                onChangeText={(text) =>
+                  onChangeCourseForm({ ...courseForm, name: text })
+                }
+                placeholder="Course code (e.g. CS 458)"
+                placeholderTextColor={COLORS.textMuted}
+                style={styles.input}
+              />
+              <TextInput
+                value={courseForm.instructor}
+                onChangeText={(text) =>
+                  onChangeCourseForm({ ...courseForm, instructor: text })
+                }
+                placeholder="Instructor"
+                placeholderTextColor={COLORS.textMuted}
+                style={styles.input}
+              />
+            </View>
+            <View style={styles.formRow}>
+              <TextInput
+                value={courseForm.section}
+                onChangeText={(text) =>
+                  onChangeCourseForm({ ...courseForm, section: text })
+                }
+                placeholder="Section (optional)"
+                placeholderTextColor={COLORS.textMuted}
+                style={styles.input}
+              />
+              <TextInput
+                value={courseForm.location}
+                onChangeText={(text) =>
+                  onChangeCourseForm({ ...courseForm, location: text })
+                }
+                placeholder="Location"
+                placeholderTextColor={COLORS.textMuted}
+                style={styles.input}
+              />
+            </View>
+            <TextInput
+              value={courseForm.description}
+              onChangeText={(text) =>
+                onChangeCourseForm({ ...courseForm, description: text })
+              }
+              placeholder="Description"
+              placeholderTextColor={COLORS.textMuted}
+              style={[styles.input, styles.descriptionInput]}
+              multiline
+              numberOfLines={6}
+              textAlignVertical="top"
+            />
+
+            <View style={styles.modalSectionHeader}>
+              <Text style={styles.formLabel}>Weekly time slots</Text>
+              <Pressable
+                style={[
+                  styles.ghostButton,
+                  !canAddDraftBlock && styles.buttonDisabled,
+                ]}
+                onPress={onAddDraftBlock}
+                disabled={!canAddDraftBlock}
+              >
+                <Text style={styles.ghostButtonText}>Add time block</Text>
+              </Pressable>
+            </View>
+
+            <Text style={styles.selectionHint}>
+              Tap a start slot, then tap an end slot to add a range.
             </Text>
-          </Pressable>
+
+            <DraftScheduleGrid
+              draftBlocks={modalBlocks}
+              selection={selection}
+              onSlotPress={onSlotPress}
+              color={draftColor}
+              blockedBlocks={blockedBlocks}
+              courseLookup={courseLookup}
+            />
+
+            {modalBlocks.length > 0 ? (
+              <View style={styles.selectionList}>
+                {modalBlocks.map((block) => (
+                  <View key={block.id} style={styles.selectionChip}>
+                    <Text style={styles.selectionChipText}>
+                      {block.day} · {block.start} - {block.end}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+
+            {message ? <Text style={styles.formMessage}>{message}</Text> : null}
+          </ScrollView>
+
+          <View style={styles.modalFooter}>
+            <Pressable style={styles.ghostButton} onPress={onClose}>
+              <Text style={styles.ghostButtonText}>Cancel</Text>
+            </Pressable>
+            <Pressable
+              style={[
+                styles.primaryButton,
+                (!canAddCourse || saving) && styles.buttonDisabled,
+              ]}
+              onPress={onAddCourse}
+              disabled={!canAddCourse || saving}
+            >
+              <Text style={styles.primaryButtonText}>
+                {saving
+                  ? "Saving..."
+                  : mode === "edit"
+                    ? "Save changes"
+                    : "Save course"}
+              </Text>
+            </Pressable>
+          </View>
         </View>
       </View>
-    </View>
-  </Modal>
+    </Modal>
   );
 };
 
@@ -1359,7 +1410,9 @@ const CourseLegend: React.FC<CourseLegendProps> = ({ courses, loading }) => {
       ) : (
         courses.map((course) => (
           <View key={course.id} style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: course.color }]} />
+            <View
+              style={[styles.legendDot, { backgroundColor: course.color }]}
+            />
             <Text style={styles.legendLabel} numberOfLines={1}>
               {getCourseCodeLabel(course)}
             </Text>
@@ -1517,7 +1570,10 @@ const CourseDayColumn: React.FC<CourseDayColumnProps> = ({
     .map((b) => {
       const startIndex = timeToIndex(b.start);
       const endIndex = timeToIndex(b.end);
-      return { ...b, startIndex, endIndex } as (StudyBlock & { startIndex: number; endIndex: number });
+      return { ...b, startIndex, endIndex } as StudyBlock & {
+        startIndex: number;
+        endIndex: number;
+      };
     })
     .filter((b) => b.startIndex >= 0 && b.endIndex > b.startIndex)
     .sort((a, c) => a.startIndex - c.startIndex || a.endIndex - c.endIndex);
@@ -1578,7 +1634,10 @@ const CourseDayColumn: React.FC<CourseDayColumnProps> = ({
         // If no column data (col/cols) exists, render full-width like plan blocks.
         const maybeCol = (block as any).col;
         const maybeCols = (block as any).cols;
-        const hasCols = typeof maybeCol === "number" && typeof maybeCols === "number" && maybeCols > 1;
+        const hasCols =
+          typeof maybeCol === "number" &&
+          typeof maybeCols === "number" &&
+          maybeCols > 1;
 
         if (!hasCols) {
           return (
@@ -1605,7 +1664,10 @@ const CourseDayColumn: React.FC<CourseDayColumnProps> = ({
         const sidePad = 4; // matches left/right padding used elsewhere
         const innerWidth = Math.max(8, columnTotalPx - sidePad * 2);
         const gap = 4; // gap between split columns
-        const colWidth = Math.max(24, Math.floor((innerWidth - gap * (cols - 1)) / cols));
+        const colWidth = Math.max(
+          24,
+          Math.floor((innerWidth - gap * (cols - 1)) / cols),
+        );
         const leftPx = sidePad + col * (colWidth + gap);
 
         return (
@@ -1661,7 +1723,7 @@ const DraftScheduleGrid: React.FC<DraftScheduleGridProps> = ({
     selection.startIndex !== null && selection.endIndex === null;
 
   const isSlotBlocked = (day: WeekdayKey, slotIndex: number) => {
-    const isInBlocks = (items: Array<DraftBlock | CourseBlock>) =>
+    const isInBlocks = (items: (DraftBlock | CourseBlock)[]) =>
       items.some((block) => {
         if (block.day !== day) {
           return false;
@@ -1898,7 +1960,10 @@ type DateStripProps = {
   onSelectDate: (d: Date) => void;
 };
 
-const DateStrip: React.FC<DateStripProps> = ({ selectedDate, onSelectDate }) => {
+const DateStrip: React.FC<DateStripProps> = ({
+  selectedDate,
+  onSelectDate,
+}) => {
   const { styles, COLORS } = useScheduleTheme();
   const listRef = useRef<FlatList>(null);
   const today = useMemo(() => {
@@ -1910,7 +1975,11 @@ const DateStrip: React.FC<DateStripProps> = ({ selectedDate, onSelectDate }) => 
   useEffect(() => {
     const idx = DATE_STRIP_ITEMS.findIndex((d) => isSameDay(d, selectedDate));
     if (idx >= 0 && listRef.current) {
-      listRef.current.scrollToIndex({ index: idx, animated: true, viewPosition: 0.3 });
+      listRef.current.scrollToIndex({
+        index: idx,
+        animated: true,
+        viewPosition: 0.3,
+      });
     }
   }, []);
 
@@ -1946,7 +2015,14 @@ const DateStrip: React.FC<DateStripProps> = ({ selectedDate, onSelectDate }) => 
               {item.getDate()}
             </Text>
           </View>
-          {isToday && <View style={[styles.dateStripTodayDot, { backgroundColor: COLORS.accent }]} />}
+          {isToday && (
+            <View
+              style={[
+                styles.dateStripTodayDot,
+                { backgroundColor: COLORS.accent },
+              ]}
+            />
+          )}
         </Pressable>
       );
     },
@@ -1986,7 +2062,8 @@ const AIInsightBanner: React.FC<AIInsightBannerProps> = ({ blocks }) => {
     });
     const hours = Math.floor(totalMin / 60);
     const mins = totalMin % 60;
-    const timeStr = hours > 0 ? (mins > 0 ? `${hours}h ${mins}m` : `${hours}h`) : `${mins}m`;
+    const timeStr =
+      hours > 0 ? (mins > 0 ? `${hours}h ${mins}m` : `${hours}h`) : `${mins}m`;
     return `Today: ${blocks.length} session${blocks.length > 1 ? "s" : ""}, ${timeStr} of focus`;
   }, [blocks]);
 
@@ -2032,11 +2109,10 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   }, []);
 
   const currentMinuteOffset = isToday
-    ? (currentTime.getHours() * 60 + currentTime.getMinutes() - START_HOUR * 60)
+    ? currentTime.getHours() * 60 + currentTime.getMinutes() - START_HOUR * 60
     : -1;
-  const currentTimePx = currentMinuteOffset >= 0
-    ? (currentMinuteOffset / 60) * HOUR_HEIGHT
-    : -1;
+  const currentTimePx =
+    currentMinuteOffset >= 0 ? (currentMinuteOffset / 60) * HOUR_HEIGHT : -1;
 
   useEffect(() => {
     if (isToday && scrollRef.current && currentTimePx > 0) {
@@ -2058,7 +2134,10 @@ const TimelineView: React.FC<TimelineViewProps> = ({
           const topPx = (h - START_HOUR) * HOUR_HEIGHT;
           const label = `${String(h).padStart(2, "0")}:00`;
           return (
-            <View key={`hour-${h}`} style={[styles.timelineHourRow, { top: topPx }]}>
+            <View
+              key={`hour-${h}`}
+              style={[styles.timelineHourRow, { top: topPx }]}
+            >
               <Text style={styles.timelineHourLabel}>{label}</Text>
               <View style={styles.timelineHourLine} />
             </View>
@@ -2117,8 +2196,18 @@ const TimelineView: React.FC<TimelineViewProps> = ({
 
         {isToday && currentTimePx >= 0 && currentTimePx <= totalHeight && (
           <View style={[styles.currentTimeRow, { top: currentTimePx }]}>
-            <View style={[styles.currentTimeDot, { backgroundColor: COLORS.danger }]} />
-            <View style={[styles.currentTimeLine, { backgroundColor: COLORS.danger }]} />
+            <View
+              style={[
+                styles.currentTimeDot,
+                { backgroundColor: COLORS.danger },
+              ]}
+            />
+            <View
+              style={[
+                styles.currentTimeLine,
+                { backgroundColor: COLORS.danger },
+              ]}
+            />
           </View>
         )}
       </ScrollView>
@@ -2199,7 +2288,9 @@ const SessionCard: React.FC<SessionCardProps> = ({
         </Pressable>
       </View>
       {!isCompact && block.focus ? (
-        <View style={[styles.sessionTag, { backgroundColor: block.color + "20" }]}>
+        <View
+          style={[styles.sessionTag, { backgroundColor: block.color + "20" }]}
+        >
           <Text style={[styles.sessionTagText, { color: block.color }]}>
             #{block.focus}
           </Text>
@@ -2234,11 +2325,19 @@ const SessionDetailSheet: React.FC<SessionDetailSheetProps> = ({
   return (
     <Modal animationType="slide" transparent visible={visible}>
       <Pressable style={styles.sheetBackdrop} onPress={onClose}>
-        <Pressable style={styles.sheetCard} onPress={(e) => e.stopPropagation()}>
+        <Pressable
+          style={styles.sheetCard}
+          onPress={(e) => e.stopPropagation()}
+        >
           <View style={styles.sheetHandle} />
 
           <View style={styles.sheetHeader}>
-            <View style={[styles.sheetIconWrap, { backgroundColor: session.color + "20" }]}>
+            <View
+              style={[
+                styles.sheetIconWrap,
+                { backgroundColor: session.color + "20" },
+              ]}
+            >
               <Ionicons
                 name={getSubjectIcon(session.title)}
                 size={24}
@@ -2253,7 +2352,11 @@ const SessionDetailSheet: React.FC<SessionDetailSheetProps> = ({
           <Text style={styles.sheetTitle}>{session.title}</Text>
 
           <View style={styles.sheetMetaRow}>
-            <Ionicons name="time-outline" size={16} color={COLORS.textSecondary} />
+            <Ionicons
+              name="time-outline"
+              size={16}
+              color={COLORS.textSecondary}
+            />
             <Text style={styles.sheetMetaText}>
               {session.start} - {session.end} ({durationMin} min)
             </Text>
@@ -2261,7 +2364,11 @@ const SessionDetailSheet: React.FC<SessionDetailSheetProps> = ({
 
           {session.focus ? (
             <View style={styles.sheetMetaRow}>
-              <Ionicons name="flash-outline" size={16} color={COLORS.textSecondary} />
+              <Ionicons
+                name="flash-outline"
+                size={16}
+                color={COLORS.textSecondary}
+              />
               <Text style={styles.sheetMetaText}>{session.focus}</Text>
             </View>
           ) : null}
@@ -2376,11 +2483,14 @@ function indexToTime(index: number) {
 
 function getSubjectIcon(title: string): keyof typeof Ionicons.glyphMap {
   const lower = title.toLowerCase();
-  if (/math|algebra|calculus|geometry|trigonometry/.test(lower)) return "calculator-outline";
-  if (/literature|reading|english|writing|essay/.test(lower)) return "book-outline";
+  if (/math|algebra|calculus|geometry|trigonometry/.test(lower))
+    return "calculator-outline";
+  if (/literature|reading|english|writing|essay/.test(lower))
+    return "book-outline";
   if (/science|physics|chemistry|biology/.test(lower)) return "flask-outline";
   if (/history/.test(lower)) return "time-outline";
-  if (/programming|code|data.?struct|computer|software/.test(lower)) return "code-slash-outline";
+  if (/programming|code|data.?struct|computer|software/.test(lower))
+    return "code-slash-outline";
   if (/music|art|design/.test(lower)) return "color-palette-outline";
   if (/language|spanish|french|german/.test(lower)) return "language-outline";
   return "school-outline";
@@ -2414,7 +2524,15 @@ function isSameDay(a: Date, b: Date): boolean {
 }
 
 function getWeekdayKey(date: Date): WeekdayKey {
-  const dayNames: WeekdayKey[] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const dayNames: WeekdayKey[] = [
+    "Sun",
+    "Mon",
+    "Tue",
+    "Wed",
+    "Thu",
+    "Fri",
+    "Sat",
+  ];
   return dayNames[date.getDay()];
 }
 
@@ -2425,880 +2543,880 @@ function timeToMinutes(time: string): number {
 
 const createStyles = (COLORS: ThemeColors) =>
   StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  backgroundTop: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: "100%",
-    backgroundColor: COLORS.background,
-  },
-  backgroundBottom: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: "100%",
-    backgroundColor: COLORS.backgroundAlt,
-    opacity: 0.45,
-  },
-  glow: {
-    position: "absolute",
-    top: -120,
-    left: -60,
-    right: -60,
-    height: 260,
-    borderRadius: 260,
-    backgroundColor: "rgba(109,94,247,0.18)",
-    opacity: 0.25,
-  },
-  wrapper: {
-    flex: 1,
-    alignSelf: "center",
-    width: "100%",
-    maxWidth: 430,
-    paddingHorizontal: SPACING.lg,
-  },
-  content: {
-    paddingTop: SPACING.lg,
-    paddingBottom: SPACING.xl * 2,
-    gap: SPACING.lg,
-  },
-  header: {
-    alignItems: "center",
-    gap: SPACING.sm,
-  },
-  headerTopBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    alignSelf: "stretch",
-  },
-  section: {
-    gap: SPACING.lg,
-  },
-  sectionHeader: {
-    gap: SPACING.xs,
-  },
-  coursesHeader: {
-    gap: SPACING.sm,
-  },
-  coursesTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: SPACING.sm,
-  },
-  coursesActionRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.xs,
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: COLORS.textPrimary,
-    fontFamily: Platform.select({
-      ios: "AvenirNext-Heavy",
-      android: "serif",
-      default: "serif",
-    }),
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-  },
-  sectionTitleInline: {
-    flexShrink: 1,
-    fontSize: 18,
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-  },
-  sectionSubtitle: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-  },
-  segmentContainer: {
-    flexDirection: "row",
-    backgroundColor: COLORS.subtleCard,
-    borderRadius: 999,
-    padding: 4,
-    borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
-    alignSelf: "stretch",
-  },
-  segmentItem: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 999,
-  },
-  segmentItemActive: {
-    backgroundColor: COLORS.accent,
-  },
-  segmentLabel: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    fontWeight: "500",
-    textAlign: "center",
-  },
-  segmentLabelActive: {
-    color: "#FFFFFF",
-    fontWeight: "700",
-  },
-  importButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    backgroundColor: COLORS.accent + "14",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.accent + "30",
-  },
-  clearScheduleButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 5,
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(239,68,68,0.30)",
-    backgroundColor: "rgba(239,68,68,0.08)",
-  },
-  clearScheduleText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: COLORS.danger,
-  },
-  importButtonText: {
-    fontSize: 12,
-    color: COLORS.accent,
-    fontWeight: "600",
-  },
-  addCourseButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    backgroundColor: COLORS.accent,
-    borderRadius: 12,
-  },
-  addCourseText: {
-    fontSize: 12,
-    color: "#FFFFFF",
-    fontWeight: "600",
-  },
-  panelCard: {
-    backgroundColor: COLORS.card,
-    borderRadius: 22,
-    padding: SPACING.md,
-    borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
-    gap: SPACING.md,
-  },
-  panelTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-  },
-  panelSubtitle: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-  },
-  formSection: {
-    gap: SPACING.sm,
-  },
-  formLabel: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    fontWeight: "600",
-  },
-  formRow: {
-    flexDirection: "row",
-    gap: SPACING.sm,
-  },
-  emptyText: {
-    fontSize: 12,
-    color: COLORS.textMuted,
-  },
-  input: {
-    flex: 1,
-    backgroundColor: COLORS.inputBg,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    color: COLORS.textPrimary,
-    fontSize: 13,
-  },
-  descriptionInput: {
-    minHeight: 120,
-    maxHeight: 200,
-  },
-  primaryButton: {
-    backgroundColor: COLORS.accent,
-    borderRadius: 12,
-    paddingVertical: 10,
-    alignItems: "center",
-  },
-  primaryButtonText: {
-    color: "#FFFFFF",
-    fontSize: 13,
-    fontWeight: "700",
-  },
-  ghostButton: {
-    borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
-    borderRadius: 12,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-  },
-  ghostButtonText: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    fontWeight: "600",
-  },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-  formMessage: {
-    fontSize: 12,
-    color: COLORS.accentSoft,
-  },
-  selectionHint: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-  },
-  selectionList: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  selectionChip: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: COLORS.subtleCard,
-  },
-  selectionChipText: {
-    fontSize: 11,
-    color: COLORS.textSecondary,
-  },
-  legendRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-  },
-  legendItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  legendDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  legendLabel: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-  },
-  gridWrapper: {
-    borderRadius: 16,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-  },
-  gridScroll: {
-    paddingBottom: 4,
-  },
-  gridHeaderRow: {
-    flexDirection: "row",
-    backgroundColor: COLORS.subtleCard,
-  },
-  timeHeaderSpacer: {
-    width: TIME_COLUMN_WIDTH,
-  },
-  dayHeaderCell: {
-    width: DAY_COLUMN_WIDTH,
-    paddingVertical: 10,
-    borderLeftWidth: 1,
-    borderLeftColor: COLORS.borderSoft,
-    alignItems: "center",
-  },
-  dayHeaderText: {
-    fontSize: 11,
-    color: COLORS.textSecondary,
-    fontWeight: "600",
-  },
-  gridBody: {
-    backgroundColor: COLORS.inputBg,
-  },
-  gridRow: {
-    flexDirection: "row",
-  },
-  timeColumn: {
-    width: TIME_COLUMN_WIDTH,
-    backgroundColor: COLORS.subtleCard,
-  },
-  timeSlot: {
-    height: SLOT_HEIGHT,
-    justifyContent: "center",
-    paddingLeft: 4,
-    paddingRight: 2,
-    borderBottomWidth: 1,
-  },
-  timeSlotHourBoundary: {
-    borderBottomColor: COLORS.borderSoft,
-    backgroundColor: COLORS.subtleCard,
-  },
-  timeSlotHalf: {
-    borderBottomColor: COLORS.borderSubtle,
-    backgroundColor: COLORS.inputBg,
-  },
-  timeTextHour: {
-    fontSize: 10,
-    fontWeight: "700",
-    color: COLORS.textSecondary,
-  },
-  timeTextHalf: {
-    fontSize: 8,
-    fontWeight: "500",
-    color: COLORS.textMuted,
-    opacity: 0.85,
-  },
-  dayColumn: {
-    width: DAY_COLUMN_WIDTH,
-    borderLeftWidth: 1,
-    borderLeftColor: COLORS.borderSoft,
-    position: "relative",
-  },
-  gridSlot: {
-    height: SLOT_HEIGHT,
-    borderBottomWidth: 1,
-  },
-  gridSlotHourLine: {
-    borderBottomColor: COLORS.borderSoft,
-    backgroundColor: "transparent",
-  },
-  gridSlotHalfLine: {
-    borderBottomColor: COLORS.borderSubtle,
-    backgroundColor: "rgba(148,163,184,0.04)",
-  },
-  gridSlotDisabled: {
-    backgroundColor: COLORS.subtleCard,
-  },
-  selectionBlock: {
-    position: "absolute",
-    left: 3,
-    right: 3,
-    borderRadius: 10,
-    backgroundColor: "rgba(109,94,247,0.35)",
-    borderWidth: 1,
-    borderColor: "rgba(109,94,247,0.5)",
-  },
-  selectionStart: {
-    position: "absolute",
-    left: 3,
-    right: 3,
-    borderRadius: 10,
-    backgroundColor: "rgba(109,94,247,0.2)",
-    borderWidth: 1,
-    borderColor: "rgba(109,94,247,0.4)",
-  },
-  blockedBlock: {
-    position: "absolute",
-    left: 4,
-    right: 4,
-    borderRadius: 10,
-    opacity: 0.45,
-  },
-  courseBlock: {
-    position: "absolute",
-    left: 4,
-    right: 4,
-    borderRadius: 12,
-    padding: 6,
-    gap: 4,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "rgba(11,18,32,0.14)",
-    ...WEEKLY_BLOCK_CARD_EXTRAS,
-  },
-  courseBlockCode: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#0B1220",
-    textAlign: "center",
-  },
-  courseBlockName: {
-    fontSize: 10,
-    color: "#0B1220",
-    textAlign: "center",
-  },
-  courseBlockMeta: {
-    fontSize: 9,
-    color: "rgba(11,18,32,0.7)",
-  },
-  weeklyBlockKind: {
-    fontSize: 9,
-    fontWeight: "700",
-    color: "rgba(11,18,32,0.55)",
-    textAlign: "center",
-    textTransform: "uppercase",
-    letterSpacing: 0.7,
-  },
-  planBlock: {
-    position: "absolute",
-    left: 4,
-    right: 4,
-    borderRadius: 12,
-    padding: 6,
-    gap: 4,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "rgba(11,18,32,0.14)",
-    ...WEEKLY_BLOCK_CARD_EXTRAS,
-  },
-  planBlockCompact: {
-    paddingVertical: 3,
-    paddingHorizontal: 4,
-    gap: 0,
-    justifyContent: "center",
-  },
-  planCourseBlock: {
-    opacity: 0.9,
-  },
-  planBlockTitle: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#0B1220",
-    textAlign: "center",
-  },
-  planBlockTitleCompact: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#0B1220",
-    textAlign: "center",
-    width: "100%",
-  },
-  planBlockFocus: {
-    fontSize: 10,
-    color: "rgba(11,18,32,0.75)",
-    textAlign: "center",
-  },
-  dateStripContainer: {
-    paddingVertical: SPACING.xs,
-    gap: 0,
-  },
-  dateStripItem: {
-    width: DATE_STRIP_ITEM_WIDTH,
-    alignItems: "center",
-    gap: 4,
-    paddingVertical: 6,
-  },
-  dateStripDayName: {
-    fontSize: 10,
-    fontWeight: "600",
-    color: COLORS.textMuted,
-    letterSpacing: 0.5,
-  },
-  dateStripDayNameActive: {
-    color: COLORS.accent,
-  },
-  dateStripNumberWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  dateStripNumberWrapActive: {
-    backgroundColor: COLORS.accent,
-  },
-  dateStripNumber: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-  },
-  dateStripNumberActive: {
-    color: "#FFFFFF",
-  },
-  dateStripTodayDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 3,
-  },
-  insightBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.xs,
-    backgroundColor: COLORS.subtleCard,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-  },
-  insightText: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    fontWeight: "500",
-    flex: 1,
-  },
-  timelineWrapper: {
-    backgroundColor: COLORS.card,
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
-    padding: SPACING.sm,
-    maxHeight: 600,
-    overflow: "hidden",
-  },
-  timelineHourRow: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    height: HOUR_HEIGHT,
-    flexDirection: "row",
-    alignItems: "flex-start",
-  },
-  timelineHourLabel: {
-    width: TIMELINE_LEFT_WIDTH,
-    fontSize: 11,
-    color: COLORS.textMuted,
-    fontWeight: "500",
-    textAlign: "right",
-    paddingRight: 10,
-    marginTop: -6,
-  },
-  timelineHourLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: COLORS.borderSoft,
-  },
-  timelineAxis: {
-    position: "absolute",
-    left: TIMELINE_LEFT_WIDTH,
-    width: 2,
-    backgroundColor: COLORS.borderSubtle,
-    borderRadius: 1,
-  },
-  timelineCourseCard: {
-    position: "absolute",
-    left: TIMELINE_LEFT_WIDTH + 12,
-    right: 8,
-    borderRadius: 12,
-    backgroundColor: COLORS.card,
-    borderLeftWidth: 3,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  timelineCourseCardContent: {
-    flex: 1,
-    gap: 2,
-  },
-  timelineCourseTitle: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-  },
-  timelineCourseTime: {
-    fontSize: 11,
-    color: COLORS.textSecondary,
-  },
-  sessionCard: {
-    position: "absolute",
-    left: TIMELINE_LEFT_WIDTH + 12,
-    right: 8,
-    borderRadius: 16,
-    backgroundColor: COLORS.card,
-    borderLeftWidth: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    gap: 4,
-    shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-  },
-  sessionCardRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  sessionCardContent: {
-    flex: 1,
-    gap: 2,
-  },
-  sessionCardTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-  },
-  sessionCardTitleDone: {
-    textDecorationLine: "line-through",
-    color: COLORS.textMuted,
-  },
-  sessionCardTime: {
-    fontSize: 11,
-    color: COLORS.textSecondary,
-  },
-  sessionTag: {
-    alignSelf: "flex-start",
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    marginLeft: 26,
-  },
-  sessionTagText: {
-    fontSize: 10,
-    fontWeight: "600",
-  },
-  currentTimeRow: {
-    position: "absolute",
-    left: TIMELINE_LEFT_WIDTH - 4,
-    right: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    zIndex: 10,
-  },
-  currentTimeDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  currentTimeLine: {
-    flex: 1,
-    height: 2,
-    marginLeft: -1,
-  },
-  sheetBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(2,6,23,0.5)",
-    justifyContent: "flex-end",
-  },
-  sheetCard: {
-    backgroundColor: COLORS.card,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: SPACING.lg,
-    paddingTop: SPACING.sm,
-    borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
-    gap: SPACING.md,
-  },
-  sheetHandle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: COLORS.borderSubtle,
-    alignSelf: "center",
-    marginBottom: SPACING.xs,
-  },
-  sheetHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  sheetIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  sheetTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: COLORS.textPrimary,
-  },
-  sheetMetaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.xs,
-  },
-  sheetMetaText: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-  },
-  sheetActions: {
-    marginTop: SPACING.xs,
-    gap: SPACING.sm,
-  },
-  sheetDoneButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: SPACING.xs,
-    paddingVertical: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
-    backgroundColor: COLORS.subtleCard,
-  },
-  sheetDoneButtonText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: COLORS.accent,
-  },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(2,6,23,0.7)",
-    justifyContent: "flex-end",
-  },
-  modalCard: {
-    backgroundColor: COLORS.card,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: SPACING.lg,
-    borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
-    gap: SPACING.md,
-    maxHeight: "90%",
-  },
-  modalHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  modalTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-  },
-  modalScrollBody: {
-    flexShrink: 1,
-  },
-  modalBody: {
-    gap: SPACING.sm,
-    paddingBottom: SPACING.xs,
-  },
-  modalSectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  modalFooter: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: SPACING.sm,
-  },
-  importModalBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(2,6,23,0.7)",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: SPACING.lg,
-  },
-  importModalCard: {
-    width: "100%",
-    maxWidth: 420,
-    backgroundColor: COLORS.card,
-    borderRadius: 20,
-    padding: SPACING.lg,
-    borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
-    gap: SPACING.md,
-  },
-  importModalHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  importModalTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-  },
-  importModalText: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-  },
-  importModalMessage: {
-    fontSize: 12,
-    color: COLORS.accentSoft,
-  },
-  importModalError: {
-    fontSize: 12,
-    color: COLORS.danger,
-  },
-  courseCardList: {
-    gap: SPACING.sm,
-  },
-  courseCard: {
-    borderRadius: 16,
-    padding: SPACING.md,
-    backgroundColor: COLORS.card,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-  },
-  courseCardContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.sm,
-  },
-  courseCardMain: {
-    flex: 1,
-    gap: 6,
-  },
-  courseCardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  courseCardDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  courseCardTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-    flex: 1,
-  },
-  courseCardMeta: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-  },
-  courseCardHint: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-  },
-  syllabusButtonCompact: {
-    alignItems: "center",
-    justifyContent: "center",
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: "rgba(109,94,247,0.1)",
-    borderWidth: 1,
-    borderColor: "rgba(109,94,247,0.3)",
-  },
-});
+    safeArea: {
+      flex: 1,
+      backgroundColor: COLORS.background,
+    },
+    backgroundTop: {
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: 0,
+      height: "100%",
+      backgroundColor: COLORS.background,
+    },
+    backgroundBottom: {
+      position: "absolute",
+      bottom: 0,
+      left: 0,
+      right: 0,
+      height: "100%",
+      backgroundColor: COLORS.backgroundAlt,
+      opacity: 0.45,
+    },
+    glow: {
+      position: "absolute",
+      top: -120,
+      left: -60,
+      right: -60,
+      height: 260,
+      borderRadius: 260,
+      backgroundColor: "rgba(109,94,247,0.18)",
+      opacity: 0.25,
+    },
+    wrapper: {
+      flex: 1,
+      alignSelf: "center",
+      width: "100%",
+      maxWidth: 430,
+      paddingHorizontal: SPACING.lg,
+    },
+    content: {
+      paddingTop: SPACING.lg,
+      paddingBottom: SPACING.xl * 2,
+      gap: SPACING.lg,
+    },
+    header: {
+      alignItems: "center",
+      gap: SPACING.sm,
+    },
+    headerTopBar: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      alignSelf: "stretch",
+    },
+    section: {
+      gap: SPACING.lg,
+    },
+    sectionHeader: {
+      gap: SPACING.xs,
+    },
+    coursesHeader: {
+      gap: SPACING.sm,
+    },
+    coursesTitleRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: SPACING.sm,
+    },
+    coursesActionRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: SPACING.xs,
+    },
+    title: {
+      fontSize: 22,
+      fontWeight: "800",
+      color: COLORS.textPrimary,
+      fontFamily: Platform.select({
+        ios: "AvenirNext-Heavy",
+        android: "serif",
+        default: "serif",
+      }),
+    },
+    sectionTitle: {
+      fontSize: 18,
+      fontWeight: "700",
+      color: COLORS.textPrimary,
+    },
+    sectionTitleInline: {
+      flexShrink: 1,
+      fontSize: 18,
+      fontWeight: "700",
+      color: COLORS.textPrimary,
+    },
+    sectionSubtitle: {
+      fontSize: 12,
+      color: COLORS.textSecondary,
+    },
+    segmentContainer: {
+      flexDirection: "row",
+      backgroundColor: COLORS.subtleCard,
+      borderRadius: 999,
+      padding: 4,
+      borderWidth: 1,
+      borderColor: COLORS.borderSubtle,
+      alignSelf: "stretch",
+    },
+    segmentItem: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      borderRadius: 999,
+    },
+    segmentItemActive: {
+      backgroundColor: COLORS.accent,
+    },
+    segmentLabel: {
+      fontSize: 12,
+      color: COLORS.textSecondary,
+      fontWeight: "500",
+      textAlign: "center",
+    },
+    segmentLabelActive: {
+      color: "#FFFFFF",
+      fontWeight: "700",
+    },
+    importButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      paddingVertical: 7,
+      paddingHorizontal: 12,
+      backgroundColor: COLORS.accent + "14",
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: COLORS.accent + "30",
+    },
+    clearScheduleButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 5,
+      paddingVertical: 7,
+      paddingHorizontal: 12,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: "rgba(239,68,68,0.30)",
+      backgroundColor: "rgba(239,68,68,0.08)",
+    },
+    clearScheduleText: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: COLORS.danger,
+    },
+    importButtonText: {
+      fontSize: 12,
+      color: COLORS.accent,
+      fontWeight: "600",
+    },
+    addCourseButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      paddingVertical: 7,
+      paddingHorizontal: 12,
+      backgroundColor: COLORS.accent,
+      borderRadius: 12,
+    },
+    addCourseText: {
+      fontSize: 12,
+      color: "#FFFFFF",
+      fontWeight: "600",
+    },
+    panelCard: {
+      backgroundColor: COLORS.card,
+      borderRadius: 22,
+      padding: SPACING.md,
+      borderWidth: 1,
+      borderColor: COLORS.borderSubtle,
+      gap: SPACING.md,
+    },
+    panelTitle: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: COLORS.textPrimary,
+    },
+    panelSubtitle: {
+      fontSize: 12,
+      color: COLORS.textSecondary,
+    },
+    formSection: {
+      gap: SPACING.sm,
+    },
+    formLabel: {
+      fontSize: 12,
+      color: COLORS.textSecondary,
+      fontWeight: "600",
+    },
+    formRow: {
+      flexDirection: "row",
+      gap: SPACING.sm,
+    },
+    emptyText: {
+      fontSize: 12,
+      color: COLORS.textMuted,
+    },
+    input: {
+      flex: 1,
+      backgroundColor: COLORS.inputBg,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: COLORS.borderSubtle,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      color: COLORS.textPrimary,
+      fontSize: 13,
+    },
+    descriptionInput: {
+      minHeight: 120,
+      maxHeight: 200,
+    },
+    primaryButton: {
+      backgroundColor: COLORS.accent,
+      borderRadius: 12,
+      paddingVertical: 10,
+      alignItems: "center",
+    },
+    primaryButtonText: {
+      color: "#FFFFFF",
+      fontSize: 13,
+      fontWeight: "700",
+    },
+    ghostButton: {
+      borderWidth: 1,
+      borderColor: COLORS.borderSubtle,
+      borderRadius: 12,
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+    },
+    ghostButtonText: {
+      fontSize: 12,
+      color: COLORS.textSecondary,
+      fontWeight: "600",
+    },
+    buttonDisabled: {
+      opacity: 0.5,
+    },
+    formMessage: {
+      fontSize: 12,
+      color: COLORS.accentSoft,
+    },
+    selectionHint: {
+      fontSize: 12,
+      color: COLORS.textSecondary,
+    },
+    selectionList: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+    },
+    selectionChip: {
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: COLORS.borderSoft,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      backgroundColor: COLORS.subtleCard,
+    },
+    selectionChipText: {
+      fontSize: 11,
+      color: COLORS.textSecondary,
+    },
+    legendRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 10,
+    },
+    legendItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+    },
+    legendDot: {
+      width: 10,
+      height: 10,
+      borderRadius: 5,
+    },
+    legendLabel: {
+      fontSize: 12,
+      color: COLORS.textSecondary,
+    },
+    gridWrapper: {
+      borderRadius: 16,
+      overflow: "hidden",
+      borderWidth: 1,
+      borderColor: COLORS.borderSoft,
+    },
+    gridScroll: {
+      paddingBottom: 4,
+    },
+    gridHeaderRow: {
+      flexDirection: "row",
+      backgroundColor: COLORS.subtleCard,
+    },
+    timeHeaderSpacer: {
+      width: TIME_COLUMN_WIDTH,
+    },
+    dayHeaderCell: {
+      width: DAY_COLUMN_WIDTH,
+      paddingVertical: 10,
+      borderLeftWidth: 1,
+      borderLeftColor: COLORS.borderSoft,
+      alignItems: "center",
+    },
+    dayHeaderText: {
+      fontSize: 11,
+      color: COLORS.textSecondary,
+      fontWeight: "600",
+    },
+    gridBody: {
+      backgroundColor: COLORS.inputBg,
+    },
+    gridRow: {
+      flexDirection: "row",
+    },
+    timeColumn: {
+      width: TIME_COLUMN_WIDTH,
+      backgroundColor: COLORS.subtleCard,
+    },
+    timeSlot: {
+      height: SLOT_HEIGHT,
+      justifyContent: "center",
+      paddingLeft: 4,
+      paddingRight: 2,
+      borderBottomWidth: 1,
+    },
+    timeSlotHourBoundary: {
+      borderBottomColor: COLORS.borderSoft,
+      backgroundColor: COLORS.subtleCard,
+    },
+    timeSlotHalf: {
+      borderBottomColor: COLORS.borderSubtle,
+      backgroundColor: COLORS.inputBg,
+    },
+    timeTextHour: {
+      fontSize: 10,
+      fontWeight: "700",
+      color: COLORS.textSecondary,
+    },
+    timeTextHalf: {
+      fontSize: 8,
+      fontWeight: "500",
+      color: COLORS.textMuted,
+      opacity: 0.85,
+    },
+    dayColumn: {
+      width: DAY_COLUMN_WIDTH,
+      borderLeftWidth: 1,
+      borderLeftColor: COLORS.borderSoft,
+      position: "relative",
+    },
+    gridSlot: {
+      height: SLOT_HEIGHT,
+      borderBottomWidth: 1,
+    },
+    gridSlotHourLine: {
+      borderBottomColor: COLORS.borderSoft,
+      backgroundColor: "transparent",
+    },
+    gridSlotHalfLine: {
+      borderBottomColor: COLORS.borderSubtle,
+      backgroundColor: "rgba(148,163,184,0.04)",
+    },
+    gridSlotDisabled: {
+      backgroundColor: COLORS.subtleCard,
+    },
+    selectionBlock: {
+      position: "absolute",
+      left: 3,
+      right: 3,
+      borderRadius: 10,
+      backgroundColor: "rgba(109,94,247,0.35)",
+      borderWidth: 1,
+      borderColor: "rgba(109,94,247,0.5)",
+    },
+    selectionStart: {
+      position: "absolute",
+      left: 3,
+      right: 3,
+      borderRadius: 10,
+      backgroundColor: "rgba(109,94,247,0.2)",
+      borderWidth: 1,
+      borderColor: "rgba(109,94,247,0.4)",
+    },
+    blockedBlock: {
+      position: "absolute",
+      left: 4,
+      right: 4,
+      borderRadius: 10,
+      opacity: 0.45,
+    },
+    courseBlock: {
+      position: "absolute",
+      left: 4,
+      right: 4,
+      borderRadius: 12,
+      padding: 6,
+      gap: 4,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 1,
+      borderColor: "rgba(11,18,32,0.14)",
+      ...WEEKLY_BLOCK_CARD_EXTRAS,
+    },
+    courseBlockCode: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: "#0B1220",
+      textAlign: "center",
+    },
+    courseBlockName: {
+      fontSize: 10,
+      color: "#0B1220",
+      textAlign: "center",
+    },
+    courseBlockMeta: {
+      fontSize: 9,
+      color: "rgba(11,18,32,0.7)",
+    },
+    weeklyBlockKind: {
+      fontSize: 9,
+      fontWeight: "700",
+      color: "rgba(11,18,32,0.55)",
+      textAlign: "center",
+      textTransform: "uppercase",
+      letterSpacing: 0.7,
+    },
+    planBlock: {
+      position: "absolute",
+      left: 4,
+      right: 4,
+      borderRadius: 12,
+      padding: 6,
+      gap: 4,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 1,
+      borderColor: "rgba(11,18,32,0.14)",
+      ...WEEKLY_BLOCK_CARD_EXTRAS,
+    },
+    planBlockCompact: {
+      paddingVertical: 3,
+      paddingHorizontal: 4,
+      gap: 0,
+      justifyContent: "center",
+    },
+    planCourseBlock: {
+      opacity: 0.9,
+    },
+    planBlockTitle: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: "#0B1220",
+      textAlign: "center",
+    },
+    planBlockTitleCompact: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: "#0B1220",
+      textAlign: "center",
+      width: "100%",
+    },
+    planBlockFocus: {
+      fontSize: 10,
+      color: "rgba(11,18,32,0.75)",
+      textAlign: "center",
+    },
+    dateStripContainer: {
+      paddingVertical: SPACING.xs,
+      gap: 0,
+    },
+    dateStripItem: {
+      width: DATE_STRIP_ITEM_WIDTH,
+      alignItems: "center",
+      gap: 4,
+      paddingVertical: 6,
+    },
+    dateStripDayName: {
+      fontSize: 10,
+      fontWeight: "600",
+      color: COLORS.textMuted,
+      letterSpacing: 0.5,
+    },
+    dateStripDayNameActive: {
+      color: COLORS.accent,
+    },
+    dateStripNumberWrap: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    dateStripNumberWrapActive: {
+      backgroundColor: COLORS.accent,
+    },
+    dateStripNumber: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: COLORS.textPrimary,
+    },
+    dateStripNumberActive: {
+      color: "#FFFFFF",
+    },
+    dateStripTodayDot: {
+      width: 5,
+      height: 5,
+      borderRadius: 3,
+    },
+    insightBanner: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: SPACING.xs,
+      backgroundColor: COLORS.subtleCard,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: COLORS.borderSoft,
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.sm,
+    },
+    insightText: {
+      fontSize: 13,
+      color: COLORS.textSecondary,
+      fontWeight: "500",
+      flex: 1,
+    },
+    timelineWrapper: {
+      backgroundColor: COLORS.card,
+      borderRadius: 22,
+      borderWidth: 1,
+      borderColor: COLORS.borderSubtle,
+      padding: SPACING.sm,
+      maxHeight: 600,
+      overflow: "hidden",
+    },
+    timelineHourRow: {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      height: HOUR_HEIGHT,
+      flexDirection: "row",
+      alignItems: "flex-start",
+    },
+    timelineHourLabel: {
+      width: TIMELINE_LEFT_WIDTH,
+      fontSize: 11,
+      color: COLORS.textMuted,
+      fontWeight: "500",
+      textAlign: "right",
+      paddingRight: 10,
+      marginTop: -6,
+    },
+    timelineHourLine: {
+      flex: 1,
+      height: 1,
+      backgroundColor: COLORS.borderSoft,
+    },
+    timelineAxis: {
+      position: "absolute",
+      left: TIMELINE_LEFT_WIDTH,
+      width: 2,
+      backgroundColor: COLORS.borderSubtle,
+      borderRadius: 1,
+    },
+    timelineCourseCard: {
+      position: "absolute",
+      left: TIMELINE_LEFT_WIDTH + 12,
+      right: 8,
+      borderRadius: 12,
+      backgroundColor: COLORS.card,
+      borderLeftWidth: 3,
+      borderWidth: 1,
+      borderColor: COLORS.borderSoft,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    timelineCourseCardContent: {
+      flex: 1,
+      gap: 2,
+    },
+    timelineCourseTitle: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: COLORS.textPrimary,
+    },
+    timelineCourseTime: {
+      fontSize: 11,
+      color: COLORS.textSecondary,
+    },
+    sessionCard: {
+      position: "absolute",
+      left: TIMELINE_LEFT_WIDTH + 12,
+      right: 8,
+      borderRadius: 16,
+      backgroundColor: COLORS.card,
+      borderLeftWidth: 4,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      gap: 4,
+      shadowColor: COLORS.shadow,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.08,
+      shadowRadius: 8,
+      elevation: 2,
+      borderWidth: 1,
+      borderColor: COLORS.borderSoft,
+    },
+    sessionCardRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    sessionCardContent: {
+      flex: 1,
+      gap: 2,
+    },
+    sessionCardTitle: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: COLORS.textPrimary,
+    },
+    sessionCardTitleDone: {
+      textDecorationLine: "line-through",
+      color: COLORS.textMuted,
+    },
+    sessionCardTime: {
+      fontSize: 11,
+      color: COLORS.textSecondary,
+    },
+    sessionTag: {
+      alignSelf: "flex-start",
+      borderRadius: 999,
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      marginLeft: 26,
+    },
+    sessionTagText: {
+      fontSize: 10,
+      fontWeight: "600",
+    },
+    currentTimeRow: {
+      position: "absolute",
+      left: TIMELINE_LEFT_WIDTH - 4,
+      right: 0,
+      flexDirection: "row",
+      alignItems: "center",
+      zIndex: 10,
+    },
+    currentTimeDot: {
+      width: 10,
+      height: 10,
+      borderRadius: 5,
+    },
+    currentTimeLine: {
+      flex: 1,
+      height: 2,
+      marginLeft: -1,
+    },
+    sheetBackdrop: {
+      flex: 1,
+      backgroundColor: "rgba(2,6,23,0.5)",
+      justifyContent: "flex-end",
+    },
+    sheetCard: {
+      backgroundColor: COLORS.card,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      padding: SPACING.lg,
+      paddingTop: SPACING.sm,
+      borderWidth: 1,
+      borderColor: COLORS.borderSubtle,
+      gap: SPACING.md,
+    },
+    sheetHandle: {
+      width: 36,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: COLORS.borderSubtle,
+      alignSelf: "center",
+      marginBottom: SPACING.xs,
+    },
+    sheetHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    sheetIconWrap: {
+      width: 44,
+      height: 44,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    sheetTitle: {
+      fontSize: 20,
+      fontWeight: "800",
+      color: COLORS.textPrimary,
+    },
+    sheetMetaRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: SPACING.xs,
+    },
+    sheetMetaText: {
+      fontSize: 14,
+      color: COLORS.textSecondary,
+    },
+    sheetActions: {
+      marginTop: SPACING.xs,
+      gap: SPACING.sm,
+    },
+    sheetDoneButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: SPACING.xs,
+      paddingVertical: 12,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: COLORS.borderSubtle,
+      backgroundColor: COLORS.subtleCard,
+    },
+    sheetDoneButtonText: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: COLORS.accent,
+    },
+    modalBackdrop: {
+      flex: 1,
+      backgroundColor: "rgba(2,6,23,0.7)",
+      justifyContent: "flex-end",
+    },
+    modalCard: {
+      backgroundColor: COLORS.card,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      padding: SPACING.lg,
+      borderWidth: 1,
+      borderColor: COLORS.borderSubtle,
+      gap: SPACING.md,
+      maxHeight: "90%",
+    },
+    modalHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    modalTitle: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: COLORS.textPrimary,
+    },
+    modalScrollBody: {
+      flexShrink: 1,
+    },
+    modalBody: {
+      gap: SPACING.sm,
+      paddingBottom: SPACING.xs,
+    },
+    modalSectionHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    modalFooter: {
+      flexDirection: "row",
+      justifyContent: "flex-end",
+      gap: SPACING.sm,
+    },
+    importModalBackdrop: {
+      flex: 1,
+      backgroundColor: "rgba(2,6,23,0.7)",
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: SPACING.lg,
+    },
+    importModalCard: {
+      width: "100%",
+      maxWidth: 420,
+      backgroundColor: COLORS.card,
+      borderRadius: 20,
+      padding: SPACING.lg,
+      borderWidth: 1,
+      borderColor: COLORS.borderSubtle,
+      gap: SPACING.md,
+    },
+    importModalHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    importModalTitle: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: COLORS.textPrimary,
+    },
+    importModalText: {
+      fontSize: 14,
+      color: COLORS.textSecondary,
+    },
+    importModalMessage: {
+      fontSize: 12,
+      color: COLORS.accentSoft,
+    },
+    importModalError: {
+      fontSize: 12,
+      color: COLORS.danger,
+    },
+    courseCardList: {
+      gap: SPACING.sm,
+    },
+    courseCard: {
+      borderRadius: 16,
+      padding: SPACING.md,
+      backgroundColor: COLORS.card,
+      borderWidth: 1,
+      borderColor: COLORS.borderSoft,
+    },
+    courseCardContent: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: SPACING.sm,
+    },
+    courseCardMain: {
+      flex: 1,
+      gap: 6,
+    },
+    courseCardHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    courseCardDot: {
+      width: 10,
+      height: 10,
+      borderRadius: 5,
+    },
+    courseCardTitle: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: COLORS.textPrimary,
+      flex: 1,
+    },
+    courseCardMeta: {
+      fontSize: 12,
+      color: COLORS.textSecondary,
+    },
+    courseCardHint: {
+      fontSize: 11,
+      color: COLORS.textMuted,
+    },
+    syllabusButtonCompact: {
+      alignItems: "center",
+      justifyContent: "center",
+      width: 40,
+      height: 40,
+      borderRadius: 12,
+      backgroundColor: "rgba(109,94,247,0.1)",
+      borderWidth: 1,
+      borderColor: "rgba(109,94,247,0.3)",
+    },
+  });

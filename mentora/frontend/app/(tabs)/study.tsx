@@ -223,14 +223,18 @@ export default function StudyScreen() {
         setSecondsLeft((value) => {
           if (value <= 1) {
             if (isOnBreak) {
-              if (currentCycle >= totalCycles) {
-                finalizeSession();
-                return 0;
-              }
+              // Break ended, start next focus cycle
               setIsOnBreak(false);
               setCurrentCycle((cycle) => cycle + 1);
               return focusMinutes * 60;
             }
+            // Focus ended
+            if (currentCycle >= totalCycles) {
+              // Last cycle completed, finalize session
+              finalizeSession();
+              return 0;
+            }
+            // Start break between cycles
             setIsOnBreak(true);
             return breakMinutes * 60;
           }
@@ -280,7 +284,7 @@ export default function StudyScreen() {
 
   const timerLabel = useMemo(() => {
     if (activeTab === "normal") {
-      return normalMode === "countup" ? "Focus time" : "Time left";
+      return normalMode === "countup" ? "Focus" : "Time left";
     }
     if (activeTab === "pomodoro") {
       return isOnBreak ? "Break" : "Focus";
@@ -290,7 +294,7 @@ export default function StudyScreen() {
 
   const timerHint = useMemo(() => {
     if (activeTab === "pomodoro") {
-      return `Pomodoro • ${currentCycle} / ${totalCycles}`;
+      return `Round • ${currentCycle} / ${totalCycles}`;
     }
     if (activeTab === "normal" && normalMode === "countdown") {
       return "Countdown mode";
@@ -560,19 +564,17 @@ export default function StudyScreen() {
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.header}>
-            <Text style={styles.headerText}>
-              Study <Text style={styles.headerAccent}>Timer</Text>
-            </Text>
-          </View>
-
           <View style={styles.segmentedControl}>
             <Pressable
               style={[
                 styles.segmentButton,
                 activeTab === "normal" && styles.segmentButtonActive,
+                isRunning &&
+                  activeTab !== "normal" &&
+                  styles.segmentButtonDisabled,
               ]}
               onPress={() => setActiveTab("normal")}
+              disabled={isRunning && activeTab !== "normal"}
             >
               <Text
                 style={[
@@ -587,8 +589,12 @@ export default function StudyScreen() {
               style={[
                 styles.segmentButton,
                 activeTab === "pomodoro" && styles.segmentButtonActive,
+                isRunning &&
+                  activeTab !== "pomodoro" &&
+                  styles.segmentButtonDisabled,
               ]}
               onPress={() => setActiveTab("pomodoro")}
+              disabled={isRunning && activeTab !== "pomodoro"}
             >
               <Text
                 style={[
@@ -603,8 +609,10 @@ export default function StudyScreen() {
               style={[
                 styles.segmentButton,
                 activeTab === "streak" && styles.segmentButtonActive,
+                isRunning && styles.segmentButtonDisabled,
               ]}
               onPress={() => setActiveTab("streak")}
+              disabled={isRunning}
             >
               <Text
                 style={[
@@ -812,8 +820,12 @@ export default function StudyScreen() {
                     style={[
                       styles.toggleButton,
                       normalMode === "countup" && styles.toggleButtonActive,
+                      isRunning &&
+                        activeTab === "normal" &&
+                        styles.toggleButtonDisabled,
                     ]}
                     onPress={() => setNormalMode("countup")}
+                    disabled={isRunning && activeTab === "normal"}
                   >
                     <Text
                       style={[
@@ -828,8 +840,12 @@ export default function StudyScreen() {
                     style={[
                       styles.toggleButton,
                       normalMode === "countdown" && styles.toggleButtonActive,
+                      isRunning &&
+                        activeTab === "normal" &&
+                        styles.toggleButtonDisabled,
                     ]}
                     onPress={() => setNormalMode("countdown")}
+                    disabled={isRunning && activeTab === "normal"}
                   >
                     <Text
                       style={[
@@ -969,7 +985,11 @@ export default function StudyScreen() {
                             layoutMeasurement,
                             contentOffset,
                             contentSize,
-                          } = event.nativeEvent;
+                          } = event.nativeEvent as {
+                            layoutMeasurement: { height: number };
+                            contentOffset: { y: number };
+                            contentSize: { height: number };
+                          };
                           setSessionListVisibleHeight(layoutMeasurement.height);
                           setSessionListContentHeight(contentSize.height);
                         },
@@ -1257,22 +1277,6 @@ const createStyles = (COLORS: ThemeColors, isOnBreak: boolean) =>
       paddingBottom: SPACING.xl * 2,
       gap: SPACING.lg,
     },
-    header: {
-      alignItems: "center",
-    },
-    headerText: {
-      fontSize: 24,
-      fontWeight: "800",
-      color: COLORS.textPrimary,
-    },
-    headerAccent: {
-      color: COLORS.accent,
-    },
-    headerSubtitle: {
-      marginTop: 4,
-      fontSize: 13,
-      color: COLORS.textSecondary,
-    },
     timerCard: {
       backgroundColor: COLORS.card,
       borderRadius: 24,
@@ -1428,6 +1432,7 @@ const createStyles = (COLORS: ThemeColors, isOnBreak: boolean) =>
       color: COLORS.textMuted,
     },
     segmentedControl: {
+      marginTop: SPACING.md,
       flexDirection: "row",
       backgroundColor: COLORS.subtleCard,
       borderRadius: 999,
@@ -1444,6 +1449,9 @@ const createStyles = (COLORS: ThemeColors, isOnBreak: boolean) =>
     },
     segmentButtonActive: {
       backgroundColor: COLORS.accent,
+    },
+    segmentButtonDisabled: {
+      opacity: 0.5,
     },
     segmentText: {
       fontSize: 12,
@@ -1473,6 +1481,9 @@ const createStyles = (COLORS: ThemeColors, isOnBreak: boolean) =>
     toggleButtonActive: {
       borderColor: COLORS.accent,
       backgroundColor: "rgba(109,94,247,0.2)",
+    },
+    toggleButtonDisabled: {
+      opacity: 0.5,
     },
     toggleText: {
       fontSize: 12,
