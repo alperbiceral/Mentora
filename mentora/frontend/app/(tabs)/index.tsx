@@ -20,6 +20,7 @@ import {
   View,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import LottieView from "lottie-react-native";
 import {
   SettingsLanguage,
   SettingsModal,
@@ -40,6 +41,7 @@ const FRIENDS_LAST_SEEN_KEY = "mentora.friendsNotifLastSeenAt";
 const GROUPS_LAST_SEEN_KEY = "mentora.groupsNotifLastSeenAt";
 const CHATS_LAST_SEEN_KEY = "mentora.chatsNotifLastSeenAt";
 const CHAT_LAST_SEEN_KEY = "mentora.chatLastSeenByThread";
+const AI_ROBOT_ANIMATION = require("../../assets/lottie/mentora_ai_friendly.json");
 
 type Profile = {
   profile_id: number;
@@ -1081,6 +1083,28 @@ const GreetingCard = ({
   colors: ThemeColors;
 }) => {
   const name = displayName?.trim() ? displayName.trim() : "there";
+  const robotColorFilters = useMemo(
+    () => [
+      {
+        keypath: "**.Body.Fill 1",
+        color: "#8B5CF6",
+      },
+      {
+        keypath: "**.Head.Fill 1",
+        color: "#8B5CF6",
+      },
+      {
+        keypath: "**.Antenna.Fill 1",
+        color: "#A78BFA",
+      },
+      {
+        keypath: "**.FaceDots.Fill 1",
+        color: "#5B21B6",
+      },
+    ],
+    [],
+  );
+
   return (
     <Pressable
       onPress={onPress}
@@ -1091,7 +1115,15 @@ const GreetingCard = ({
     >
       <View style={styles.aiCardHeader}>
         <View style={styles.aiCardIconWrap}>
-          <Ionicons name="sparkles" size={20} color="#FFFFFF" />
+          <LottieView
+            key="home_greeting_ai_robot"
+            source={AI_ROBOT_ANIMATION}
+            colorFilters={robotColorFilters}
+            autoPlay
+            loop
+            resizeMode="contain"
+            style={styles.aiRobotAnimation}
+          />
         </View>
         <View style={styles.aiCardHeaderText}>
           <Text
@@ -1664,12 +1696,16 @@ const createStyles = (COLORS: ThemeColors) =>
       gap: SPACING.sm,
     },
     aiCardIconWrap: {
-      width: 38,
-      height: 38,
+      width: 42,
+      height: 42,
       borderRadius: 12,
-      backgroundColor: COLORS.accent,
       alignItems: "center",
       justifyContent: "center",
+      overflow: "hidden",
+    },
+    aiRobotAnimation: {
+      width: 40,
+      height: 40,
     },
     aiCardHeaderText: {
       flex: 1,
