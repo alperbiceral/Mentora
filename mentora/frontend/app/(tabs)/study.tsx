@@ -397,8 +397,8 @@ export default function StudyScreen() {
       ? "Resume"
       : "Start";
 
-  const secondaryActionLabel =
-    studySeconds > 0 || elapsedSeconds > 0 ? "Finish" : "Reset";
+  const hasSessionActivity = studySeconds > 0 || elapsedSeconds > 0;
+  const secondaryActionLabel = "Finish";
 
   // Streak Question Functions
   const loadDailyQuestion = async () => {
@@ -952,10 +952,19 @@ export default function StudyScreen() {
                 </Pressable>
 
                 <Pressable
-                  style={styles.secondaryButton}
+                  style={[
+                    styles.secondaryButton,
+                    !hasSessionActivity ? styles.secondaryButtonDisabled : null,
+                  ]}
                   onPress={finalizeSession}
+                  disabled={!hasSessionActivity}
                 >
-                  <Text style={styles.secondaryButtonText}>
+                  <Text
+                    style={[
+                      styles.secondaryButtonText,
+                      !hasSessionActivity ? styles.secondaryButtonTextDisabled : null,
+                    ]}
+                  >
                     {secondaryActionLabel}
                   </Text>
                 </Pressable>
@@ -1409,10 +1418,16 @@ const createStyles = (COLORS: ThemeColors, isOnBreak: boolean) =>
       justifyContent: "center",
       backgroundColor: COLORS.subtleCard,
     },
+    secondaryButtonDisabled: {
+      opacity: 0.45,
+    },
     secondaryButtonText: {
       fontSize: 14,
       fontWeight: "700",
       color: COLORS.textPrimary,
+    },
+    secondaryButtonTextDisabled: {
+      color: COLORS.textMuted,
     },
     statsSection: {
       marginTop: SPACING.lg,

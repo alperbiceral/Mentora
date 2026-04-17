@@ -18,6 +18,7 @@ class ChangePasswordRequest(BaseModel):
     username: str
     old_password: str
     new_password: str
+    confirm_password: Optional[str] = None
 
 
 class ProfileCreate(BaseModel):

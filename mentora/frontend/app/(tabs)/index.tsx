@@ -41,6 +41,8 @@ const FRIENDS_LAST_SEEN_KEY = "mentora.friendsNotifLastSeenAt";
 const GROUPS_LAST_SEEN_KEY = "mentora.groupsNotifLastSeenAt";
 const CHATS_LAST_SEEN_KEY = "mentora.chatsNotifLastSeenAt";
 const CHAT_LAST_SEEN_KEY = "mentora.chatLastSeenByThread";
+const CHAT_UNREAD_BY_THREAD_KEY = "mentora.chatUnreadByThread";
+const CHAT_UNREAD_TOTAL_KEY = "mentora.chatUnreadTotal";
 const AI_ROBOT_ANIMATION = require("../../assets/lottie/mentora_ai_friendly.json");
 
 type Profile = {
@@ -515,7 +517,7 @@ export default function HomeScreen() {
           { method: "DELETE" },
         ).catch(() => { });
       }
-      await AsyncStorage.multiRemove([
+      const keysToRemove = [
         "mentora.username",
         "mentora.email",
         "mentora.token",
@@ -524,7 +526,21 @@ export default function HomeScreen() {
         GROUPS_LAST_SEEN_KEY,
         CHATS_LAST_SEEN_KEY,
         CHAT_LAST_SEEN_KEY,
-      ]);
+        CHAT_UNREAD_BY_THREAD_KEY,
+        CHAT_UNREAD_TOTAL_KEY,
+      ];
+      if (logoutUsername) {
+        const allKeys = await AsyncStorage.getAllKeys();
+        const scopedKeys = allKeys.filter((key) =>
+          key.startsWith(`${CHAT_LAST_SEEN_KEY}::${logoutUsername}`) ||
+          key.startsWith(`${CHAT_UNREAD_BY_THREAD_KEY}::${logoutUsername}`) ||
+          key.startsWith(`${CHAT_UNREAD_TOTAL_KEY}::${logoutUsername}`) ||
+          key.startsWith(`${CHATS_LAST_SEEN_KEY}::${logoutUsername}`),
+        );
+        await AsyncStorage.multiRemove([...keysToRemove, ...scopedKeys]);
+      } else {
+        await AsyncStorage.multiRemove(keysToRemove);
+      }
     } catch (error) {
       Alert.alert("Logout failed", "Please try again.");
       return;
@@ -538,21 +554,28 @@ export default function HomeScreen() {
   const handleChangePassword = async (
     oldPassword: string,
     newPassword: string,
+    confirmPassword: string,
   ) => {
     const username = await AsyncStorage.getItem("mentora.username");
+    const token = await AsyncStorage.getItem("mentora.token");
     if (!username) {
       throw new Error("Missing username");
+    }
+    if (!token) {
+      throw new Error("Missing auth session. Please log in again.");
     }
 
     const response = await fetch(`${API_BASE_URL}/auth/change-password`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
         username,
         old_password: oldPassword,
         new_password: newPassword,
+        confirm_password: confirmPassword,
       }),
     });
 
@@ -560,6 +583,8 @@ export default function HomeScreen() {
       const message = await response.json().catch(() => null);
       throw new Error(message?.detail ?? "Change password failed");
     }
+
+    return;
   };
 
   const [upcomingBlocks, setUpcomingBlocks] = useState<

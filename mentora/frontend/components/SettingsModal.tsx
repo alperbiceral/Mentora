@@ -1,7 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  Alert,
   Modal,
   Pressable,
   StyleSheet,
@@ -22,7 +21,11 @@ type Props = {
   language: SettingsLanguage;
   setLanguage: (v: SettingsLanguage) => void;
   onLogout: () => void;
-  onChangePassword: (oldPassword: string, newPassword: string) => Promise<void>;
+  onChangePassword: (
+    oldPassword: string,
+    newPassword: string,
+    confirmPassword: string,
+  ) => Promise<void>;
 };
 
 export function SettingsModal({
@@ -44,6 +47,9 @@ export function SettingsModal({
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordLoading, setPasswordLoading] = useState(false);
+  const [passwordChangedSuccessfully, setPasswordChangedSuccessfully] =
+    useState(false);
+  const [languageRowY, setLanguageRowY] = useState(0);
 
   useEffect(() => {
     if (!visible) {
@@ -54,6 +60,7 @@ export function SettingsModal({
       setConfirmPassword("");
       setPasswordError(null);
       setPasswordLoading(false);
+      setPasswordChangedSuccessfully(false);
     }
   }, [visible]);
 
@@ -101,7 +108,20 @@ export function SettingsModal({
       animationType="fade"
       onRequestClose={onClose}
     >
-      <Pressable style={styles.backdrop} onPress={onClose}>
+      <Pressable
+        style={styles.backdrop}
+        onPress={
+          passwordChangedSuccessfully
+            ? undefined
+            : () => {
+              if (languageOpen) {
+                setLanguageOpen(false);
+                return;
+              }
+              onClose();
+            }
+        }
+      >
         <View style={styles.centerWrap}>
           {/* Prevent backdrop press when interacting with the card */}
           <Pressable
@@ -111,13 +131,14 @@ export function SettingsModal({
             }}
           >
             <View style={styles.headerRow}>
-              {passwordOpen ? (
+              {passwordOpen && !passwordChangedSuccessfully ? (
                 <Pressable
                   hitSlop={10}
                   onPress={() => {
                     setPasswordOpen(false);
                     setPasswordError(null);
                     setPasswordLoading(false);
+                    setPasswordChangedSuccessfully(false);
                     setOldPassword("");
                     setNewPassword("");
                     setConfirmPassword("");
@@ -134,14 +155,50 @@ export function SettingsModal({
                 <View style={{ width: 28 }} />
               )}
               <Text style={styles.title}>
-                {passwordOpen ? "Change Password" : "Settings"}
+                {passwordChangedSuccessfully
+                  ? "Password Updated"
+                  : passwordOpen
+                    ? "Change Password"
+                    : "Settings"}
               </Text>
-              <Pressable hitSlop={10} onPress={onClose} style={styles.closeBtn}>
-                <Ionicons name="close" size={20} color={colors.textPrimary} />
-              </Pressable>
+              {passwordChangedSuccessfully ? (
+                <View style={{ width: 28 }} />
+              ) : (
+                <Pressable hitSlop={10} onPress={onClose} style={styles.closeBtn}>
+                  <Ionicons name="close" size={20} color={colors.textPrimary} />
+                </Pressable>
+              )}
             </View>
 
-            {passwordOpen ? (
+            {passwordChangedSuccessfully ? (
+              <View style={styles.passwordSuccessCard}>
+                <View style={styles.passwordSuccessIconWrap}>
+                  <Ionicons name="checkmark-circle" size={44} color={colors.accent} />
+                </View>
+                <Text style={styles.passwordSuccessTitle}>
+                  Password changed successfully
+                </Text>
+                <Text style={styles.passwordSuccessSubtitle}>
+                  For your security, continue by logging in again.
+                </Text>
+                <Pressable
+                  style={styles.passwordSuccessLoginButton}
+                  onPress={() => {
+                    if (passwordLoading) {
+                      return;
+                    }
+                    setPasswordLoading(true);
+                    Promise.resolve(onLogout()).finally(() => {
+                      setPasswordLoading(false);
+                    });
+                  }}
+                >
+                  <Text style={styles.passwordSuccessLoginText}>
+                    {passwordLoading ? "Opening login..." : "Login"}
+                  </Text>
+                </Pressable>
+              </View>
+            ) : passwordOpen ? (
               <View style={styles.passwordCard}>
                 <TextInput
                   value={oldPassword}
@@ -150,6 +207,10 @@ export function SettingsModal({
                   placeholder="Old password"
                   placeholderTextColor={colors.textMuted}
                   secureTextEntry
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  textContentType="password"
+                  autoComplete="current-password"
                 />
                 <TextInput
                   value={newPassword}
@@ -158,6 +219,10 @@ export function SettingsModal({
                   placeholder="New password"
                   placeholderTextColor={colors.textMuted}
                   secureTextEntry
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  textContentType="newPassword"
+                  autoComplete="new-password"
                 />
                 <TextInput
                   value={confirmPassword}
@@ -166,6 +231,10 @@ export function SettingsModal({
                   placeholder="Confirm new password"
                   placeholderTextColor={colors.textMuted}
                   secureTextEntry
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  textContentType="newPassword"
+                  autoComplete="new-password"
                 />
                 {passwordError ? (
                   <Text style={styles.passwordErrorText}>{passwordError}</Text>
@@ -176,32 +245,29 @@ export function SettingsModal({
                     if (passwordLoading) {
                       return;
                     }
-                    if (!oldPassword || !newPassword) {
+                    const oldPasswordValue = oldPassword.trim();
+                    const newPasswordValue = newPassword.trim();
+                    const confirmPasswordValue = confirmPassword.trim();
+                    if (!oldPasswordValue || !newPasswordValue || !confirmPasswordValue) {
                       setPasswordError("Please fill all fields.");
                       return;
                     }
-                    if (oldPassword === newPassword) {
-                      setPasswordError(
-                        "New password cannot be the same as your old password.",
-                      );
-                      return;
-                    }
-                    if (newPassword !== confirmPassword) {
+                    if (newPasswordValue !== confirmPasswordValue) {
                       setPasswordError("Passwords do not match.");
                       return;
                     }
                     setPasswordError(null);
                     setPasswordLoading(true);
                     try {
-                      await onChangePassword(oldPassword, newPassword);
-                      Alert.alert(
-                        "Password Updated",
-                        "Your password has been updated successfully.",
+                      await onChangePassword(
+                        oldPasswordValue,
+                        newPasswordValue,
+                        confirmPasswordValue,
                       );
                       setOldPassword("");
                       setNewPassword("");
                       setConfirmPassword("");
-                      setPasswordOpen(false);
+                      setPasswordChangedSuccessfully(true);
                     } catch (error) {
                       const message =
                         error instanceof Error
@@ -219,7 +285,7 @@ export function SettingsModal({
                 </Pressable>
               </View>
             ) : (
-              <>
+              <View style={styles.settingsSection}>
                 <View style={styles.rows}>
                   <SettingSwitchRow
                     label="Dark Mode"
@@ -231,9 +297,14 @@ export function SettingsModal({
                     thumbOffColor="#FFFFFF"
                   />
 
-                  <View style={styles.row}>
+                  <View
+                    style={styles.row}
+                    onLayout={(event) => {
+                      setLanguageRowY(event.nativeEvent.layout.y);
+                    }}
+                  >
                     <Text style={styles.rowLabel}>Language</Text>
-                    <View style={styles.languageWrap}>
+                    <View style={styles.languageControl}>
                       <Pressable
                         style={styles.languageButton}
                         onPress={() => setLanguageOpen((v) => !v)}
@@ -245,36 +316,6 @@ export function SettingsModal({
                           color={colors.textMuted}
                         />
                       </Pressable>
-
-                      {languageOpen ? (
-                        <View style={styles.dropdown}>
-                          {languageOptions.map((opt) => {
-                            const selected = opt === language;
-                            return (
-                              <Pressable
-                                key={opt}
-                                style={[
-                                  styles.dropdownItem,
-                                  selected && styles.dropdownItemSelected,
-                                ]}
-                                onPress={() => {
-                                  setLanguage(opt);
-                                  setLanguageOpen(false);
-                                }}
-                              >
-                                <Text
-                                  style={[
-                                    styles.dropdownItemText,
-                                    selected && styles.dropdownItemTextSelected,
-                                  ]}
-                                >
-                                  {opt}
-                                </Text>
-                              </Pressable>
-                            );
-                          })}
-                        </View>
-                      ) : null}
                     </View>
                   </View>
                 </View>
@@ -289,10 +330,57 @@ export function SettingsModal({
                   <Text style={styles.changePasswordText}>Change Password</Text>
                 </Pressable>
 
-                <Pressable style={styles.logoutButton} onPress={onLogout}>
+                <Pressable
+                  style={styles.logoutButton}
+                  onPress={() => {
+                    setLanguageOpen(false);
+                    onLogout();
+                  }}
+                >
                   <Text style={styles.logoutText}>Log Out</Text>
                 </Pressable>
-              </>
+
+                {languageOpen ? (
+                  <View style={styles.dropdownOverlay} pointerEvents="box-none">
+                    <Pressable
+                      style={styles.dropdownOverlayBackdrop}
+                      onPress={() => setLanguageOpen(false)}
+                    />
+                    <View
+                      style={[
+                        styles.dropdownFloating,
+                        { top: languageRowY + 44 + 6 },
+                      ]}
+                    >
+                      {languageOptions.map((opt) => {
+                        const selected = opt === language;
+                        return (
+                          <Pressable
+                            key={opt}
+                            style={[
+                              styles.dropdownItem,
+                              selected && styles.dropdownItemSelected,
+                            ]}
+                            onPress={() => {
+                              setLanguage(opt);
+                              setLanguageOpen(false);
+                            }}
+                          >
+                            <Text
+                              style={[
+                                styles.dropdownItemText,
+                                selected && styles.dropdownItemTextSelected,
+                              ]}
+                            >
+                              {opt}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </View>
+                ) : null}
+              </View>
             )}
           </Pressable>
         </View>
@@ -303,6 +391,7 @@ export function SettingsModal({
 
 const createStyles = (colors: {
   accent: string;
+  background: string;
   card: string;
   textPrimary: string;
   textMuted: string;
@@ -370,26 +459,31 @@ const createStyles = (colors: {
     gap: 12,
     marginTop: 4,
   },
+  settingsSection: {
+    position: "relative",
+  },
   row: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    minHeight: 44,
   },
   rowLabel: {
     fontSize: 14,
     fontWeight: "700",
     color: colors.textPrimary,
   },
-  languageWrap: {
-    alignItems: "flex-end",
+  languageControl: {
+    width: 136,
   },
   languageButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    minWidth: 132,
+    width: "100%",
+    height: 42,
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 9,
     borderRadius: 14,
     backgroundColor: colors.subtleCard,
     borderWidth: 1,
@@ -401,27 +495,39 @@ const createStyles = (colors: {
     fontWeight: "600",
     marginRight: 10,
   },
-  dropdown: {
-    marginTop: 8,
-    width: 132,
+  dropdownOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 1000,
+    elevation: 30,
+  },
+  dropdownOverlayBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  dropdownFloating: {
+    position: "absolute",
+    right: 0,
+    width: 136,
     borderRadius: 14,
-    backgroundColor: colors.card,
+    backgroundColor: colors.background,
     borderWidth: 1,
     borderColor: colors.borderSoft,
     overflow: "hidden",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.16,
     shadowRadius: 12,
-    elevation: 5,
+    elevation: 24,
+    zIndex: 3000,
   },
   dropdownItem: {
     paddingVertical: 10,
     paddingHorizontal: 12,
-    backgroundColor: colors.card,
+    backgroundColor: colors.background,
   },
   dropdownItemSelected: {
-    backgroundColor: "rgba(109,94,247,0.12)",
+    backgroundColor: colors.subtleCard,
+    borderLeftWidth: 2,
+    borderLeftColor: colors.accent,
   },
   dropdownItemText: {
     fontSize: 14,
@@ -495,5 +601,50 @@ const createStyles = (colors: {
     fontSize: 14,
     color: "#FFFFFF",
     fontWeight: "800",
+  },
+  passwordSuccessCard: {
+    marginTop: 12,
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 6,
+    paddingBottom: 4,
+  },
+  passwordSuccessIconWrap: {
+    marginBottom: 2,
+  },
+  passwordSuccessTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: colors.textPrimary,
+    textAlign: "center",
+  },
+  passwordSuccessSubtitle: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.textMuted,
+    textAlign: "center",
+    marginBottom: 6,
+  },
+  passwordSuccessLoginButton: {
+    marginTop: 2,
+    alignSelf: "center",
+    minWidth: 148,
+    paddingHorizontal: 20,
+    paddingVertical: 9,
+    borderRadius: 999,
+    backgroundColor: colors.accent,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.14,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  passwordSuccessLoginText: {
+    fontSize: 14,
+    color: "#FFFFFF",
+    fontWeight: "700",
+    letterSpacing: 0.2,
   },
 });

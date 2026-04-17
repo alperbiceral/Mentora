@@ -105,15 +105,40 @@ async def logout():
 @router.post("/change-password")
 async def change_password(
     payload: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    user = db.query(User).filter(User.username == payload.username).first()
-    if not user or not verify_password(payload.old_password, user.pass_hash):
+    if current_user.username != payload.username:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials",
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Username mismatch",
         )
 
-    user.pass_hash = get_password_hash(payload.new_password)
+    if not verify_password(payload.old_password, current_user.pass_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Current password is incorrect",
+        )
+
+    trimmed_new_password = payload.new_password.strip()
+    if len(trimmed_new_password) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be at least 8 characters",
+        )
+
+    if payload.confirm_password is not None and payload.new_password != payload.confirm_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Confirm password does not match",
+        )
+
+    if verify_password(payload.new_password, current_user.pass_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be different from current password",
+        )
+
+    current_user.pass_hash = get_password_hash(payload.new_password)
     db.commit()
     return {"message": "Password updated"}
