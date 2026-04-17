@@ -241,9 +241,18 @@ export default function ChatScreen() {
 
   const scrollMessagesToEnd = useCallback((animated = true) => {
     requestAnimationFrame(() => {
-      messagesScrollRef.current?.scrollToEnd({ animated });
+      setTimeout(() => {
+        messagesScrollRef.current?.scrollToEnd({ animated });
+      }, 60);
     });
   }, []);
+
+  const handleMessagesContentSizeChange = useCallback(() => {
+    if (!activeThreadId || loadingMessages) {
+      return;
+    }
+    scrollMessagesToEnd(true);
+  }, [activeThreadId, loadingMessages, scrollMessagesToEnd]);
 
   const fetchThreads = useCallback(async (user: string) => {
     setLoadingThreads(true);
@@ -607,7 +616,7 @@ export default function ChatScreen() {
     const threadChanged = prev.threadId !== activeThreadId;
     const newMessageArrived = activeMessageCount > prev.count;
     if (threadChanged || newMessageArrived) {
-      scrollMessagesToEnd(!threadChanged);
+      scrollMessagesToEnd(true);
     }
     lastAutoScrollRef.current = { threadId: activeThreadId, count: activeMessageCount };
   }, [activeThreadId, activeMessageCount, loadingMessages, scrollMessagesToEnd]);
@@ -1023,6 +1032,7 @@ export default function ChatScreen() {
                 style={styles.messagesScroll}
                 contentContainerStyle={styles.messagesContent}
                 showsVerticalScrollIndicator={false}
+                onContentSizeChange={handleMessagesContentSizeChange}
               >
                 {loadingMessages ? (
                   <Text style={styles.emptyText}>Loading messages...</Text>
