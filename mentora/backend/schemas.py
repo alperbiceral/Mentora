@@ -263,10 +263,15 @@ class ChatThreadItem(BaseModel):
     last_message: Optional[str]
     last_message_at: Optional[datetime]
     last_message_sender: Optional[str] = None
+    unread_count: int = 0
 
 
 class ChatThreadsResponse(BaseModel):
     threads: list[ChatThreadItem]
+
+
+class ChatUnreadSummary(BaseModel):
+    total_unread: int
 
 
 class GroupCreate(BaseModel):

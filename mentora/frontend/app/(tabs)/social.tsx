@@ -564,6 +564,48 @@ export default function SocialScreen() {
     });
   };
 
+  const handleOpenPrivateChat = async (friendUsername: string) => {
+    if (!currentUsername) {
+      return;
+    }
+    try {
+      const response = await fetch(`${API_BASE_URL}/chat/threads`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: currentUsername,
+          friend_username: friendUsername,
+        }),
+      });
+      if (!response.ok) {
+        const message = await response.json().catch(() => null);
+        throw new Error(message?.detail ?? "Start chat failed");
+      }
+      const thread = (await response.json()) as { thread_id?: number };
+      const threadId =
+        typeof thread.thread_id === "number" &&
+        Number.isFinite(thread.thread_id) &&
+        thread.thread_id > 0
+          ? thread.thread_id
+          : null;
+      if (!threadId) {
+        throw new Error("No valid private thread found.");
+      }
+      router.push({
+        pathname: "/(tabs)/chat",
+        params: {
+          thread: String(threadId),
+          friend: friendUsername,
+          openAt: String(Date.now()),
+        },
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Start chat failed";
+      Alert.alert("Error", message);
+    }
+  };
+
   const toggleInvitee = (username: string) => {
     setGroupInvitees((prev) =>
       prev.includes(username)
@@ -938,12 +980,7 @@ export default function SocialScreen() {
                             styles.messageButton,
                             pressed && styles.iconButtonPressed,
                           ]}
-                          onPress={() =>
-                            router.push({
-                              pathname: "/(tabs)/chat",
-                              params: { friend: friend.username },
-                            })
-                          }
+                          onPress={() => handleOpenPrivateChat(friend.username)}
                         >
                           {({ pressed }) => (
                             <Ionicons

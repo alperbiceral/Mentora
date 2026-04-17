@@ -4,12 +4,12 @@ import json
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from database import SessionLocal
 from deps import get_db
-from models import ChatMessage, ChatParticipant, ChatThread, Friend, Profile
+from models import ChatMessage, ChatParticipant, ChatReadState, ChatThread, Friend, Profile
 from schemas import (
     ChatGroupCreate,
     ChatGroupUpdate,
@@ -19,6 +19,7 @@ from schemas import (
     ChatThreadCreate,
     ChatThreadItem,
     ChatThreadsResponse,
+    ChatUnreadSummary,
 )
 from ws_manager import manager
 
@@ -52,6 +53,34 @@ def _ensure_participant(db: Session, thread: ChatThread, username: str) -> None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not a participant",
         )
+
+
+def _ensure_read_state(db: Session, thread_id: int, username: str) -> ChatReadState:
+    state = (
+        db.query(ChatReadState)
+        .filter(
+            ChatReadState.thread_id == thread_id,
+            ChatReadState.username == username,
+        )
+        .first()
+    )
+    if state:
+        return state
+    state = ChatReadState(thread_id=thread_id, username=username, last_read_message_id=None)
+    db.add(state)
+    db.flush()
+    return state
+
+
+def _thread_unread_count(db: Session, thread_id: int, username: str) -> int:
+    state = _ensure_read_state(db, thread_id, username)
+    query = db.query(func.count(ChatMessage.message_id)).filter(
+        ChatMessage.thread_id == thread_id,
+        ChatMessage.sender != username,
+    )
+    if state.last_read_message_id is not None:
+        query = query.filter(ChatMessage.message_id > state.last_read_message_id)
+    return int(query.scalar() or 0)
 
 
 def _ensure_friendship(db: Session, username: str, friend_username: str) -> None:
@@ -134,9 +163,11 @@ async def list_threads(username: str, db: Session = Depends(get_db)):
                 last_message=last_message.content if last_message else None,
                 last_message_at=last_message.created_at if last_message else None,
                 last_message_sender=last_message.sender if last_message else None,
+                unread_count=_thread_unread_count(db, thread.thread_id, username),
             )
         )
 
+    db.commit()
     return {"threads": items}
 
 
@@ -191,6 +222,9 @@ async def create_thread(payload: ChatThreadCreate, db: Session = Depends(get_db)
             .filter(ChatParticipant.thread_id == existing.thread_id)
             .count()
         )
+        _ensure_read_state(db, existing.thread_id, payload.username)
+        _ensure_read_state(db, existing.thread_id, payload.friend_username)
+        db.commit()
         return ChatThreadItem(
             thread_id=existing.thread_id,
             is_group=existing.is_group,
@@ -201,6 +235,7 @@ async def create_thread(payload: ChatThreadCreate, db: Session = Depends(get_db)
             members_count=members_count,
             last_message=None,
             last_message_at=None,
+            unread_count=_thread_unread_count(db, existing.thread_id, payload.username),
         )
 
     thread = ChatThread(
@@ -221,6 +256,8 @@ async def create_thread(payload: ChatThreadCreate, db: Session = Depends(get_db)
             ),
         ]
     )
+    _ensure_read_state(db, thread.thread_id, payload.username)
+    _ensure_read_state(db, thread.thread_id, payload.friend_username)
     db.commit()
 
     return ChatThreadItem(
@@ -233,6 +270,7 @@ async def create_thread(payload: ChatThreadCreate, db: Session = Depends(get_db)
         members_count=2,
         last_message=None,
         last_message_at=None,
+        unread_count=0,
     )
 
 
@@ -288,6 +326,8 @@ async def create_group(payload: ChatGroupCreate, db: Session = Depends(get_db)):
     db.add_all(
         [ChatParticipant(thread_id=thread.thread_id, username=member) for member in participants]
     )
+    for participant in participants:
+        _ensure_read_state(db, thread.thread_id, participant)
     db.commit()
 
     return ChatThreadItem(
@@ -299,6 +339,7 @@ async def create_group(payload: ChatGroupCreate, db: Session = Depends(get_db)):
         members_count=len(participants),
         last_message=None,
         last_message_at=None,
+        unread_count=0,
     )
 
 
@@ -335,6 +376,46 @@ async def create_message(payload: ChatMessageCreate, db: Session = Depends(get_d
     return message
 
 
+@router.post("/threads/{thread_id}/read")
+async def mark_thread_read(
+    thread_id: int,
+    payload: ChatThreadAction,
+    db: Session = Depends(get_db),
+):
+    thread = db.query(ChatThread).filter(ChatThread.thread_id == thread_id).first()
+    if not thread:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Thread not found",
+        )
+    _ensure_participant(db, thread, payload.username)
+    state = _ensure_read_state(db, thread_id, payload.username)
+    latest_message = (
+        db.query(ChatMessage)
+        .filter(ChatMessage.thread_id == thread_id)
+        .order_by(ChatMessage.message_id.desc())
+        .first()
+    )
+    state.last_read_message_id = latest_message.message_id if latest_message else None
+    db.commit()
+    return {"thread_id": thread_id, "unread_count": 0}
+
+
+@router.get("/unread/{username}", response_model=ChatUnreadSummary)
+async def unread_total(username: str, db: Session = Depends(get_db)):
+    threads = (
+        db.query(ChatThread.thread_id)
+        .join(ChatParticipant, ChatParticipant.thread_id == ChatThread.thread_id)
+        .filter(ChatParticipant.username == username)
+        .all()
+    )
+    total = 0
+    for (thread_id,) in threads:
+        total += _thread_unread_count(db, thread_id, username)
+    db.commit()
+    return ChatUnreadSummary(total_unread=total)
+
+
 @router.delete("/threads/{thread_id}")
 async def delete_thread(
     thread_id: int,
@@ -358,6 +439,7 @@ async def delete_thread(
         _ensure_participant(db, thread, payload.username)
 
     db.query(ChatMessage).filter(ChatMessage.thread_id == thread_id).delete()
+    db.query(ChatReadState).filter(ChatReadState.thread_id == thread_id).delete()
     db.query(ChatParticipant).filter(ChatParticipant.thread_id == thread_id).delete()
     db.delete(thread)
     db.commit()
@@ -438,7 +520,14 @@ async def update_group(
                 if member not in participants
             ]
         )
+        for member in add_members:
+            if member not in participants:
+                _ensure_read_state(db, thread_id, member)
     if remove_members:
+        db.query(ChatReadState).filter(
+            ChatReadState.thread_id == thread_id,
+            ChatReadState.username.in_(remove_members),
+        ).delete(synchronize_session=False)
         db.query(ChatParticipant).filter(
             ChatParticipant.thread_id == thread_id,
             ChatParticipant.username.in_(remove_members),
@@ -465,6 +554,7 @@ async def update_group(
         last_message=last_message.content if last_message else None,
         last_message_at=last_message.created_at if last_message else None,
         last_message_sender=last_message.sender if last_message else None,
+        unread_count=_thread_unread_count(db, thread.thread_id, payload.username),
     )
 
 

@@ -213,6 +213,24 @@ class ChatParticipant(Base):
     thread = relationship("ChatThread", back_populates="participants")
 
 
+class ChatReadState(Base):
+    __tablename__ = "chat_read_states"
+
+    read_state_id: Mapped[int] = mapped_column(primary_key=True)
+    thread_id: Mapped[int] = mapped_column(
+        ForeignKey("chat_threads.thread_id"),
+        nullable=False,
+    )
+    username: Mapped[str] = mapped_column(String(50), nullable=False)
+    last_read_message_id: Mapped[Optional[int]] = mapped_column(Integer)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+
 class Group(Base):
     __tablename__ = "groups"
 

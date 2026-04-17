@@ -26,3 +26,17 @@ def ensure_schema_patches() -> None:
                 "ALTER TABLE courses ADD COLUMN IF NOT EXISTS importance_level DOUBLE PRECISION"
             )
         )
+        conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS chat_read_states (
+                    read_state_id SERIAL PRIMARY KEY,
+                    thread_id INTEGER NOT NULL REFERENCES chat_threads(thread_id),
+                    username VARCHAR(50) NOT NULL,
+                    last_read_message_id INTEGER,
+                    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                    UNIQUE(thread_id, username)
+                )
+                """
+            )
+        )

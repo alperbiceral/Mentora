@@ -11,6 +11,7 @@ import React, {
 } from "react";
 import {
   Alert,
+  DeviceEventEmitter,
   Image,
   Modal,
   Pressable,
@@ -38,6 +39,8 @@ const GROUP_PANEL_HEIGHT = 320;
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
 const CHAT_LAST_SEEN_KEY = "mentora.chatLastSeenByThread";
+const CHAT_UNREAD_BY_THREAD_KEY = "mentora.chatUnreadByThread";
+const CHAT_UNREAD_TOTAL_KEY = "mentora.chatUnreadTotal";
 const CHATS_NOTIF_LAST_SEEN_KEY = "mentora.chatsNotifLastSeenAt";
 
 type FriendProfile = {
@@ -59,6 +62,8 @@ type ChatThreadItem = {
   members_count?: number;
   last_message?: string | null;
   last_message_at?: string | null;
+  last_message_sender?: string | null;
+  unread_count?: number;
 };
 
 type ChatMessage = {
@@ -90,6 +95,21 @@ function parseApiTimestamp(value: string) {
   return new Date(`${normalized}Z`);
 }
 
+function toTimestampMs(value?: string | null) {
+  if (!value) {
+    return 0;
+  }
+  return parseApiTimestamp(value).getTime() || 0;
+}
+
+function normalizeUsername(value?: string | null) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+function scopedStorageKey(base: string, username?: string | null) {
+  return `${base}:${normalizeUsername(username)}`;
+}
+
 export default function ChatScreen() {
   const { colors: COLORS } = useTheme();
   const styles = useMemo(() => createStyles(COLORS), [COLORS]);
@@ -119,11 +139,25 @@ export default function ChatScreen() {
   >({});
   const [loadingThreads, setLoadingThreads] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [threadLastSeenMap, setThreadLastSeenMap] = useState<
+    Record<string, number>
+  >({});
+  const [unreadByThreadMap, setUnreadByThreadMap] = useState<
+    Record<string, number>
+  >({});
 
   const wsRef = useRef<WebSocket | null>(null);
+  const messagesScrollRef = useRef<ScrollView | null>(null);
   const lastFriendOpenRef = useRef<string | null>(null);
+  const lastHandledOpenAtRef = useRef<string | null>(null);
   const isChatFocusedRef = useRef(false);
   const activeThreadIdRef = useRef<number | null>(null);
+  const messagesByThreadRef = useRef<Record<number, ChatMessage[]>>({});
+  const threadsRef = useRef<ChatThreadItem[]>([]);
+  const lastAutoScrollRef = useRef<{ threadId: number | null; count: number }>({
+    threadId: null,
+    count: 0,
+  });
 
   const activeThread = useMemo(
     () => threads.find((thread) => thread.thread_id === activeThreadId) ?? null,
@@ -135,6 +169,7 @@ export default function ChatScreen() {
   );
   const rawFriendParam = params.friend;
   const rawThreadParam = params.thread;
+  const rawOpenAtParam = params.openAt;
   const friendParam =
     typeof rawFriendParam === "string"
       ? rawFriendParam
@@ -147,11 +182,19 @@ export default function ChatScreen() {
       : Array.isArray(rawThreadParam) && typeof rawThreadParam[0] === "string"
         ? rawThreadParam[0]
         : null;
+  const openAtParam =
+    typeof rawOpenAtParam === "string"
+      ? rawOpenAtParam
+      : Array.isArray(rawOpenAtParam) && typeof rawOpenAtParam[0] === "string"
+        ? rawOpenAtParam[0]
+        : null;
   const threadParamId = threadParam ? Number(threadParam) : null;
   const normalizedThreadParamId =
     threadParamId && Number.isFinite(threadParamId) && threadParamId > 0
       ? threadParamId
       : null;
+  const hasExplicitThreadOpen =
+    normalizedThreadParamId !== null && Boolean(openAtParam);
   const isGroupThread = activeThread?.is_group ?? false;
   const activeFriend =
     !isGroupThread && activeThread?.friend_username
@@ -175,6 +218,32 @@ export default function ChatScreen() {
     const memberSet = new Set(activeGroupMembers);
     return friends.filter((friend) => !memberSet.has(friend.username));
   }, [activeGroupMembers, friends]);
+  const unreadByThread = useMemo(() => {
+    const entries: Record<number, number> = {};
+    for (const thread of threads) {
+      entries[thread.thread_id] = Number(
+        unreadByThreadMap[String(thread.thread_id)] ?? 0,
+      );
+    }
+    return entries;
+  }, [threads, unreadByThreadMap]);
+  const totalUnreadCount = useMemo(
+    () => Object.values(unreadByThreadMap).reduce((sum, value) => sum + value, 0),
+    [unreadByThreadMap],
+  );
+  const normalizedCurrentUsername = useMemo(
+    () => normalizeUsername(username),
+    [username],
+  );
+  const activeMessageCount = activeThreadId
+    ? (messagesByThread[activeThreadId]?.length ?? 0)
+    : 0;
+
+  const scrollMessagesToEnd = useCallback((animated = true) => {
+    requestAnimationFrame(() => {
+      messagesScrollRef.current?.scrollToEnd({ animated });
+    });
+  }, []);
 
   const fetchThreads = useCallback(async (user: string) => {
     setLoadingThreads(true);
@@ -184,9 +253,23 @@ export default function ChatScreen() {
         throw new Error("Threads failed");
       }
       const data = await response.json();
-      setThreads(data.threads ?? []);
+      const fetchedThreads = (data.threads ?? []) as ChatThreadItem[];
+      setThreads(fetchedThreads);
+      const unreadFromBackend = Object.fromEntries(
+        fetchedThreads.map((thread) => [
+          String(thread.thread_id),
+          Number(thread.unread_count ?? 0),
+        ]),
+      ) as Record<string, number>;
+      setUnreadByThreadMap(unreadFromBackend);
+      await AsyncStorage.setItem(
+        scopedStorageKey(CHAT_UNREAD_BY_THREAD_KEY, user),
+        JSON.stringify(unreadFromBackend),
+      );
+      return fetchedThreads;
     } catch (error) {
       setThreads([]);
+      return [] as ChatThreadItem[];
     } finally {
       setLoadingThreads(false);
     }
@@ -237,21 +320,57 @@ export default function ChatScreen() {
   }, []);
 
   const markThreadSeen = useCallback(async (threadId: number) => {
-    const stored = await AsyncStorage.getItem(CHAT_LAST_SEEN_KEY);
-    let parsed: Record<string, number> = {};
-    if (stored) {
-      try {
-        parsed = JSON.parse(stored) as Record<string, number>;
-      } catch {
-        parsed = {};
-      }
+    if (!username) {
+      return;
     }
-    const next = {
-      ...parsed,
-      [String(threadId)]: Date.now(),
-    };
-    await AsyncStorage.setItem(CHAT_LAST_SEEN_KEY, JSON.stringify(next));
-  }, []);
+    const threadMessages = messagesByThreadRef.current[threadId] ?? [];
+    const latestFromLoadedMessages = threadMessages.reduce((max, message) => {
+      const createdAtMs = toTimestampMs(message.created_at);
+      return createdAtMs > max ? createdAtMs : max;
+    }, 0);
+    const threadMeta = threadsRef.current.find(
+      (thread) => thread.thread_id === threadId,
+    );
+    const latestFromThreadMeta = toTimestampMs(threadMeta?.last_message_at ?? null);
+    const latestThreadTimestamp = Math.max(
+      latestFromLoadedMessages,
+      latestFromThreadMeta,
+    );
+    const seenAt = latestThreadTimestamp > 0 ? latestThreadTimestamp : Date.now();
+
+    setThreadLastSeenMap((prev) => {
+      const next = {
+        ...prev,
+        [String(threadId)]: seenAt,
+      };
+      void AsyncStorage.setItem(
+        scopedStorageKey(CHAT_LAST_SEEN_KEY, username),
+        JSON.stringify(next),
+      );
+      return next;
+    });
+    setUnreadByThreadMap((prev) => {
+      if (!prev[String(threadId)]) {
+        return prev;
+      }
+      const next = {
+        ...prev,
+        [String(threadId)]: 0,
+      };
+      void AsyncStorage.setItem(
+        scopedStorageKey(CHAT_UNREAD_BY_THREAD_KEY, username),
+        JSON.stringify(next),
+      );
+      return next;
+    });
+    void fetch(`${API_BASE_URL}/chat/threads/${threadId}/read`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username }),
+    }).catch(() => {
+      // keep UI responsive; backend sync will recover on next refresh
+    });
+  }, [username]);
 
   const refreshAll = useCallback(() => {
     let active = true;
@@ -296,18 +415,95 @@ export default function ChatScreen() {
 
   useFocusEffect(refreshAll);
 
+  useEffect(() => {
+    if (!username) {
+      setThreadLastSeenMap({});
+      return;
+    }
+    let active = true;
+    (async () => {
+      const stored = await AsyncStorage.getItem(
+        scopedStorageKey(CHAT_LAST_SEEN_KEY, username),
+      );
+      if (!active) {
+        return;
+      }
+      if (!stored) {
+        setThreadLastSeenMap({});
+        return;
+      }
+      try {
+        setThreadLastSeenMap(JSON.parse(stored) as Record<string, number>);
+      } catch {
+        setThreadLastSeenMap({});
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [username]);
+
+  useEffect(() => {
+    if (!username) {
+      setUnreadByThreadMap({});
+      return;
+    }
+    let active = true;
+    (async () => {
+      const stored = await AsyncStorage.getItem(
+        scopedStorageKey(CHAT_UNREAD_BY_THREAD_KEY, username),
+      );
+      if (!active) {
+        return;
+      }
+      if (!stored) {
+        setUnreadByThreadMap({});
+        return;
+      }
+      try {
+        setUnreadByThreadMap(JSON.parse(stored) as Record<string, number>);
+      } catch {
+        setUnreadByThreadMap({});
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [username]);
+
   useFocusEffect(
     useCallback(() => {
       isChatFocusedRef.current = true;
-      AsyncStorage.setItem(CHATS_NOTIF_LAST_SEEN_KEY, String(Date.now()));
-      if (normalizedThreadParamId) {
-        setActiveThreadId(normalizedThreadParamId);
+      if (username) {
+        AsyncStorage.setItem(
+          scopedStorageKey(CHATS_NOTIF_LAST_SEEN_KEY, username),
+          String(Date.now()),
+        );
       }
+
+      const isFreshExplicitOpen =
+        hasExplicitThreadOpen &&
+        openAtParam !== null &&
+        lastHandledOpenAtRef.current !== openAtParam;
+
+      if (isFreshExplicitOpen && normalizedThreadParamId) {
+        setActiveThreadId(normalizedThreadParamId);
+        lastHandledOpenAtRef.current = openAtParam;
+      } else {
+        // No fresh explicit thread param => land on generic chat overview.
+        setActiveThreadId(null);
+      }
+
       return () => {
         isChatFocusedRef.current = false;
-        AsyncStorage.setItem(CHATS_NOTIF_LAST_SEEN_KEY, String(Date.now()));
+        if (username) {
+          AsyncStorage.setItem(
+            scopedStorageKey(CHATS_NOTIF_LAST_SEEN_KEY, username),
+            String(Date.now()),
+          );
+        }
       };
-    }, [normalizedThreadParamId]),
+    }, [hasExplicitThreadOpen, normalizedThreadParamId, openAtParam, username]),
   );
 
   useEffect(() => {
@@ -340,6 +536,7 @@ export default function ChatScreen() {
                   ...thread,
                   last_message: message.content,
                   last_message_at: message.created_at,
+                  last_message_sender: message.sender,
                 }
                 : thread,
             );
@@ -349,6 +546,27 @@ export default function ChatScreen() {
               ),
             );
           });
+          if (
+            message.thread_id === activeThreadIdRef.current &&
+            isChatFocusedRef.current
+          ) {
+            void markThreadSeen(message.thread_id);
+          } else if (
+            normalizeUsername(message.sender) !== normalizedCurrentUsername
+          ) {
+            setUnreadByThreadMap((prev) => {
+              const nextCount = Number(prev[String(message.thread_id)] ?? 0) + 1;
+              const next = {
+                ...prev,
+                [String(message.thread_id)]: nextCount,
+              };
+              void AsyncStorage.setItem(
+                scopedStorageKey(CHAT_UNREAD_BY_THREAD_KEY, username),
+                JSON.stringify(next),
+              );
+              return next;
+            });
+          }
         }
       } catch (error) {
         // ignore
@@ -363,7 +581,7 @@ export default function ChatScreen() {
       ws.close();
       wsRef.current = null;
     };
-  }, [username]);
+  }, [markThreadSeen, normalizedCurrentUsername, username]);
 
   useEffect(() => {
     if (activeThreadId) {
@@ -382,26 +600,72 @@ export default function ChatScreen() {
   ]);
 
   useEffect(() => {
+    if (!activeThreadId || loadingMessages) {
+      return;
+    }
+    const prev = lastAutoScrollRef.current;
+    const threadChanged = prev.threadId !== activeThreadId;
+    const newMessageArrived = activeMessageCount > prev.count;
+    if (threadChanged || newMessageArrived) {
+      scrollMessagesToEnd(!threadChanged);
+    }
+    lastAutoScrollRef.current = { threadId: activeThreadId, count: activeMessageCount };
+  }, [activeThreadId, activeMessageCount, loadingMessages, scrollMessagesToEnd]);
+
+  useEffect(() => {
+    if (!activeThreadId) {
+      lastAutoScrollRef.current = { threadId: null, count: 0 };
+    }
+  }, [activeThreadId]);
+
+  useEffect(() => {
     activeThreadIdRef.current = activeThreadId;
   }, [activeThreadId]);
 
   useEffect(() => {
-    if (!username || !friendParam) {
-      return;
-    }
-    if (lastFriendOpenRef.current === friendParam) {
-      return;
-    }
-    lastFriendOpenRef.current = friendParam;
-    handleStartChat(friendParam);
-  }, [friendParam, username]);
+    messagesByThreadRef.current = messagesByThread;
+  }, [messagesByThread]);
 
   useEffect(() => {
-    if (!normalizedThreadParamId) {
+    threadsRef.current = threads;
+  }, [threads]);
+
+  useEffect(() => {
+    if (!username || !friendParam || normalizedThreadParamId) {
       return;
     }
-    setActiveThreadId(normalizedThreadParamId);
-  }, [normalizedThreadParamId]);
+    const routeOpenKey = `${friendParam}:${openAtParam ?? "default"}`;
+    if (lastFriendOpenRef.current === routeOpenKey) {
+      return;
+    }
+    lastFriendOpenRef.current = routeOpenKey;
+    handleStartChat(friendParam);
+  }, [friendParam, username, normalizedThreadParamId, openAtParam]);
+
+  useEffect(() => {
+    const isFreshExplicitOpen =
+      hasExplicitThreadOpen &&
+      openAtParam !== null &&
+      lastHandledOpenAtRef.current !== openAtParam;
+
+    if (isFreshExplicitOpen && normalizedThreadParamId) {
+      setActiveThreadId(normalizedThreadParamId);
+      lastHandledOpenAtRef.current = openAtParam;
+    }
+  }, [hasExplicitThreadOpen, normalizedThreadParamId, openAtParam]);
+
+  useEffect(() => {
+    if (username) {
+      void AsyncStorage.setItem(
+        scopedStorageKey(CHAT_UNREAD_TOTAL_KEY, username),
+        String(totalUnreadCount),
+      );
+    }
+    DeviceEventEmitter.emit("chatUnreadTotalChanged", {
+      username: normalizeUsername(username),
+      total: totalUnreadCount,
+    });
+  }, [totalUnreadCount, username]);
 
   const handleStartChat = async (friendUsername: string) => {
     if (!username) {
@@ -591,6 +855,18 @@ export default function ChatScreen() {
           [message.thread_id]: [...existing, message],
         };
       });
+      setThreads((prev) =>
+        prev.map((thread) =>
+          thread.thread_id === message.thread_id
+            ? {
+              ...thread,
+              last_message: message.content,
+              last_message_at: message.created_at,
+              last_message_sender: message.sender,
+            }
+            : thread,
+        ),
+      );
     } catch (error) {
       Alert.alert("Error", "Message failed to send.");
     }
@@ -614,6 +890,18 @@ export default function ChatScreen() {
         const updated = { ...prev };
         delete updated[threadId];
         return updated;
+      });
+      setUnreadByThreadMap((prev) => {
+        if (!(String(threadId) in prev)) {
+          return prev;
+        }
+        const next = { ...prev };
+        delete next[String(threadId)];
+        void AsyncStorage.setItem(
+          scopedStorageKey(CHAT_UNREAD_BY_THREAD_KEY, username),
+          JSON.stringify(next),
+        );
+        return next;
       });
       if (activeThreadId === threadId) {
         setActiveThreadId(null);
@@ -731,6 +1019,7 @@ export default function ChatScreen() {
 
             <View style={styles.chatSurface}>
               <ScrollView
+                ref={messagesScrollRef}
                 style={styles.messagesScroll}
                 contentContainerStyle={styles.messagesContent}
                 showsVerticalScrollIndicator={false}
@@ -961,6 +1250,13 @@ export default function ChatScreen() {
                             {thread.last_message ?? "New conversation"}
                           </Text>
                         </View>
+                        {unreadByThread[thread.thread_id] ? (
+                          <View style={styles.unreadBadge}>
+                            <Text style={styles.unreadBadgeText}>
+                              {unreadByThread[thread.thread_id]}
+                            </Text>
+                          </View>
+                        ) : null}
                         <Pressable
                           hitSlop={8}
                           style={styles.threadDelete}
@@ -1031,6 +1327,13 @@ export default function ChatScreen() {
                             {thread.members_count ?? 0} members
                           </Text>
                         </View>
+                        {unreadByThread[thread.thread_id] ? (
+                          <View style={styles.unreadBadge}>
+                            <Text style={styles.unreadBadgeText}>
+                              {unreadByThread[thread.thread_id]}
+                            </Text>
+                          </View>
+                        ) : null}
                       </Pressable>
                     ))
                   )}
@@ -1551,6 +1854,21 @@ const createStyles = (COLORS: ThemeColors) =>
     backgroundColor: "rgba(239,68,68,0.12)",
     borderWidth: 1,
     borderColor: "rgba(239,68,68,0.35)",
+    },
+    unreadBadge: {
+      minWidth: 20,
+      height: 20,
+      borderRadius: 10,
+      paddingHorizontal: 6,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: COLORS.accent,
+      marginRight: 8,
+    },
+    unreadBadgeText: {
+      color: "#FFFFFF",
+      fontSize: 11,
+      fontWeight: "700",
     },
     chatHeader: {
       flexDirection: "row",

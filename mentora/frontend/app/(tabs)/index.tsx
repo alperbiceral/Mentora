@@ -108,20 +108,7 @@ type GroupRequestsList = {
   outgoing_join_requests: GroupJoinRequestItem[];
 };
 
-type ChatThreadItem = {
-  thread_id: number;
-  is_group: boolean;
-  friend_username?: string | null;
-  title?: string | null;
-  owner_username?: string | null;
-  group_photo?: string | null;
-  members_count?: number;
-  last_message?: string | null;
-  last_message_at?: string | null;
-  last_message_sender?: string | null;
-};
-
-type NotificationTab = "friends" | "groups" | "chats";
+type NotificationTab = "friends" | "groups";
 
 export default function HomeScreen() {
   const { colors: COLORS, mode, setMode } = useTheme();
@@ -146,10 +133,8 @@ export default function HomeScreen() {
     incoming_join_requests: [],
     outgoing_join_requests: [],
   });
-  const [chatThreads, setChatThreads] = useState<ChatThreadItem[]>([]);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
   const [notificationBadgeCount, setNotificationBadgeCount] = useState(0);
-  const [chatsTabLastSeen, setChatsTabLastSeen] = useState(0);
   const [streakRank, setStreakRank] = useState<number | null>(null);
   const [hoursRank, setHoursRank] = useState<number | null>(null);
 
@@ -270,7 +255,9 @@ export default function HomeScreen() {
       );
       if (res.ok) {
         const data = await res.json();
-        setNotificationBadgeCount(data.total ?? 0);
+        setNotificationBadgeCount(
+          (data.friend_requests ?? 0) + (data.group_invites ?? 0),
+        );
       }
     } catch {
       // ignore
@@ -289,20 +276,14 @@ export default function HomeScreen() {
           incoming_join_requests: [],
           outgoing_join_requests: [],
         });
-        setChatThreads([]);
         return;
       }
 
-      const chatsSince =
-        Number(await AsyncStorage.getItem(CHATS_LAST_SEEN_KEY)) || 0;
-      setChatsTabLastSeen(chatsSince);
-
-      const [friendsRes, groupsRes, threadsRes] = await Promise.all([
+      const [friendsRes, groupsRes] = await Promise.all([
         fetch(`${API_BASE_URL}/friends/requests/${username}`),
         fetch(
           `${API_BASE_URL}/groups/requests/${encodeURIComponent(username)}`,
         ),
-        fetch(`${API_BASE_URL}/chat/threads/${username}`),
       ]);
 
       if (friendsRes.ok) {
@@ -332,12 +313,6 @@ export default function HomeScreen() {
         });
       }
 
-      if (threadsRes.ok) {
-        const data = await threadsRes.json();
-        setChatThreads(data.threads ?? []);
-      } else {
-        setChatThreads([]);
-      }
     } finally {
       setNotificationsLoading(false);
     }
@@ -361,7 +336,6 @@ export default function HomeScreen() {
       const keyMap: Record<NotificationTab, string> = {
         friends: FRIENDS_LAST_SEEN_KEY,
         groups: GROUPS_LAST_SEEN_KEY,
-        chats: CHATS_LAST_SEEN_KEY,
       };
       await AsyncStorage.setItem(keyMap[tab], String(Date.now()));
       await fetchBadgeCount();
@@ -374,6 +348,24 @@ export default function HomeScreen() {
     setNotificationsOpen(true);
     await markTabSeen("friends");
   };
+
+  const friendTabCount = useMemo(
+    () => friendRequests.incoming.length + friendRequests.outgoing.length,
+    [friendRequests.incoming.length, friendRequests.outgoing.length],
+  );
+  const groupTabCount = useMemo(
+    () =>
+      groupRequests.incoming_invites.length +
+      groupRequests.incoming_join_requests.length +
+      groupRequests.outgoing_invites.length +
+      groupRequests.outgoing_join_requests.length,
+    [
+      groupRequests.incoming_invites.length,
+      groupRequests.incoming_join_requests.length,
+      groupRequests.outgoing_invites.length,
+      groupRequests.outgoing_join_requests.length,
+    ],
+  );
 
   const handleFriendRequestAction = async (
     requestId: number,
@@ -461,36 +453,6 @@ export default function HomeScreen() {
     }
   };
 
-  const formatNotificationTimestamp = (value?: string | null) => {
-    if (!value) {
-      return "";
-    }
-    const hasTimezone = /[Zz]|[+-]\d{2}:\d{2}$/.test(value);
-    const date = new Date(hasTimezone ? value : value + "Z");
-    if (Number.isNaN(date.getTime())) {
-      return "";
-    }
-    const datePart = date.toLocaleDateString(undefined, {
-      month: "short",
-      day: "numeric",
-    });
-    const timePart = date.toLocaleTimeString(undefined, {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-    return `${datePart} ${timePart}`;
-  };
-
-  const unreadChatThreads = useMemo(() => {
-    return chatThreads.filter((thread) => {
-      if (thread.last_message_sender === currentUsername) {
-        return false;
-      }
-      const lastMessageAt = toTimestampMs(thread.last_message_at);
-      return lastMessageAt > 0 && lastMessageAt > chatsTabLastSeen;
-    });
-  }, [chatThreads, toTimestampMs, chatsTabLastSeen, currentUsername]);
-
   useEffect(() => {
     if (!currentUsername) {
       return;
@@ -520,37 +482,8 @@ export default function HomeScreen() {
           created_at: string;
         };
         if (message.sender === currentUsername) {
-          setChatThreads((prev) =>
-            prev.map((thread) =>
-              thread.thread_id === message.thread_id
-                ? {
-                  ...thread,
-                  last_message: message.content,
-                  last_message_at: message.created_at,
-                }
-                : thread,
-            ),
-          );
           return;
         }
-        setChatThreads((prev) => {
-          const existing = prev.find(
-            (thread) => thread.thread_id === message.thread_id,
-          );
-          const next = existing
-            ? prev.map((thread) =>
-              thread.thread_id === message.thread_id
-                ? {
-                  ...thread,
-                  last_message: message.content,
-                  last_message_at: message.created_at,
-                }
-                : thread,
-            )
-            : prev;
-          return next;
-        });
-        setNotificationBadgeCount((count) => count + 1);
       } catch {
         // ignore
       }
@@ -767,7 +700,7 @@ export default function HomeScreen() {
                     styles.notificationTabTextActive,
                   ]}
                 >
-                  Friend requests
+                  {`Friend requests (${friendTabCount})`}
                 </Text>
               </Pressable>
 
@@ -788,30 +721,10 @@ export default function HomeScreen() {
                     styles.notificationTabTextActive,
                   ]}
                 >
-                  Group requests
+                  {`Group requests (${groupTabCount})`}
                 </Text>
               </Pressable>
 
-              <Pressable
-                style={[
-                  styles.notificationTab,
-                  notificationTab === "chats" && styles.notificationTabActive,
-                ]}
-                onPress={() => {
-                  setNotificationTab("chats");
-                  markTabSeen("chats");
-                }}
-              >
-                <Text
-                  style={[
-                    styles.notificationTabText,
-                    notificationTab === "chats" &&
-                    styles.notificationTabTextActive,
-                  ]}
-                >
-                  Chat messages
-                </Text>
-              </Pressable>
             </View>
 
             <ScrollView
@@ -1045,46 +958,6 @@ export default function HomeScreen() {
                 </View>
               ) : null}
 
-              {!notificationsLoading && notificationTab === "chats" ? (
-                <View style={styles.notificationSection}>
-                  {unreadChatThreads.length === 0 ? (
-                    <Text style={styles.emptyText}>No new messages.</Text>
-                  ) : (
-                    unreadChatThreads.map((thread) => {
-                      const title = thread.is_group
-                        ? (thread.title ?? "Group chat")
-                        : (thread.friend_username ?? "Direct message");
-                      return (
-                        <Pressable
-                          key={thread.thread_id}
-                          style={styles.notificationItem}
-                          onPress={() => {
-                            setNotificationsOpen(false);
-                            router.push({
-                              pathname: "/chat",
-                              params: { thread: String(thread.thread_id) },
-                            });
-                          }}
-                        >
-                          <View style={styles.notificationInfo}>
-                            <Text style={styles.notificationTitle}>
-                              {title}
-                            </Text>
-                            <Text style={styles.notificationSubtitle}>
-                              {thread.last_message ?? "No messages yet"}
-                            </Text>
-                          </View>
-                          <Text style={styles.notificationMeta}>
-                            {formatNotificationTimestamp(
-                              thread.last_message_at,
-                            )}
-                          </Text>
-                        </Pressable>
-                      );
-                    })
-                  )}
-                </View>
-              ) : null}
             </ScrollView>
           </Pressable>
         </Pressable>
@@ -1578,17 +1451,18 @@ const createStyles = (COLORS: ThemeColors) =>
     },
     notificationTabsRow: {
       flexDirection: "row",
-      flexWrap: "wrap",
       gap: 8,
       marginBottom: SPACING.sm,
     },
     notificationTab: {
-      paddingHorizontal: 10,
+      flex: 1,
       paddingVertical: 6,
       borderRadius: 999,
       borderWidth: 1,
       borderColor: COLORS.borderSoft,
       backgroundColor: COLORS.subtleCard,
+      alignItems: "center",
+      justifyContent: "center",
     },
     notificationTabActive: {
       backgroundColor: COLORS.accent,
