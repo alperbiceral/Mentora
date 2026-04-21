@@ -962,7 +962,9 @@ export default function StudyScreen() {
                   <Text
                     style={[
                       styles.secondaryButtonText,
-                      !hasSessionActivity ? styles.secondaryButtonTextDisabled : null,
+                      !hasSessionActivity
+                        ? styles.secondaryButtonTextDisabled
+                        : null,
                     ]}
                   >
                     {secondaryActionLabel}
@@ -1447,7 +1449,6 @@ const createStyles = (COLORS: ThemeColors, isOnBreak: boolean) =>
       color: COLORS.textMuted,
     },
     segmentedControl: {
-      marginTop: SPACING.md,
       flexDirection: "row",
       backgroundColor: COLORS.subtleCard,
       borderRadius: 999,

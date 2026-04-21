@@ -46,7 +46,9 @@ const SPACING = {
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
 
-type Mode = "courses" | "study";
+type Mode = "schedule" | "courses";
+
+type ScheduleView = "weekly" | "daily";
 
 type Course = {
   id: string;
@@ -180,7 +182,8 @@ function useScheduleTheme() {
 export default function ScheduleScreen() {
   const { COLORS, styles } = useScheduleTheme();
 
-  const [mode, setMode] = useState<Mode>("courses");
+  const [mode, setMode] = useState<Mode>("schedule");
+  const [scheduleView, setScheduleView] = useState<ScheduleView>("weekly");
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
@@ -944,88 +947,91 @@ export default function ScheduleScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.header}>
-            <SegmentedControl mode={mode} setMode={setMode} />
+            <MainModeSegmentedControl mode={mode} setMode={setMode} />
           </View>
 
-          {mode === "courses" ? (
+          {mode === "schedule" ? (
             <View style={styles.section}>
-              <View style={styles.coursesActionRow}>
-                <Pressable
-                  style={styles.clearScheduleButton}
-                  onPress={handleClearSchedule}
-                  disabled={isClearingSchedule}
-                  hitSlop={6}
-                >
-                  <Ionicons
-                    name="trash-outline"
-                    size={15}
-                    color={COLORS.danger}
-                  />
-                  <Text style={styles.clearScheduleText}>Clear</Text>
-                </Pressable>
-                <Pressable
-                  style={styles.importButton}
-                  onPress={() => setIsImportModalOpen(true)}
-                >
-                  <Ionicons
-                    name="cloud-upload-outline"
-                    size={15}
-                    color={COLORS.accent}
-                  />
-                  <Text style={styles.importButtonText}>Import</Text>
-                </Pressable>
-                <Pressable
-                  style={styles.addCourseButton}
-                  onPress={handleOpenCourseModal}
-                >
-                  <Ionicons
-                    name="add-circle-outline"
-                    size={15}
-                    color="#FFFFFF"
-                  />
-                  <Text style={styles.addCourseText}>Add Course</Text>
-                </Pressable>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <View style={{ flexDirection: "row", gap: 8 }}>
+                  <Pressable
+                    style={styles.clearScheduleButton}
+                    onPress={handleClearSchedule}
+                    disabled={isClearingSchedule}
+                    hitSlop={6}
+                  >
+                    <Ionicons
+                      name="trash-outline"
+                      size={15}
+                      color={COLORS.danger}
+                    />
+                    <Text style={styles.clearScheduleText}>Clear</Text>
+                  </Pressable>
+                  <Pressable
+                    style={styles.importButton}
+                    onPress={() => setIsImportModalOpen(true)}
+                  >
+                    <Ionicons
+                      name="cloud-upload-outline"
+                      size={15}
+                      color={COLORS.accent}
+                    />
+                    <Text style={styles.importButtonText}>Import</Text>
+                  </Pressable>
+                </View>
+                <ScheduleViewSegmentedControl
+                  scheduleView={scheduleView}
+                  setScheduleView={setScheduleView}
+                />
               </View>
-
-              <ScheduleCard>
-                <CourseLegend courses={courses} loading={loadingCourses} />
-                <CourseScheduleGrid
-                  blocks={blocks}
-                  courseLookup={courseLookup}
-                  studyPlan={studyPlan}
-                />
-              </ScheduleCard>
-
-              <ScheduleCard title="Course details">
-                <CourseCardList
-                  courses={courses}
-                  onPress={handleEditCourse}
-                  onImportSyllabus={handleImportSyllabus}
-                  loading={loadingCourses}
-                  importingSyllabusId={importingSyllabusId}
-                />
-              </ScheduleCard>
-
-              <CourseModal
-                visible={isCourseModalOpen}
-                mode={modalMode}
-                courseForm={modalCourseForm}
-                canAddCourse={canAddCourse}
-                canAddDraftBlock={canAddDraftBlock}
-                modalBlocks={modalBlocks}
-                selection={modalSelection}
-                blockedBlocks={blockedBlocks}
-                courseLookup={courseLookup}
-                draftColor={draftColor}
-                saving={savingCourse}
-                onChangeCourseForm={setModalCourseForm}
-                onAddCourse={handleSaveCourse}
-                onAddDraftBlock={handleAddDraftBlock}
-                onSlotPress={handleModalSlotPress}
-                message={modalMessage}
-                onClose={() => setIsCourseModalOpen(false)}
-              />
-
+              {scheduleView === "weekly" ? (
+                <>
+                  <ScheduleCard>
+                    <CourseLegend courses={courses} loading={loadingCourses} />
+                    <CourseScheduleGrid
+                      blocks={blocks}
+                      courseLookup={courseLookup}
+                      studyPlan={studyPlan}
+                    />
+                  </ScheduleCard>
+                </>
+              ) : (
+                <View style={{ flexDirection: "column", gap: 8 }}>
+                  <DateStrip
+                    selectedDate={selectedDate}
+                    onSelectDate={handleSelectDate}
+                  />
+                  <AIInsightBanner blocks={selectedDayStudyBlocks} />
+                  <TimelineView
+                    studyBlocks={selectedDayStudyBlocks}
+                    courseBlocks={selectedDayCourseBlocks}
+                    courseLookup={courseLookup}
+                    completedSessions={completedSessions}
+                    onToggleDone={handleToggleDone}
+                    onPressSession={handlePressSession}
+                    isToday={isSelectedDateToday}
+                    currentTime={currentTime}
+                    scrollRef={timelineScrollRef}
+                  />
+                  <SessionDetailSheet
+                    visible={isSessionSheetOpen}
+                    session={selectedSession}
+                    isDone={
+                      selectedSession
+                        ? completedSessions.has(selectedSession.id)
+                        : false
+                    }
+                    onToggleDone={handleToggleDone}
+                    onClose={() => setIsSessionSheetOpen(false)}
+                  />
+                </View>
+              )}
               <Modal
                 animationType="fade"
                 transparent
@@ -1077,35 +1083,48 @@ export default function ScheduleScreen() {
             </View>
           ) : (
             <View style={styles.section}>
-              <DateStrip
-                selectedDate={selectedDate}
-                onSelectDate={handleSelectDate}
-              />
+              <View style={styles.coursesActionRow}>
+                <Pressable
+                  style={styles.addCourseButton}
+                  onPress={handleOpenCourseModal}
+                >
+                  <Ionicons
+                    name="add-circle-outline"
+                    size={15}
+                    color="#FFFFFF"
+                  />
+                  <Text style={styles.addCourseText}>Add Course</Text>
+                </Pressable>
+              </View>
 
-              <AIInsightBanner blocks={selectedDayStudyBlocks} />
+              <ScheduleCard title="Course details">
+                <CourseCardList
+                  courses={courses}
+                  onPress={handleEditCourse}
+                  onImportSyllabus={handleImportSyllabus}
+                  loading={loadingCourses}
+                  importingSyllabusId={importingSyllabusId}
+                />
+              </ScheduleCard>
 
-              <TimelineView
-                studyBlocks={selectedDayStudyBlocks}
-                courseBlocks={selectedDayCourseBlocks}
+              <CourseModal
+                visible={isCourseModalOpen}
+                mode={modalMode}
+                courseForm={modalCourseForm}
+                canAddCourse={canAddCourse}
+                canAddDraftBlock={canAddDraftBlock}
+                modalBlocks={modalBlocks}
+                selection={modalSelection}
+                blockedBlocks={blockedBlocks}
                 courseLookup={courseLookup}
-                completedSessions={completedSessions}
-                onToggleDone={handleToggleDone}
-                onPressSession={handlePressSession}
-                isToday={isSelectedDateToday}
-                currentTime={currentTime}
-                scrollRef={timelineScrollRef}
-              />
-
-              <SessionDetailSheet
-                visible={isSessionSheetOpen}
-                session={selectedSession}
-                isDone={
-                  selectedSession
-                    ? completedSessions.has(selectedSession.id)
-                    : false
-                }
-                onToggleDone={handleToggleDone}
-                onClose={() => setIsSessionSheetOpen(false)}
+                draftColor={draftColor}
+                saving={savingCourse}
+                onChangeCourseForm={setModalCourseForm}
+                onAddCourse={handleSaveCourse}
+                onAddDraftBlock={handleAddDraftBlock}
+                onSlotPress={handleModalSlotPress}
+                message={modalMessage}
+                onClose={() => setIsCourseModalOpen(false)}
               />
             </View>
           )}
@@ -1115,16 +1134,38 @@ export default function ScheduleScreen() {
   );
 }
 
-type SegmentedProps = {
+// Main mode segmented control (Schedule / Courses)
+type MainModeSegmentedProps = {
   mode: Mode;
   setMode: (m: Mode) => void;
 };
 
-const SegmentedControl: React.FC<SegmentedProps> = ({ mode, setMode }) => {
+const MainModeSegmentedControl: React.FC<MainModeSegmentedProps> = ({
+  mode,
+  setMode,
+}) => {
   const { styles } = useScheduleTheme();
-
   return (
     <View style={styles.segmentContainer}>
+      <Pressable
+        style={[
+          styles.segmentItem,
+          mode === "schedule" && styles.segmentItemActive,
+        ]}
+        onPress={() => setMode("schedule")}
+      >
+        <Text
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.8}
+          style={[
+            styles.segmentLabel,
+            mode === "schedule" && styles.segmentLabelActive,
+          ]}
+        >
+          Schedule
+        </Text>
+      </Pressable>
       <Pressable
         style={[
           styles.segmentItem,
@@ -1141,16 +1182,34 @@ const SegmentedControl: React.FC<SegmentedProps> = ({ mode, setMode }) => {
             mode === "courses" && styles.segmentLabelActive,
           ]}
         >
-          Weekly Schedule
+          Courses
         </Text>
       </Pressable>
+    </View>
+  );
+};
 
+// Segmented control for schedule view (Weekly / Daily)
+type ScheduleViewSegmentedProps = {
+  scheduleView: ScheduleView;
+  setScheduleView: (v: ScheduleView) => void;
+};
+
+const ScheduleViewSegmentedControl: React.FC<ScheduleViewSegmentedProps> = ({
+  scheduleView,
+  setScheduleView,
+}) => {
+  const { styles } = useScheduleTheme();
+  return (
+    <View
+      style={[styles.segmentContainer, styles.scheduleViewSegmentContainer]}
+    >
       <Pressable
         style={[
           styles.segmentItem,
-          mode === "study" && styles.segmentItemActive,
+          scheduleView === "weekly" && styles.segmentItemActive,
         ]}
-        onPress={() => setMode("study")}
+        onPress={() => setScheduleView("weekly")}
       >
         <Text
           numberOfLines={1}
@@ -1158,10 +1217,29 @@ const SegmentedControl: React.FC<SegmentedProps> = ({ mode, setMode }) => {
           minimumFontScale={0.8}
           style={[
             styles.segmentLabel,
-            mode === "study" && styles.segmentLabelActive,
+            scheduleView === "weekly" && styles.segmentLabelActive,
           ]}
         >
-          Daily Schedule
+          Weekly
+        </Text>
+      </Pressable>
+      <Pressable
+        style={[
+          styles.segmentItem,
+          scheduleView === "daily" && styles.segmentItemActive,
+        ]}
+        onPress={() => setScheduleView("daily")}
+      >
+        <Text
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.8}
+          style={[
+            styles.segmentLabel,
+            scheduleView === "daily" && styles.segmentLabelActive,
+          ]}
+        >
+          Daily
         </Text>
       </Pressable>
     </View>
@@ -1436,41 +1514,79 @@ const CourseScheduleGrid: React.FC<CourseScheduleGridProps> = ({
 }) => {
   const { styles } = useScheduleTheme();
   const gridHeight = TIME_SLOTS.length * SLOT_HEIGHT;
+  const headerScrollRef = useRef<ScrollView>(null);
+  const bodyScrollRef = useRef<ScrollView>(null);
+  const activeHorizontalSync = useRef<"header" | "body" | null>(null);
+
+  const syncHorizontalScroll = useCallback(
+    (source: "header" | "body", x: number) => {
+      if (
+        activeHorizontalSync.current &&
+        activeHorizontalSync.current !== source
+      ) {
+        return;
+      }
+      activeHorizontalSync.current = source;
+      const targetRef =
+        source === "header" ? bodyScrollRef.current : headerScrollRef.current;
+      targetRef?.scrollTo({ x, animated: false });
+      requestAnimationFrame(() => {
+        activeHorizontalSync.current = null;
+      });
+    },
+    [],
+  );
 
   return (
     <View style={styles.gridWrapper}>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator
-        contentContainerStyle={styles.gridScroll}
-      >
-        <View>
-          <View style={styles.gridHeaderRow}>
-            <View style={styles.timeHeaderSpacer} />
-            {DAYS.map((day) => (
-              <View key={`head-${day}`} style={styles.dayHeaderCell}>
-                <Text style={styles.dayHeaderText}>{day}</Text>
-              </View>
-            ))}
-          </View>
-          <ScrollView
-            style={[styles.gridBody, { maxHeight: GRID_MAX_HEIGHT }]}
-            nestedScrollEnabled
-            showsVerticalScrollIndicator={false}
-          >
-            <View style={styles.gridRow}>
-              <TimeColumn height={gridHeight} />
-              {DAYS.map((day) => (
-                <CourseDayColumn
-                  key={day}
-                  day={day}
-                  blocks={blocks}
-                  courseLookup={courseLookup}
-                  height={gridHeight}
-                  studyBlocks={studyPlan?.[day] ?? []}
-                />
-              ))}
+      <View style={styles.gridHeaderRow}>
+        <View style={styles.timeHeaderSpacer} />
+        <ScrollView
+          ref={headerScrollRef}
+          horizontal
+          style={styles.gridHorizontalScroll}
+          contentContainerStyle={styles.gridDaysRow}
+          showsHorizontalScrollIndicator={false}
+          scrollEventThrottle={16}
+          onScroll={(event) =>
+            syncHorizontalScroll("header", event.nativeEvent.contentOffset.x)
+          }
+        >
+          {DAYS.map((day) => (
+            <View key={`head-${day}`} style={styles.dayHeaderCell}>
+              <Text style={styles.dayHeaderText}>{day}</Text>
             </View>
+          ))}
+        </ScrollView>
+      </View>
+      <ScrollView
+        style={[styles.gridBody, { maxHeight: GRID_MAX_HEIGHT }]}
+        nestedScrollEnabled
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.gridRow}>
+          <TimeColumn height={gridHeight} />
+          <ScrollView
+            ref={bodyScrollRef}
+            horizontal
+            style={styles.gridHorizontalScroll}
+            showsHorizontalScrollIndicator
+            contentContainerStyle={[styles.gridDaysRow, styles.gridScroll]}
+            scrollEventThrottle={16}
+            onScroll={(event) =>
+              syncHorizontalScroll("body", event.nativeEvent.contentOffset.x)
+            }
+          >
+            {DAYS.map((day) => (
+              <CourseDayColumn
+                key={day}
+                day={day}
+                blocks={blocks}
+                courseLookup={courseLookup}
+                height={gridHeight}
+                studyBlocks={studyPlan?.[day] ?? []}
+              />
+            ))}
           </ScrollView>
         </View>
       </ScrollView>
@@ -1716,6 +1832,9 @@ const DraftScheduleGrid: React.FC<DraftScheduleGridProps> = ({
 }) => {
   const { styles } = useScheduleTheme();
   const gridHeight = TIME_SLOTS.length * SLOT_HEIGHT;
+  const headerScrollRef = useRef<ScrollView>(null);
+  const bodyScrollRef = useRef<ScrollView>(null);
+  const activeHorizontalSync = useRef<"header" | "body" | null>(null);
   const selectionDay = selection.day;
   const showSelection =
     selection.startIndex !== null && selection.endIndex !== null;
@@ -1736,130 +1855,165 @@ const DraftScheduleGrid: React.FC<DraftScheduleGridProps> = ({
     return isInBlocks(blockedBlocks) || isInBlocks(draftBlocks);
   };
 
+  const syncHorizontalScroll = useCallback(
+    (source: "header" | "body", x: number) => {
+      if (
+        activeHorizontalSync.current &&
+        activeHorizontalSync.current !== source
+      ) {
+        return;
+      }
+      activeHorizontalSync.current = source;
+      const targetRef =
+        source === "header" ? bodyScrollRef.current : headerScrollRef.current;
+      targetRef?.scrollTo({ x, animated: false });
+      requestAnimationFrame(() => {
+        activeHorizontalSync.current = null;
+      });
+    },
+    [],
+  );
+
   return (
     <View style={styles.gridWrapper}>
+      <View style={styles.gridHeaderRow}>
+        <View style={styles.timeHeaderSpacer} />
+        <ScrollView
+          ref={headerScrollRef}
+          horizontal
+          style={styles.gridHorizontalScroll}
+          contentContainerStyle={styles.gridDaysRow}
+          showsHorizontalScrollIndicator={false}
+          scrollEventThrottle={16}
+          onScroll={(event) =>
+            syncHorizontalScroll("header", event.nativeEvent.contentOffset.x)
+          }
+        >
+          {DAYS.map((day) => (
+            <View key={`head-${day}`} style={styles.dayHeaderCell}>
+              <Text style={styles.dayHeaderText}>{day}</Text>
+            </View>
+          ))}
+        </ScrollView>
+      </View>
       <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator
-        contentContainerStyle={styles.gridScroll}
+        style={[styles.gridBody, { maxHeight: DRAFT_GRID_MAX_HEIGHT }]}
+        nestedScrollEnabled
+        showsVerticalScrollIndicator={false}
       >
-        <View>
-          <View style={styles.gridHeaderRow}>
-            <View style={styles.timeHeaderSpacer} />
-            {DAYS.map((day) => (
-              <View key={`head-${day}`} style={styles.dayHeaderCell}>
-                <Text style={styles.dayHeaderText}>{day}</Text>
-              </View>
-            ))}
-          </View>
+        <View style={styles.gridRow}>
+          <TimeColumn height={gridHeight} />
           <ScrollView
-            style={[styles.gridBody, { maxHeight: DRAFT_GRID_MAX_HEIGHT }]}
-            nestedScrollEnabled
-            showsVerticalScrollIndicator={false}
+            ref={bodyScrollRef}
+            horizontal
+            style={styles.gridHorizontalScroll}
+            showsHorizontalScrollIndicator
+            contentContainerStyle={[styles.gridDaysRow, styles.gridScroll]}
+            scrollEventThrottle={16}
+            onScroll={(event) =>
+              syncHorizontalScroll("body", event.nativeEvent.contentOffset.x)
+            }
           >
-            <View style={styles.gridRow}>
-              <TimeColumn height={gridHeight} />
-              {DAYS.map((day) => (
-                <View
-                  key={day}
-                  style={[styles.dayColumn, { height: gridHeight }]}
-                >
-                  {TIME_SLOTS.map((slot, index) => {
-                    const isDisabled = isSlotBlocked(day, index);
+            {DAYS.map((day) => (
+              <View
+                key={day}
+                style={[styles.dayColumn, { height: gridHeight }]}
+              >
+                {TIME_SLOTS.map((slot, index) => {
+                  const isDisabled = isSlotBlocked(day, index);
+                  return (
+                    <Pressable
+                      key={`${day}-${slot}`}
+                      style={[
+                        styles.gridSlot,
+                        isTimeSlotOnHour(slot)
+                          ? styles.gridSlotHourLine
+                          : styles.gridSlotHalfLine,
+                        isDisabled && styles.gridSlotDisabled,
+                      ]}
+                      onPress={() => onSlotPress(day, index)}
+                      disabled={isDisabled}
+                    />
+                  );
+                })}
+
+                {blockedBlocks
+                  .filter((block) => block.day === day)
+                  .map((block) => {
+                    const startIndex = timeToIndex(block.start);
+                    const endIndex = timeToIndex(block.end);
+                    if (startIndex < 0 || endIndex <= startIndex) {
+                      return null;
+                    }
+                    const blockHeight = (endIndex - startIndex) * SLOT_HEIGHT;
+                    const course = courseLookup.get(block.courseId);
                     return (
-                      <Pressable
-                        key={`${day}-${slot}`}
+                      <View
+                        key={`blocked-${block.id}`}
                         style={[
-                          styles.gridSlot,
-                          isTimeSlotOnHour(slot)
-                            ? styles.gridSlotHourLine
-                            : styles.gridSlotHalfLine,
-                          isDisabled && styles.gridSlotDisabled,
+                          styles.blockedBlock,
+                          {
+                            top: startIndex * SLOT_HEIGHT,
+                            height: blockHeight,
+                            backgroundColor:
+                              course?.color ?? "rgba(148,163,184,0.35)",
+                          },
                         ]}
-                        onPress={() => onSlotPress(day, index)}
-                        disabled={isDisabled}
                       />
                     );
                   })}
 
-                  {blockedBlocks
-                    .filter((block) => block.day === day)
-                    .map((block) => {
-                      const startIndex = timeToIndex(block.start);
-                      const endIndex = timeToIndex(block.end);
-                      if (startIndex < 0 || endIndex <= startIndex) {
-                        return null;
-                      }
-                      const blockHeight = (endIndex - startIndex) * SLOT_HEIGHT;
-                      const course = courseLookup.get(block.courseId);
-                      return (
-                        <View
-                          key={`blocked-${block.id}`}
-                          style={[
-                            styles.blockedBlock,
-                            {
-                              top: startIndex * SLOT_HEIGHT,
-                              height: blockHeight,
-                              backgroundColor:
-                                course?.color ?? "rgba(148,163,184,0.35)",
-                            },
-                          ]}
-                        />
-                      );
-                    })}
+                {selectionDay === day && showSelection ? (
+                  <View
+                    style={[
+                      styles.selectionBlock,
+                      {
+                        top: selection.startIndex! * SLOT_HEIGHT,
+                        height:
+                          (selection.endIndex! - selection.startIndex!) *
+                          SLOT_HEIGHT,
+                      },
+                    ]}
+                  />
+                ) : null}
 
-                  {selectionDay === day && showSelection ? (
-                    <View
-                      style={[
-                        styles.selectionBlock,
-                        {
-                          top: selection.startIndex! * SLOT_HEIGHT,
-                          height:
-                            (selection.endIndex! - selection.startIndex!) *
-                            SLOT_HEIGHT,
-                        },
-                      ]}
-                    />
-                  ) : null}
+                {selectionDay === day && showSelectionStart ? (
+                  <View
+                    style={[
+                      styles.selectionStart,
+                      {
+                        top: selection.startIndex! * SLOT_HEIGHT,
+                        height: SLOT_HEIGHT,
+                      },
+                    ]}
+                  />
+                ) : null}
 
-                  {selectionDay === day && showSelectionStart ? (
-                    <View
-                      style={[
-                        styles.selectionStart,
-                        {
-                          top: selection.startIndex! * SLOT_HEIGHT,
-                          height: SLOT_HEIGHT,
-                        },
-                      ]}
-                    />
-                  ) : null}
-
-                  {draftBlocks
-                    .filter((block) => block.day === day)
-                    .map((block) => {
-                      const startIndex = timeToIndex(block.start);
-                      const endIndex = timeToIndex(block.end);
-                      if (startIndex < 0 || endIndex <= startIndex) {
-                        return null;
-                      }
-                      const blockHeight = (endIndex - startIndex) * SLOT_HEIGHT;
-                      return (
-                        <View
-                          key={block.id}
-                          style={[
-                            styles.courseBlock,
-                            {
-                              top: startIndex * SLOT_HEIGHT,
-                              height: blockHeight,
-                              backgroundColor: color,
-                            },
-                          ]}
-                        />
-                      );
-                    })}
-                </View>
-              ))}
-            </View>
+                {draftBlocks
+                  .filter((block) => block.day === day)
+                  .map((block) => {
+                    const startIndex = timeToIndex(block.start);
+                    const endIndex = timeToIndex(block.end);
+                    if (startIndex < 0 || endIndex <= startIndex) {
+                      return null;
+                    }
+                    const blockHeight = (endIndex - startIndex) * SLOT_HEIGHT;
+                    return (
+                      <View
+                        key={block.id}
+                        style={[
+                          styles.courseBlock,
+                          {
+                            top: startIndex * SLOT_HEIGHT,
+                            height: blockHeight,
+                            backgroundColor: color,
+                          },
+                        ]}
+                      />
+                    );
+                  })}
+              </View>
+            ))}
           </ScrollView>
         </View>
       </ScrollView>
@@ -2650,6 +2804,10 @@ const createStyles = (COLORS: ThemeColors) =>
       borderColor: COLORS.borderSubtle,
       alignSelf: "stretch",
     },
+    scheduleViewSegmentContainer: {
+      minWidth: 150,
+      alignSelf: "flex-start",
+    },
     segmentItem: {
       flex: 1,
       alignItems: "center",
@@ -2845,6 +3003,12 @@ const createStyles = (COLORS: ThemeColors) =>
     gridScroll: {
       paddingBottom: 4,
     },
+    gridHorizontalScroll: {
+      flex: 1,
+    },
+    gridDaysRow: {
+      flexDirection: "row",
+    },
     gridHeaderRow: {
       flexDirection: "row",
       backgroundColor: COLORS.subtleCard,
@@ -3023,7 +3187,6 @@ const createStyles = (COLORS: ThemeColors) =>
       textAlign: "center",
     },
     dateStripContainer: {
-      paddingVertical: SPACING.xs,
       gap: 0,
     },
     dateStripItem: {
@@ -3086,7 +3249,7 @@ const createStyles = (COLORS: ThemeColors) =>
       borderRadius: 22,
       borderWidth: 1,
       borderColor: COLORS.borderSubtle,
-      padding: SPACING.sm,
+      paddingHorizontal: 0,
       maxHeight: 600,
       overflow: "hidden",
     },
