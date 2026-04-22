@@ -1,0 +1,19 @@
+Mentora Portfolio (GitHub Pages)
+
+Files in this folder:
+- `index.html`: Main single-page portfolio.
+- `styles.css`: Portfolio styling.
+- `script.js`: Small navigation behavior for active section state.
+
+Deployment steps:
+1. Push this repository to GitHub.
+2. Open repository `Settings` -> `Pages`.
+3. Set `Source` to `Deploy from a branch`.
+4. Select branch `main` and folder `/docs`.
+5. Save and wait for GitHub Pages to publish.
+
+Updating links later:
+- In `index.html`, uncomment each placeholder `<a>` tag under:
+  - `Team Members` for LinkedIn and GitHub profile links.
+  - `Reports` for report document URLs.
+- Replace placeholder URLs with real links, then commit and push.
