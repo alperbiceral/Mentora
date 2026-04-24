@@ -8,7 +8,7 @@ import random
 
 from config import GEMINI_API_KEY, GEMINI_MODEL
 from deps import get_db
-from models import Course, CourseBlock, Personality, Emotion, StudySession, User
+from models import Course, CourseBlock, Personality, Emotion, StudyHistory, StudySession, User
 from schemas import WeeklyStudyHoursRequest
 from google import genai
 
@@ -39,6 +39,39 @@ async def create_local_schedule(
     user = db.query(User).filter(User.username == username).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+
+    # Clear old scheduled sessions before creating a fresh plan.
+    try:
+        existing_session_ids = [
+            sid
+            for (sid,) in db.query(StudySession.session_id)
+            .filter(StudySession.username == username)
+            .all()
+        ]
+
+        if existing_session_ids:
+            db.query(StudyHistory).filter(
+                StudyHistory.study_session_id.in_(existing_session_ids)
+            ).update(
+                {StudyHistory.study_session_id: None},
+                synchronize_session=False,
+            )
+
+            deleted_sessions = (
+                db.query(StudySession)
+                .filter(StudySession.username == username)
+                .delete(synchronize_session=False)
+            )
+            db.commit()
+            logger.info(
+                "Cleared %d existing study sessions for user %s before scheduling",
+                deleted_sessions,
+                username,
+            )
+    except Exception:
+        db.rollback()
+        logger.exception("Failed to clear existing sessions for user %s", username)
+        raise HTTPException(status_code=500, detail="Failed to reset previous schedule")
 
     # Personality (most recent)
     personality = (
