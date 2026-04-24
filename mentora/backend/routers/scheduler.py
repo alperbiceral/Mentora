@@ -40,6 +40,8 @@ async def create_local_schedule(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    user_history_records: list[StudyHistory] = []
+
     # Clear old scheduled sessions before creating a fresh plan.
     try:
         existing_session_ids = [
@@ -50,6 +52,12 @@ async def create_local_schedule(
         ]
 
         if existing_session_ids:
+            user_history_records = (
+                db.query(StudyHistory)
+                .filter(StudyHistory.study_session_id.in_(existing_session_ids))
+                .all()
+            )
+
             db.query(StudyHistory).filter(
                 StudyHistory.study_session_id.in_(existing_session_ids)
             ).update(
@@ -268,6 +276,48 @@ async def create_local_schedule(
     effective_focus_credit = int(round(focus_base * (0.85 + 0.45 * C - 0.25 * N + 0.2 * max(0.0, energy_norm))))
     effective_focus_credit = max(15, min(40, effective_focus_credit))
 
+    # --- Study history effect on focus/break ---
+    # Note: history is user-scoped through previous study_session_id links.
+    recent_cutoff = today - timedelta(days=30)
+    recent_history = [
+        h
+        for h in user_history_records
+        if h.date and h.date >= recent_cutoff and (h.study_duration or 0) > 0
+    ]
+
+    history_consistency = min(1.0, len(recent_history) / 20.0) if recent_history else 0.0
+    history_avg_duration = (
+        sum(h.study_duration for h in recent_history) / len(recent_history)
+        if recent_history
+        else 0.0
+    )
+
+    # Per-course duration tendency from history.
+    course_history_avg: dict[str, float] = {}
+    course_duration_acc: dict[str, list[float]] = {}
+    for h in recent_history:
+        key = (h.course_name or "").strip().lower()
+        if not key:
+            continue
+        course_duration_acc.setdefault(key, []).append(float(h.study_duration))
+    for k, vals in course_duration_acc.items():
+        if vals:
+            course_history_avg[k] = sum(vals) / len(vals)
+
+    # Global history bias: longer historical sessions increase suggested focus, shorter reduce it.
+    if history_avg_duration > 0:
+        global_history_bias = int(round((history_avg_duration - focus_base) * 0.25))
+        focus_base = max(
+            MIN_FOCUS_PER_SESSION,
+            min(MAX_FOCUS_PER_SESSION, focus_base + max(-8, min(8, global_history_bias))),
+        )
+
+    # Consistent recent studying narrows variability for steadier routines.
+    if history_consistency >= 0.7:
+        focus_variance = max(1, focus_variance - 2)
+    elif history_consistency <= 0.2:
+        focus_variance = min(8, focus_variance + 1)
+
     # --- Build slot maps for each day ---
     day_start_and_slots: dict = {}
     available_days: list = []
@@ -408,9 +458,18 @@ async def create_local_schedule(
     # =========================================================
     session_assignments = []  # list of dicts: {course, focus, duration_minutes}
 
-    def build_focus_for_duration(duration_minutes: int) -> int:
+    def build_focus_for_duration(duration_minutes: int, course_name: str) -> int:
         if duration_minutes <= 30:
             return 15
+
+        course_key = (course_name or "").strip().lower()
+        course_duration_bias = 0
+        if course_key in course_history_avg:
+            course_duration_bias = int(
+                round((course_history_avg[course_key] - focus_base) * 0.2)
+            )
+
+        consistency_bias = int(round((history_consistency - 0.5) * 4))
         raw_focus = int(
             round(
                 (duration_minutes * 0.5)
@@ -418,6 +477,8 @@ async def create_local_schedule(
                 - (8 * (N - 0.5))
                 + (5 * energy_norm)
                 + (2 * (E - 0.5))
+                + course_duration_bias
+                + consistency_bias
             )
         )
         max_focus = max(MIN_FOCUS_PER_SESSION, duration_minutes - MIN_BREAK_PER_SESSION)
@@ -437,7 +498,7 @@ async def create_local_schedule(
                 {
                     "course": cr,
                     "duration_minutes": duration_minutes,
-                    "focus": build_focus_for_duration(duration_minutes),
+                    "focus": build_focus_for_duration(duration_minutes, cr["name"]),
                 }
             )
 
