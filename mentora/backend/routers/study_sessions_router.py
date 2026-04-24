@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from datetime import date as date_cls
+from datetime import date as date_cls, datetime
 
 from deps import get_db
-from models import Profile, StudySession, User, Personality, Emotion
-from schemas import StudySessionCreate, StudySessionResponse
+from models import Profile, StudySession, StudyHistory, User, Personality, Emotion
+from schemas import StudySessionCreate, StudySessionResponse, StudyHistoryCreate, StudyHistoryResponse
 
 router = APIRouter(prefix="/study-sessions", tags=["study-sessions"])
 
@@ -47,6 +47,21 @@ async def create_session(payload: StudySessionCreate, db: Session = Depends(get_
     db.commit()
     db.refresh(session)
     return session
+
+
+@router.post("/history", response_model=StudyHistoryResponse)
+async def create_study_history(payload: StudyHistoryCreate, db: Session = Depends(get_db)):
+    if payload.study_duration <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Study duration must be positive",
+        )
+
+    history = StudyHistory(**payload.model_dump())
+    db.add(history)
+    db.commit()
+    db.refresh(history)
+    return history
 
 
 def get_latest_personality_for_user(username: str, db: Session):
