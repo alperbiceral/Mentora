@@ -182,15 +182,16 @@ async def create_local_schedule(
                 valid.append(i)
         return valid
 
-    # --- Compute upcoming week dates ---
+    # --- Compute current week dates ---
     today_date = date.today()
-    days_until_next_monday = 7 - today_date.weekday()
-    next_monday = today_date + timedelta(days=days_until_next_monday)
+    current_monday = today_date - timedelta(days=today_date.weekday())
     week_days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
     upcoming_week_dates = {
-        dname: (next_monday + timedelta(days=i)).isoformat()
+        dname: (current_monday + timedelta(days=i)).isoformat()
         for i, dname in enumerate(week_days)
     }
+    # Only schedule from today through Sunday (remaining days in this week).
+    schedulable_days = week_days[today_date.weekday() :]
 
     # --- Build course records with weekly importance weights ---
     # Importance is the only course-level weighting signal now.
@@ -237,7 +238,7 @@ async def create_local_schedule(
     # --- Build slot maps for each day ---
     day_start_and_slots: dict = {}
     available_days: list = []
-    for d in week_days:
+    for d in schedulable_days:
         start_dt, slots = build_day_slots(d)
         day_start_and_slots[d] = (start_dt, slots)
         if any(slots):
@@ -246,10 +247,10 @@ async def create_local_schedule(
     if not available_days:
         logger.warning("No free slots for user %s; falling back to default window", username)
         default_slots = int(((DEFAULT_DAY_END - DEFAULT_DAY_START) * 60) / SLOT_MINUTES)
-        for d in week_days:
+        for d in schedulable_days:
             base_dt = datetime.combine(date.fromisoformat(upcoming_week_dates[d]), datetime.min.time()).replace(hour=DEFAULT_DAY_START)
             day_start_and_slots[d] = (base_dt, [True] * default_slots)
-        available_days = week_days[:]
+        available_days = schedulable_days[:]
 
     # =========================================================
     # PHASE 1 – Use the user-provided weekly study hours directly
@@ -509,7 +510,7 @@ async def create_local_schedule(
             return None
 
     created = []
-    for d in week_days:
+    for d in schedulable_days:
         sessions_today = day_session_map.get(d, [])
         if not sessions_today:
             continue

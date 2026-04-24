@@ -97,6 +97,8 @@ export default function StudyScreen() {
   const [currentUsername, setCurrentUsername] = useState<string | null>(null);
   const [sessions, setSessions] = useState<StudySession[]>([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
+  const [selectedSession, setSelectedSession] =
+    useState<StudySession | null>(null);
 
   // Streak Question state
   const [dailyQuestion, setDailyQuestion] = useState<DailyQuestion | null>(
@@ -148,8 +150,10 @@ export default function StudyScreen() {
     if (activeTab === "streak" && currentUsername) {
       loadDailyQuestion();
       loadStreak();
+    } else if ((activeTab === "normal" || activeTab === "pomodoro") && currentUsername) {
+      loadSessions();
     }
-  }, [activeTab, currentUsername]);
+  }, [activeTab, currentUsername, loadSessions]);
 
   const focusMinutes = useMemo(
     () => parsePositiveInt(pomodoroFocusInput, 25),
@@ -357,6 +361,32 @@ export default function StudyScreen() {
     setStudySeconds(0);
   };
 
+  const applySelectedSessionToTimer = (session: StudySession) => {
+    const selectedMinutes = Math.max(
+      1,
+      Math.round(session.focus_minutes ?? session.duration_minutes),
+    );
+
+    if (session.mode === "pomodoro") {
+      setActiveTab("pomodoro");
+      setPomodoroFocusInput(String(selectedMinutes));
+      if ((session.break_minutes ?? 0) > 0) {
+        setPomodoroBreakInput(String(session.break_minutes));
+      }
+      if ((session.cycles ?? 0) > 0) {
+        setPomodoroCyclesInput(String(session.cycles));
+      }
+      return;
+    }
+
+    setActiveTab("normal");
+    setNormalMode("countdown");
+    const hours = Math.floor(selectedMinutes / 60);
+    const minutes = selectedMinutes % 60;
+    setNormalHoursInput(String(hours));
+    setNormalMinutesInput(String(minutes));
+  };
+
   const finalizeSession = () => {
     if (studySecondsRef.current <= 0) {
       handleReset();
@@ -374,8 +404,28 @@ export default function StudyScreen() {
       return;
     }
 
+    const today = new Date().toISOString().split("T")[0];
+    const timerType =
+      selectedSession?.timer_type ??
+      selectedSession?.course_name ??
+      (activeTab === "pomodoro" ? "pomodoro" : normalMode);
+
+    // If the user studied a selected scheduled session, log elapsed study time directly to history.
+    if (selectedSession) {
+      handleReset();
+      createStudyHistory({
+        course_name: timerType.charAt(0).toUpperCase() + timerType.slice(1),
+        study_duration: durationMinutes,
+        date: today,
+        study_session_id: selectedSession.session_id,
+      });
+      setSelectedSession(null);
+      return;
+    }
+
     const payload: StudySessionCreate = {
       username: currentUsername,
+      course_name: timerType,
       mode: activeTab,
       timer_type: activeTab === "pomodoro" ? "pomodoro" : normalMode,
       duration_minutes: durationMinutes,
@@ -388,7 +438,14 @@ export default function StudyScreen() {
 
     handleReset();
 
-    void recordSession(payload, loadSessions);
+    recordSession(payload, () => {
+      createStudyHistory({
+        course_name: timerType.charAt(0).toUpperCase() + timerType.slice(1),
+        study_duration: durationMinutes,
+        date: today,
+      });
+      loadSessions();
+    });
   };
 
   const primaryActionLabel = isRunning
@@ -979,9 +1036,10 @@ export default function StudyScreen() {
               <Text style={styles.statsTitle}>Recent sessions</Text>
               {loadingSessions ? (
                 <Text style={styles.emptyText}>Loading...</Text>
-              ) : sessions.filter((s) => new Date(s.started_at) <= new Date())
+              ) : sessions
+                  .filter((s) => isSessionToday(s))
                   .length === 0 ? (
-                <Text style={styles.emptyText}>No sessions yet</Text>
+                <Text style={styles.emptyText}>No sessions today yet</Text>
               ) : (
                 <View style={styles.sessionListContainer}>
                   <Animated.ScrollView
@@ -1021,16 +1079,28 @@ export default function StudyScreen() {
                       }}
                     >
                       {sessions
-                        .filter((s) => new Date(s.started_at) <= new Date())
+                        .filter((s) => isSessionToday(s))
                         .sort(
                           (a, b) =>
                             new Date(b.started_at).getTime() -
                             new Date(a.started_at).getTime(),
                         )
                         .map((session) => (
-                          <View
+                          <Pressable
                             key={session.session_id}
-                            style={styles.sessionItem}
+                            onPress={() => {
+                              if (selectedSession?.session_id === session.session_id) {
+                                setSelectedSession(null);
+                                return;
+                              }
+                              setSelectedSession(session);
+                              applySelectedSessionToTimer(session);
+                            }}
+                            style={[
+                              styles.sessionItem,
+                              selectedSession?.session_id === session.session_id &&
+                                styles.sessionItemSelected,
+                            ]}
                           >
                             <View style={styles.sessionIcon}>
                               <Ionicons
@@ -1044,17 +1114,34 @@ export default function StudyScreen() {
                               />
                             </View>
                             <View style={styles.sessionInfo}>
-                              <Text style={styles.sessionName}>
-                                {session.mode === "pomodoro"
-                                  ? "Pomodoro"
-                                  : "Focus"}
+                              <Text
+                                style={[styles.sessionName]}
+                              >
+                                {session.timer_type || session.course_name
+                                  ? (session.timer_type ?? session.course_name ?? "")
+                                      .charAt(0)
+                                      .toUpperCase() +
+                                    (session.timer_type ?? session.course_name ?? "").slice(1)
+                                  : session.mode === "pomodoro"
+                                    ? "Pomodoro"
+                                    : "Focus"}
                               </Text>
                               <Text style={styles.sessionMeta}>
                                 {formatDuration(session.duration_minutes)} •{" "}
                                 {formatDateTime(session.started_at)}
                               </Text>
+                              {session.focus_minutes && (
+                                <Text style={styles.sessionMeta}>
+                                  Focus: {session.focus_minutes} min
+                                </Text>
+                              )}
+                              {selectedSession?.session_id === session.session_id && (
+                                <Text style={styles.sessionSelectedText}>
+                                  Selected for timer
+                                </Text>
+                              )}
                             </View>
-                          </View>
+                          </Pressable>
                         ))}
                     </View>
                   </Animated.ScrollView>
@@ -1091,6 +1178,7 @@ export default function StudyScreen() {
 type StudySession = {
   session_id: number;
   username: string;
+  course_name?: string | null;
   mode: string;
   timer_type?: string | null;
   duration_minutes: number;
@@ -1104,6 +1192,7 @@ type StudySession = {
 
 type StudySessionCreate = {
   username: string;
+  course_name?: string;
   mode: string;
   timer_type?: string;
   duration_minutes: number;
@@ -1240,6 +1329,42 @@ const recordSession = async (
   } catch (error) {
     const message = error instanceof Error ? error.message : "Request failed";
     Alert.alert("Error", message);
+  }
+};
+
+const getTodayDate = () => {
+  const today = new Date();
+  return today.toISOString().split("T")[0];
+};
+
+const isSessionToday = (session: StudySession): boolean => {
+  const sessionDate = session.started_at.split("T")[0];
+  const todayDate = getTodayDate();
+  return sessionDate === todayDate;
+};
+
+const createStudyHistory = async (payload: {
+  course_name: string;
+  study_duration: number;
+  date: string;
+  study_session_id?: number;
+}) => {
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/study-sessions/history`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      },
+    );
+    if (!response.ok) {
+      throw new Error("Failed to create study history");
+    }
+  } catch (error) {
+    console.error("Error creating study history:", error);
   }
 };
 
@@ -1431,23 +1556,6 @@ const createStyles = (COLORS: ThemeColors, isOnBreak: boolean) =>
     secondaryButtonTextDisabled: {
       color: COLORS.textMuted,
     },
-    statsSection: {
-      marginTop: SPACING.lg,
-    },
-    statsTitle: {
-      fontSize: 15,
-      fontWeight: "700",
-      color: COLORS.textPrimary,
-      marginBottom: SPACING.sm,
-    },
-    statsRow: {
-      flexDirection: "row",
-      gap: SPACING.sm,
-    },
-    emptyText: {
-      fontSize: 13,
-      color: COLORS.textMuted,
-    },
     segmentedControl: {
       flexDirection: "row",
       backgroundColor: COLORS.subtleCard,
@@ -1509,43 +1617,18 @@ const createStyles = (COLORS: ThemeColors, isOnBreak: boolean) =>
     toggleTextActive: {
       color: COLORS.textPrimary,
     },
-    inputRow: {
-      flexDirection: "row",
-      gap: SPACING.sm,
-    },
-    inputGroup: {
-      flex: 1,
-    },
-    inputLabel: {
-      fontSize: 12,
-      color: COLORS.textSecondary,
-      marginBottom: 6,
-    },
-    inputField: {
-      height: 44,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: COLORS.borderSubtle,
-      paddingHorizontal: 12,
-      color: COLORS.textPrimary,
-      backgroundColor: COLORS.inputBg,
-      fontSize: 14,
-      fontWeight: "600",
-    },
-    todoCard: {
+    statsSection: {
       marginTop: SPACING.lg,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: SPACING.sm,
-      backgroundColor: COLORS.card,
-      borderRadius: 16,
-      padding: SPACING.md,
-      borderWidth: 1,
-      borderColor: COLORS.borderSoft,
     },
-    todoText: {
-      color: COLORS.textSecondary,
+    statsTitle: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: COLORS.textPrimary,
+      marginBottom: SPACING.sm,
+    },
+    emptyText: {
       fontSize: 13,
+      color: COLORS.textMuted,
     },
     sessionList: {
       gap: SPACING.sm,
@@ -1586,6 +1669,10 @@ const createStyles = (COLORS: ThemeColors, isOnBreak: boolean) =>
       borderColor: COLORS.borderSoft,
       backgroundColor: COLORS.card,
     },
+    sessionItemSelected: {
+      borderColor: COLORS.accent,
+      backgroundColor: "rgba(109,94,247,0.12)",
+    },
     sessionIcon: {
       width: 36,
       height: 36,
@@ -1606,6 +1693,50 @@ const createStyles = (COLORS: ThemeColors, isOnBreak: boolean) =>
       fontSize: 12,
       color: COLORS.textSecondary,
       marginTop: 2,
+    },
+    sessionSelectedText: {
+      marginTop: 4,
+      fontSize: 11,
+      fontWeight: "700",
+      color: COLORS.accent,
+    },
+    inputRow: {
+      flexDirection: "row",
+      gap: SPACING.sm,
+    },
+    inputGroup: {
+      flex: 1,
+    },
+    inputLabel: {
+      fontSize: 12,
+      color: COLORS.textSecondary,
+      marginBottom: 6,
+    },
+    inputField: {
+      height: 44,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: COLORS.borderSubtle,
+      paddingHorizontal: 12,
+      color: COLORS.textPrimary,
+      backgroundColor: COLORS.inputBg,
+      fontSize: 14,
+      fontWeight: "600",
+    },
+    todoCard: {
+      marginTop: SPACING.lg,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: SPACING.sm,
+      backgroundColor: COLORS.card,
+      borderRadius: 16,
+      padding: SPACING.md,
+      borderWidth: 1,
+      borderColor: COLORS.borderSoft,
+    },
+    todoText: {
+      color: COLORS.textSecondary,
+      fontSize: 13,
     },
     questionLoadingContainer: {
       marginTop: SPACING.lg,

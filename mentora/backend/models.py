@@ -84,6 +84,7 @@ class StudySession(Base):
 
     session_id: Mapped[int] = mapped_column(primary_key=True)
     username: Mapped[str] = mapped_column(String(50), nullable=False)
+    course_name: Mapped[Optional[str]] = mapped_column(String(200))
     mode: Mapped[str] = mapped_column(String(20), nullable=False)
     timer_type: Mapped[Optional[str]] = mapped_column(String(20))
     duration_minutes: Mapped[float] = mapped_column(Float, nullable=False)
@@ -92,6 +93,23 @@ class StudySession(Base):
     cycles: Mapped[Optional[int]] = mapped_column(Integer)
     started_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     ended_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+    )
+
+
+class StudyHistory(Base):
+    __tablename__ = "study_history"
+
+    history_id: Mapped[int] = mapped_column(primary_key=True)
+    study_session_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("study_sessions.session_id"), nullable=True
+    )
+    course_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    study_duration: Mapped[float] = mapped_column(Float, nullable=False)
+    date: Mapped[date] = mapped_column(Date, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         nullable=False,
