@@ -24,6 +24,7 @@ import {
   View,
   type ViewStyle,
 } from "react-native";
+import Slider from "@react-native-community/slider";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import { useTheme } from "../../theme/ThemeProvider";
@@ -45,6 +46,7 @@ const SPACING = {
 };
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
+const OPEN_GENERATE_MODAL_KEY = "mentora.openGenerateScheduleModal";
 
 type Mode = "schedule" | "courses";
 
@@ -58,6 +60,7 @@ type Course = {
   instructor: string;
   location: string;
   color: string;
+  importanceLevel: number;
   details: string[];
 };
 
@@ -115,6 +118,7 @@ type CourseApi = {
   instructor?: string | null;
   location?: string | null;
   color?: string | null;
+  importance_level?: number | null;
   blocks: CourseBlockApi[];
 };
 
@@ -230,7 +234,37 @@ export default function ScheduleScreen() {
   const [studyPlan, setStudyPlan] =
     useState<Record<WeekdayKey, StudyBlock[]>>(STUDY_PLAN);
   const [loadingStudyPlan, setLoadingStudyPlan] = useState(false);
+  const [studyPlanRefreshTick, setStudyPlanRefreshTick] = useState(0);
+  const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
+  const [isGeneratingSchedule, setIsGeneratingSchedule] = useState(false);
+  const [generateModalError, setGenerateModalError] = useState<string | null>(
+    null,
+  );
+  const [weeklyHoursInput, setWeeklyHoursInput] = useState("20");
+  const [importanceByCourse, setImportanceByCourse] = useState<
+    Record<string, number>
+  >({});
+  const [pendingOpenGenerateModal, setPendingOpenGenerateModal] =
+    useState(false);
   const draftColor = COURSE_COLORS[courses.length % COURSE_COLORS.length];
+
+  const clampImportance = useCallback((value: number) => {
+    if (!Number.isFinite(value)) {
+      return 0;
+    }
+    return Math.max(0, Math.min(5, Math.round(value)));
+  }, []);
+
+  const openGenerateScheduleModal = useCallback(() => {
+    const defaults: Record<string, number> = {};
+    courses.forEach((course) => {
+      defaults[course.id] = clampImportance(course.importanceLevel);
+    });
+    setImportanceByCourse(defaults);
+    setWeeklyHoursInput("20");
+    setGenerateModalError(null);
+    setIsGenerateModalOpen(true);
+  }, [clampImportance, courses]);
 
   useEffect(() => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -285,6 +319,7 @@ export default function ScheduleScreen() {
         instructor: course.instructor ?? "",
         location: course.location ?? "",
         color: course.color ?? COURSE_COLORS[0],
+        importanceLevel: Number(course.importance_level ?? 0),
         details: [],
       }));
       const mappedBlocks: CourseBlock[] = data.flatMap((course) =>
@@ -311,6 +346,43 @@ export default function ScheduleScreen() {
       loadCourses();
     }, []),
   );
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      const checkOpenFlag = async () => {
+        const value = await AsyncStorage.getItem(OPEN_GENERATE_MODAL_KEY);
+        if (!active || value !== "1") {
+          return;
+        }
+        await AsyncStorage.removeItem(OPEN_GENERATE_MODAL_KEY);
+        if (!active) {
+          return;
+        }
+        setPendingOpenGenerateModal(true);
+      };
+      checkOpenFlag();
+      return () => {
+        active = false;
+      };
+    }, []),
+  );
+
+  useEffect(() => {
+    if (!pendingOpenGenerateModal || loadingCourses) {
+      return;
+    }
+    setMode("schedule");
+    setScheduleView("weekly");
+    openGenerateScheduleModal();
+    setPendingOpenGenerateModal(false);
+  }, [
+    pendingOpenGenerateModal,
+    loadingCourses,
+    openGenerateScheduleModal,
+    setMode,
+    setScheduleView,
+  ]);
 
   // helpers: parse DB timestamp/ISO to Date, then to HH:MM
   const parseTimestampToDate = (s?: string | null) => {
@@ -354,8 +426,7 @@ export default function ScheduleScreen() {
     return `${String(rHour).padStart(2, "0")}:${String(rMin).padStart(2, "0")}`;
   }
 
-  useEffect(() => {
-    async function loadStudySessions() {
+  const loadStudySessions = useCallback(async () => {
       setLoadingStudyPlan(true);
       try {
         const username = await AsyncStorage.getItem("mentora.username");
@@ -480,12 +551,90 @@ export default function ScheduleScreen() {
       } finally {
         setLoadingStudyPlan(false);
       }
-    }
+    }, [courses]);
 
+  useEffect(() => {
     if (!loadingCourses) {
       loadStudySessions();
     }
-  }, [loadingCourses, courses]);
+  }, [loadingCourses, loadStudySessions, studyPlanRefreshTick]);
+
+  const handleGenerateScheduleWithInputs = useCallback(async () => {
+    try {
+      const username = await AsyncStorage.getItem("mentora.username");
+      if (!username) {
+        setGenerateModalError("Please sign in first.");
+        return;
+      }
+      if (courses.length === 0) {
+        setGenerateModalError("Add at least one course before generating.");
+        return;
+      }
+
+      const parsedHours = Number(weeklyHoursInput.replace(",", "."));
+      if (!Number.isFinite(parsedHours) || parsedHours <= 0) {
+        setGenerateModalError("Weekly study hours must be a positive number.");
+        return;
+      }
+
+      setIsGeneratingSchedule(true);
+      setGenerateModalError(null);
+
+      const importancePayload = {
+        username,
+        courses: courses.map((course) => ({
+          course_id: Number(course.id),
+          importance_level: clampImportance(
+            importanceByCourse[course.id] ?? course.importanceLevel,
+          ),
+        })),
+      };
+
+      const importanceRes = await fetch(`${API_BASE_URL}/courses/importance-levels`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(importancePayload),
+      });
+      if (!importanceRes.ok) {
+        const body = await importanceRes.json().catch(() => null);
+        throw new Error(body?.detail || "Failed to update importance levels");
+      }
+
+      const schedulerRes = await fetch(
+        `${API_BASE_URL}/scheduler/${encodeURIComponent(username)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ weekly_study_hours: parsedHours }),
+        },
+      );
+      if (!schedulerRes.ok) {
+        const body = await schedulerRes.json().catch(() => null);
+        throw new Error(body?.detail || "Failed to generate schedule");
+      }
+
+      const schedulerData = await schedulerRes.json().catch(() => null);
+      setIsGenerateModalOpen(false);
+      await loadCourses();
+      setStudyPlanRefreshTick((prev) => prev + 1);
+      Alert.alert(
+        "Schedule generated",
+        `Created ${schedulerData?.created ?? 0} sessions.`,
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to generate schedule";
+      setGenerateModalError(message);
+    } finally {
+      setIsGeneratingSchedule(false);
+    }
+  }, [
+    clampImportance,
+    courses,
+    importanceByCourse,
+    loadCourses,
+    weeklyHoursInput,
+  ]);
 
   async function handleImportSchedule() {
     if (isImporting) {
@@ -560,6 +709,7 @@ export default function ScheduleScreen() {
         instructor: course.instructor ?? "",
         location: course.location ?? "",
         color: course.color ?? COURSE_COLORS[0],
+        importanceLevel: Number(course.importance_level ?? 0),
         details: [],
       }));
       const mappedBlocks: CourseBlock[] = data.flatMap((course) =>
@@ -674,6 +824,7 @@ export default function ScheduleScreen() {
         instructor: savedCourse.instructor ?? "",
         location: savedCourse.location ?? "",
         color: savedCourse.color ?? draftColor,
+        importanceLevel: Number(savedCourse.importance_level ?? 0),
         details: [],
       };
       const mappedBlocks: CourseBlock[] = savedCourse.blocks.map((block) => ({
@@ -961,6 +1112,18 @@ export default function ScheduleScreen() {
               >
                 <View style={{ flexDirection: "row", gap: 8 }}>
                   <Pressable
+                    style={styles.generateButton}
+                    onPress={openGenerateScheduleModal}
+                    hitSlop={6}
+                  >
+                    <Ionicons
+                      name="sparkles-outline"
+                      size={15}
+                      color={COLORS.success}
+                    />
+                    <Text style={styles.generateButtonText}>Generate</Text>
+                  </Pressable>
+                  <Pressable
                     style={styles.clearScheduleButton}
                     onPress={handleClearSchedule}
                     disabled={isClearingSchedule}
@@ -1075,6 +1238,115 @@ export default function ScheduleScreen() {
                     >
                       <Text style={styles.primaryButtonText}>
                         {isImporting ? "Importing..." : "Choose image"}
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
+              </Modal>
+
+              <Modal
+                animationType="fade"
+                transparent
+                visible={isGenerateModalOpen}
+                onRequestClose={() => setIsGenerateModalOpen(false)}
+              >
+                <View style={styles.importModalBackdrop}>
+                  <View style={styles.importModalCard}>
+                    <View style={styles.importModalHeader}>
+                      <Text style={styles.importModalTitle}>Generate Schedule</Text>
+                      <Pressable
+                        onPress={() => setIsGenerateModalOpen(false)}
+                        hitSlop={8}
+                        disabled={isGeneratingSchedule}
+                      >
+                        <Ionicons
+                          name="close"
+                          size={18}
+                          color={COLORS.textSecondary}
+                        />
+                      </Pressable>
+                    </View>
+
+                    <Text style={styles.importModalText}>
+                      Set weekly hours and per-course importance (0-5).
+                    </Text>
+
+                    <View style={styles.generateHoursRow}>
+                      <Text style={styles.formLabel}>Total weekly study hours</Text>
+                      <TextInput
+                        value={weeklyHoursInput}
+                        onChangeText={setWeeklyHoursInput}
+                        keyboardType="numeric"
+                        placeholder="20"
+                        placeholderTextColor={COLORS.textMuted}
+                        style={styles.generateHoursInput}
+                        editable={!isGeneratingSchedule}
+                      />
+                    </View>
+
+                    <ScrollView
+                      style={styles.generateScroll}
+                      showsVerticalScrollIndicator={false}
+                    >
+                      {courses.length === 0 ? (
+                        <Text style={styles.emptyText}>No courses found.</Text>
+                      ) : (
+                        courses.map((course) => {
+                          const currentValue = clampImportance(
+                            importanceByCourse[course.id] ?? course.importanceLevel,
+                          );
+                          return (
+                            <View
+                              key={`importance-${course.id}`}
+                              style={styles.generateCourseRow}
+                            >
+                              <View style={styles.generateCourseHeader}>
+                                <Text
+                                  style={styles.generateCourseName}
+                                  numberOfLines={1}
+                                >
+                                  {getCourseCodeLabel(course)}
+                                </Text>
+                                <Text style={styles.generateCourseValue}>
+                                  {currentValue}
+                                </Text>
+                              </View>
+                              <Slider
+                                minimumValue={0}
+                                maximumValue={5}
+                                step={1}
+                                value={currentValue}
+                                onValueChange={(value) =>
+                                  setImportanceByCourse((prev) => ({
+                                    ...prev,
+                                    [course.id]: clampImportance(value),
+                                  }))
+                                }
+                                minimumTrackTintColor={COLORS.accent}
+                                maximumTrackTintColor={COLORS.borderSoft}
+                                thumbTintColor={COLORS.accent}
+                                disabled={isGeneratingSchedule}
+                              />
+                            </View>
+                          );
+                        })
+                      )}
+                    </ScrollView>
+
+                    {generateModalError ? (
+                      <Text style={styles.importModalError}>{generateModalError}</Text>
+                    ) : null}
+
+                    <Pressable
+                      style={[
+                        styles.primaryButton,
+                        isGeneratingSchedule && styles.buttonDisabled,
+                      ]}
+                      onPress={handleGenerateScheduleWithInputs}
+                      disabled={isGeneratingSchedule}
+                    >
+                      <Text style={styles.primaryButtonText}>
+                        {isGeneratingSchedule ? "Generating..." : "Generate"}
                       </Text>
                     </Pressable>
                   </View>
@@ -2862,6 +3134,23 @@ const createStyles = (COLORS: ThemeColors) =>
       color: COLORS.accent,
       fontWeight: "600",
     },
+    generateButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 5,
+      paddingVertical: 7,
+      paddingHorizontal: 12,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: COLORS.success + "40",
+      backgroundColor: COLORS.success + "12",
+    },
+    generateButtonText: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: COLORS.success,
+    },
     addCourseButton: {
       flexDirection: "row",
       alignItems: "center",
@@ -3528,6 +3817,49 @@ const createStyles = (COLORS: ThemeColors) =>
     importModalError: {
       fontSize: 12,
       color: COLORS.danger,
+    },
+    generateHoursRow: {
+      gap: 8,
+    },
+    generateHoursInput: {
+      backgroundColor: COLORS.inputBg,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: COLORS.borderSubtle,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      color: COLORS.textPrimary,
+      fontSize: 13,
+    },
+    generateScroll: {
+      maxHeight: 280,
+    },
+    generateCourseRow: {
+      borderWidth: 1,
+      borderColor: COLORS.borderSoft,
+      borderRadius: 12,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      backgroundColor: COLORS.subtleCard,
+      marginBottom: 8,
+    },
+    generateCourseHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 4,
+    },
+    generateCourseName: {
+      flex: 1,
+      fontSize: 13,
+      fontWeight: "600",
+      color: COLORS.textPrimary,
+      marginRight: 10,
+    },
+    generateCourseValue: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: COLORS.accent,
     },
     courseCardList: {
       gap: SPACING.sm,
