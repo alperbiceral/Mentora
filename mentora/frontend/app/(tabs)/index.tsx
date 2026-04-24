@@ -43,6 +43,7 @@ const CHATS_LAST_SEEN_KEY = "mentora.chatsNotifLastSeenAt";
 const CHAT_LAST_SEEN_KEY = "mentora.chatLastSeenByThread";
 const CHAT_UNREAD_BY_THREAD_KEY = "mentora.chatUnreadByThread";
 const CHAT_UNREAD_TOTAL_KEY = "mentora.chatUnreadTotal";
+const OPEN_GENERATE_MODAL_KEY = "mentora.openGenerateScheduleModal";
 const AI_ROBOT_ANIMATION = require("../../assets/lottie/mentora_ai_friendly.json");
 
 type Profile = {
@@ -1318,20 +1319,7 @@ const QuickActions = ({ styles, colors }: { styles: any; colors: ThemeColors }) 
       }
 
       setIsGenerating(true);
-
-      const res = await fetch(
-        `${API_BASE_URL}/scheduler/${encodeURIComponent(username)}`,
-        { method: "POST" },
-      );
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        throw new Error(body?.detail || "Failed to generate schedule");
-      }
-
-      const data = await res.json().catch(() => null);
-      const created = data?.created ?? 0;
-      Alert.alert("Schedule generated", `Created ${created} sessions.`);
+      await AsyncStorage.setItem(OPEN_GENERATE_MODAL_KEY, "1");
       router.push("/(tabs)/schedule");
     } catch (err: any) {
       Alert.alert("Error", err?.message || String(err));

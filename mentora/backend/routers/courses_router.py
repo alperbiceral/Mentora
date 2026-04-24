@@ -10,7 +10,12 @@ from config import GEMINI_API_KEY, GEMINI_MODEL
 from deps import get_db
 from datetime import date, datetime, timedelta
 from models import Course, CourseBlock, Profile, StudySession
-from schemas import CourseCreate, CourseResponse, CourseUpdate
+from schemas import (
+    CourseCreate,
+    CourseImportanceBulkUpdate,
+    CourseResponse,
+    CourseUpdate,
+)
 from google import genai
 from google.genai import types
 
@@ -600,12 +605,13 @@ async def create_course(payload: CourseCreate, db: Session = Depends(get_db)):
         )
 
     derived_importance = _extract_ects_value(payload.description)
+    default_importance = (derived_importance / 2) if derived_importance else None
     course = Course(
         username=payload.username,
         name=payload.name,
         section=(payload.section or "").strip() or None,
         description=payload.description,
-        importance_level=payload.importance_level if payload.importance_level is not None else derived_importance,
+        importance_level=payload.importance_level if payload.importance_level is not None else default_importance,
         instructor=payload.instructor,
         location=payload.location,
         color=payload.color,
@@ -646,7 +652,8 @@ async def update_course(
     if payload.importance_level is not None:
         course.importance_level = payload.importance_level
     elif payload.description is not None:
-        course.importance_level = _extract_ects_value(payload.description)
+        ects_value = _extract_ects_value(payload.description)
+        course.importance_level = (ects_value / 2) if ects_value else None
     course.instructor = payload.instructor
     course.location = payload.location
     if payload.color is not None:
@@ -661,6 +668,41 @@ async def update_course(
     db.commit()
     db.refresh(course)
     return course
+
+
+@router.post("/importance-levels")
+async def update_course_importance_levels(
+    payload: CourseImportanceBulkUpdate,
+    db: Session = Depends(get_db),
+):
+    profile = db.query(Profile).filter(Profile.username == payload.username).first()
+    if not profile:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Profile not found",
+        )
+
+    updated_courses = []
+    for item in payload.courses:
+        course = (
+            db.query(Course)
+            .filter(Course.course_id == item.course_id)
+            .filter(Course.username == payload.username)
+            .first()
+        )
+        if not course:
+            continue
+        course.importance_level = item.importance_level
+        updated_courses.append(
+            {
+                "course_id": course.course_id,
+                "name": course.name,
+                "importance_level": course.importance_level,
+            }
+        )
+
+    db.commit()
+    return {"updated": len(updated_courses), "courses": updated_courses}
 
 
 @router.post("/import-schedule", response_model=list[CourseResponse])
@@ -772,12 +814,13 @@ async def import_schedule(
     # Create Course objects from merged data
     created_courses = []
     for index, (_merge_key, course_data) in enumerate(merged_courses.items()):
+        ects_value = _extract_ects_value(course_data["description"])
         course = Course(
             username=username,
             name=course_data["name"],
             section=course_data.get("section"),
             description=course_data["description"],
-            importance_level=_extract_ects_value(course_data["description"]),
+            importance_level=(ects_value / 2) if ects_value else None,
             instructor="",
             location=course_data["location"],
             color=COURSE_COLORS[index % len(COURSE_COLORS)],
@@ -881,7 +924,8 @@ async def import_syllabus(
         )
 
     course.description = description
-    course.importance_level = _extract_ects_value(description)
+    ects_value = _extract_ects_value(description)
+    course.importance_level = (ects_value / 2) if ects_value else None
     db.commit()
     db.refresh(course)
     return course

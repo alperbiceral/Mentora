@@ -18,7 +18,6 @@ class ChangePasswordRequest(BaseModel):
     username: str
     old_password: str
     new_password: str
-    confirm_password: Optional[str] = None
 
 
 class ProfileCreate(BaseModel):
@@ -122,6 +121,20 @@ class CourseUpdate(BaseModel):
     location: Optional[str] = None
     color: Optional[str] = None
     blocks: list[CourseBlockCreate] = []
+
+
+class WeeklyStudyHoursRequest(BaseModel):
+    weekly_study_hours: float
+
+
+class CourseImportanceUpdateItem(BaseModel):
+    course_id: int
+    importance_level: float
+
+
+class CourseImportanceBulkUpdate(BaseModel):
+    username: str
+    courses: list[CourseImportanceUpdateItem]
 
 
 class CourseBlockResponse(BaseModel):
