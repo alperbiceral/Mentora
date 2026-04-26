@@ -10,6 +10,7 @@
   --primary-strong: #7c3aed;
   --border: rgba(124, 58, 237, 0.22);
   --shadow: 0 14px 32px rgba(124, 58, 237, 0.15);
+  --objectives-peek: 220px;
 }
 
 * {
@@ -147,8 +148,8 @@ main {
 
 #objectives {
   width: min(1024px, 100%);
+  margin-top: calc(var(--objectives-peek) * -1);
   position: relative;
-  top: -100px;
   z-index: -1;
 }
 
@@ -162,9 +163,9 @@ main {
   padding: 2rem 20%;
   border: 1px solid rgba(167, 139, 250, 0.36);
   background:
-    radial-gradient(55rem 28rem at 10% 15%, rgba(167, 139, 250, 0.18), transparent 55%),
-    radial-gradient(48rem 26rem at 90% 85%, rgba(139, 92, 246, 0.14), transparent 58%),
-    linear-gradient(165deg, rgba(31, 24, 50, 0.96), rgba(17, 24, 39, 0.98));
+    radial-gradient(55rem 28rem at 10% 15%, rgba(167, 139, 250, 0.28), transparent 55%),
+    radial-gradient(48rem 26rem at 90% 85%, rgba(139, 92, 246, 0.22), transparent 58%),
+    linear-gradient(165deg, rgba(31, 24, 50, 0.995), rgba(17, 24, 39, 1));
   box-shadow: 0 24px 46px rgba(15, 23, 42, 0.4);
   color: #f5f3ff;
   transform: translate3d(0, var(--intro-shift), 0);
@@ -192,9 +193,10 @@ main {
 }
 
 .mentora-placeholder {
-  width: 130px;
-  height: 130px;
+  width: 300px;
+  height: 300px;
   border-radius: 50%;
+  border: 1px solid rgba(124, 58, 237, 0.2);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -540,6 +542,10 @@ main {
 }
 
 @media (max-width: 760px) {
+  :root {
+    --objectives-peek: 120px;
+  }
+
   .site-header {
     position: static;
   }
