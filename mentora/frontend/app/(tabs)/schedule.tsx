@@ -1116,25 +1116,7 @@ export default function ScheduleScreen() {
                     onPress={openGenerateScheduleModal}
                     hitSlop={6}
                   >
-                    <Ionicons
-                      name="sparkles-outline"
-                      size={15}
-                      color={COLORS.success}
-                    />
-                    <Text style={styles.generateButtonText}>Generate</Text>
-                  </Pressable>
-                  <Pressable
-                    style={styles.clearScheduleButton}
-                    onPress={handleClearSchedule}
-                    disabled={isClearingSchedule}
-                    hitSlop={6}
-                  >
-                    <Ionicons
-                      name="trash-outline"
-                      size={15}
-                      color={COLORS.danger}
-                    />
-                    <Text style={styles.clearScheduleText}>Clear</Text>
+                    <Text style={styles.generateButtonText}>Update</Text>
                   </Pressable>
                   <Pressable
                     style={styles.importButton}
@@ -1268,7 +1250,7 @@ export default function ScheduleScreen() {
                     </View>
 
                     <Text style={styles.importModalText}>
-                      Set weekly hours and per-course importance (0-5).
+                      Set weekly hours and per-course importance.
                     </Text>
 
                     <View style={styles.generateHoursRow}>
@@ -1286,7 +1268,7 @@ export default function ScheduleScreen() {
 
                     <ScrollView
                       style={styles.generateScroll}
-                      showsVerticalScrollIndicator={false}
+                      showsVerticalScrollIndicator={true}
                     >
                       {courses.length === 0 ? (
                         <Text style={styles.emptyText}>No courses found.</Text>
@@ -1366,6 +1348,19 @@ export default function ScheduleScreen() {
                     color="#FFFFFF"
                   />
                   <Text style={styles.addCourseText}>Add Course</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.clearScheduleButton}
+                  onPress={handleClearSchedule}
+                  disabled={isClearingSchedule}
+                  hitSlop={6}
+                >
+                  <Ionicons
+                    name="trash-outline"
+                    size={15}
+                    color={COLORS.danger}
+                  />
+                  <Text style={styles.clearScheduleText}>Clear</Text>
                 </Pressable>
               </View>
 
