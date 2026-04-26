@@ -28,6 +28,11 @@ def ensure_schema_patches() -> None:
         )
         conn.execute(
             text(
+                "ALTER TABLE study_sessions ADD COLUMN IF NOT EXISTS course_name VARCHAR(200)"
+            )
+        )
+        conn.execute(
+            text(
                 """
                 CREATE TABLE IF NOT EXISTS chat_read_states (
                     read_state_id SERIAL PRIMARY KEY,
