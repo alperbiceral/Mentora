@@ -241,6 +241,7 @@ export default function ScheduleScreen() {
     null,
   );
   const [weeklyHoursInput, setWeeklyHoursInput] = useState("20");
+  const [usePersonalityHours, setUsePersonalityHours] = useState(false);
   const [importanceByCourse, setImportanceByCourse] = useState<
     Record<string, number>
   >({});
@@ -262,6 +263,7 @@ export default function ScheduleScreen() {
     });
     setImportanceByCourse(defaults);
     setWeeklyHoursInput("20");
+    setUsePersonalityHours(false);
     setGenerateModalError(null);
     setIsGenerateModalOpen(true);
   }, [clampImportance, courses]);
@@ -571,10 +573,14 @@ export default function ScheduleScreen() {
         return;
       }
 
-      const parsedHours = Number(weeklyHoursInput.replace(",", "."));
-      if (!Number.isFinite(parsedHours) || parsedHours <= 0) {
-        setGenerateModalError("Weekly study hours must be a positive number.");
-        return;
+      let parsedHours: number | null = null;
+      if (!usePersonalityHours) {
+        const enteredHours = Number(weeklyHoursInput.replace(",", "."));
+        if (!Number.isFinite(enteredHours) || enteredHours <= 0) {
+          setGenerateModalError("Weekly study hours must be a positive number.");
+          return;
+        }
+        parsedHours = enteredHours;
       }
 
       setIsGeneratingSchedule(true);
@@ -605,7 +611,9 @@ export default function ScheduleScreen() {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ weekly_study_hours: parsedHours }),
+          body: JSON.stringify(
+            parsedHours === null ? {} : { weekly_study_hours: parsedHours },
+          ),
         },
       );
       if (!schedulerRes.ok) {
@@ -633,6 +641,7 @@ export default function ScheduleScreen() {
     courses,
     importanceByCourse,
     loadCourses,
+    usePersonalityHours,
     weeklyHoursInput,
   ]);
 
@@ -1250,21 +1259,55 @@ export default function ScheduleScreen() {
                     </View>
 
                     <Text style={styles.importModalText}>
-                      Set weekly hours and per-course importance.
+                      Set per-course importance and choose how weekly hours are set.
                     </Text>
 
-                    <View style={styles.generateHoursRow}>
-                      <Text style={styles.formLabel}>Total weekly study hours</Text>
-                      <TextInput
-                        value={weeklyHoursInput}
-                        onChangeText={setWeeklyHoursInput}
-                        keyboardType="numeric"
-                        placeholder="20"
-                        placeholderTextColor={COLORS.textMuted}
-                        style={styles.generateHoursInput}
-                        editable={!isGeneratingSchedule}
+                    <Pressable
+                      style={styles.generateCheckboxRow}
+                      onPress={() => {
+                        if (!isGeneratingSchedule) {
+                          setUsePersonalityHours((prev) => !prev);
+                        }
+                      }}
+                      disabled={isGeneratingSchedule}
+                    >
+                      <Ionicons
+                        name={
+                          usePersonalityHours
+                            ? "checkbox"
+                            : "square-outline"
+                        }
+                        size={20}
+                        color={
+                          usePersonalityHours
+                            ? COLORS.accent
+                            : COLORS.textSecondary
+                        }
                       />
-                    </View>
+                      <Text style={styles.generateCheckboxText}>
+                        Use personality-based weekly hours
+                      </Text>
+                    </Pressable>
+
+                    {!usePersonalityHours ? (
+                      <View style={styles.generateHoursRow}>
+                        <Text style={styles.formLabel}>Total weekly study hours</Text>
+                        <TextInput
+                          value={weeklyHoursInput}
+                          onChangeText={setWeeklyHoursInput}
+                          keyboardType="numeric"
+                          placeholder="20"
+                          placeholderTextColor={COLORS.textMuted}
+                          style={styles.generateHoursInput}
+                          editable={!isGeneratingSchedule}
+                        />
+                      </View>
+                    ) : (
+                      <Text style={styles.generateHintText}>
+                        Weekly study hours will be calculated from personality
+                        (conscientiousness and neuroticism).
+                      </Text>
+                    )}
 
                     <ScrollView
                       style={styles.generateScroll}
@@ -3812,6 +3855,22 @@ const createStyles = (COLORS: ThemeColors) =>
     importModalError: {
       fontSize: 12,
       color: COLORS.danger,
+    },
+    generateCheckboxRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+    },
+    generateCheckboxText: {
+      flex: 1,
+      fontSize: 13,
+      color: COLORS.textPrimary,
+      fontWeight: "600",
+    },
+    generateHintText: {
+      fontSize: 12,
+      color: COLORS.textSecondary,
+      lineHeight: 18,
     },
     generateHoursRow: {
       gap: 8,
