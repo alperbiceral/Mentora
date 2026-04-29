@@ -110,10 +110,10 @@ async def create_local_schedule(
     DEFAULT_DAY_END = 22
     SLOT_MINUTES = 30
     SESSION_BLOCKS = SESSION_DURATION_MINUTES // SLOT_MINUTES  # 2 blocks of 30 minutes
-    MIN_FOCUS_PER_SESSION = 15
-    MAX_FOCUS_PER_SESSION = 45
-    MIN_BREAK_PER_SESSION = 15
-    MAX_BREAK_PER_SESSION = 45
+    MIN_FOCUS_PER_SESSION = 30
+    MAX_FOCUS_PER_SESSION = 60
+    MIN_BREAK_PER_SESSION = 0
+    MAX_BREAK_PER_SESSION = 30
 
     import re
 
@@ -268,13 +268,32 @@ async def create_local_schedule(
     energy_norm = max(-1.0, min(1.0, daily_energy / 6.0))
 
     # Personality/emotion-driven base split inside a fixed 60-minute session.
-    raw_focus_base = int(round(30 + 12 * (C - 0.5) - 10 * (N - 0.5) + 6 * energy_norm + 3 * (E - 0.5)))
+    conscientiousness_extremity = abs(C - 0.5) * 4
+    raw_focus_base = int(
+        round(
+            34
+            + 6 * conscientiousness_extremity
+            - 8 * (N - 0.5)
+            + 5 * energy_norm
+            + 2 * abs(E - 0.5)
+        )
+    )
     focus_base = max(MIN_FOCUS_PER_SESSION, min(MAX_FOCUS_PER_SESSION, raw_focus_base))
     focus_variance = int(round(2 + 6 * O))
 
     # Personality/emotion modifies planning efficiency too.
-    effective_focus_credit = int(round(focus_base * (0.85 + 0.45 * C - 0.25 * N + 0.2 * max(0.0, energy_norm))))
-    effective_focus_credit = max(15, min(40, effective_focus_credit))
+    effective_focus_credit = int(
+        round(
+            focus_base
+            * (
+                0.9
+                + 0.25 * conscientiousness_extremity
+                - 0.2 * N
+                + 0.15 * max(0.0, energy_norm)
+            )
+        )
+    )
+    effective_focus_credit = max(30, min(60, effective_focus_credit))
 
     # --- Study history effect on focus/break ---
     # Note: history is user-scoped through previous study_session_id links.
@@ -472,11 +491,11 @@ async def create_local_schedule(
         consistency_bias = int(round((history_consistency - 0.5) * 4))
         raw_focus = int(
             round(
-                (duration_minutes * 0.5)
-                + (10 * (C - 0.5))
+                (duration_minutes * 0.55)
+                + (8 * conscientiousness_extremity)
                 - (8 * (N - 0.5))
                 + (5 * energy_norm)
-                + (2 * (E - 0.5))
+                + (2 * abs(E - 0.5))
                 + course_duration_bias
                 + consistency_bias
             )
