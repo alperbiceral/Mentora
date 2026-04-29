@@ -145,7 +145,7 @@ class CourseUpdate(BaseModel):
 
 
 class WeeklyStudyHoursRequest(BaseModel):
-    weekly_study_hours: float
+    weekly_study_hours: Optional[float] = None
 
 
 class CourseImportanceUpdateItem(BaseModel):

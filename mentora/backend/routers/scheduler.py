@@ -104,7 +104,7 @@ async def create_local_schedule(
     MINUTES_PER_ECTS_TOTAL = 1500
     WEEKS_PER_TERM = 15
     MIN_SESSIONS_PER_DAY = 1
-    MAX_SESSIONS_PER_DAY = 6
+    MAX_SESSIONS_PER_DAY = 10
     SESSION_DURATION_MINUTES = 60
     DEFAULT_DAY_START = 8
     DEFAULT_DAY_END = 22
@@ -223,16 +223,17 @@ async def create_local_schedule(
                 valid.append(i)
         return valid
 
-    # --- Compute current week dates ---
+    # --- Compute next week dates ---
     today_date = date.today()
     current_monday = today_date - timedelta(days=today_date.weekday())
+    next_monday = current_monday + timedelta(days=7)
     week_days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
     upcoming_week_dates = {
-        dname: (current_monday + timedelta(days=i)).isoformat()
+        dname: (next_monday + timedelta(days=i)).isoformat()
         for i, dname in enumerate(week_days)
     }
-    # Only schedule from today through Sunday (remaining days in this week).
-    schedulable_days = week_days[today_date.weekday() :]
+    # Schedule the full next week.
+    schedulable_days = week_days[:]
 
     # --- Build course records with weekly importance weights ---
     # Importance is the only course-level weighting signal now.
@@ -355,12 +356,25 @@ async def create_local_schedule(
         available_days = schedulable_days[:]
 
     # =========================================================
-    # PHASE 1 – Use the user-provided weekly study hours directly
+    # PHASE 1 – Use provided weekly hours or derive from personality
     # =========================================================
     day_session_targets: dict[str, int] = {}
-    weekly_study_hours = max(0.0, float(payload.weekly_study_hours))
-    if weekly_study_hours <= 0:
-        raise HTTPException(status_code=400, detail="weekly_study_hours must be positive")
+    if payload.weekly_study_hours is None:
+        # Positive correlation with conscientiousness, inverse with neuroticism.
+        # C, N are normalized to 0..1, output is clamped to a practical weekly range.
+        weekly_study_hours = 14.0 + 16.0 * C + 10.0 * (1.0 - N)
+        weekly_study_hours = max(8.0, min(45.0, weekly_study_hours))
+        logger.info(
+            "Weekly study hours not provided for %s; derived %.2f from personality (C=%.3f, N=%.3f)",
+            username,
+            weekly_study_hours,
+            C,
+            N,
+        )
+    else:
+        weekly_study_hours = max(0.0, float(payload.weekly_study_hours))
+        if weekly_study_hours <= 0:
+            raise HTTPException(status_code=400, detail="weekly_study_hours must be positive")
 
     half_hour_units = max(1, int(math.floor(weekly_study_hours * 2.0 + 0.5)))
     target_minutes = half_hour_units * 30
