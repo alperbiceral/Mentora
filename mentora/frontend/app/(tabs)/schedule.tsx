@@ -1125,7 +1125,7 @@ export default function ScheduleScreen() {
                     onPress={openGenerateScheduleModal}
                     hitSlop={6}
                   >
-                    <Text style={styles.generateButtonText}>Update</Text>
+                    <Text style={styles.generateButtonText}>Update Schedule</Text>
                   </Pressable>
                   <Pressable
                     style={styles.importButton}
@@ -1403,7 +1403,7 @@ export default function ScheduleScreen() {
                     size={15}
                     color={COLORS.danger}
                   />
-                  <Text style={styles.clearScheduleText}>Clear</Text>
+                  <Text style={styles.clearScheduleText}>Clear Schedule</Text>
                 </Pressable>
               </View>
 

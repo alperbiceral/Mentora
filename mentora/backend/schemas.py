@@ -99,7 +99,7 @@ class StudyHistoryCreate(BaseModel):
     study_session_id: Optional[int] = None
     course_name: str
     study_duration: float
-    date: str
+    date: date
 
 
 class StudyHistoryResponse(BaseModel):
@@ -107,7 +107,7 @@ class StudyHistoryResponse(BaseModel):
     study_session_id: Optional[int]
     course_name: str
     study_duration: float
-    date: str
+    date: date
     created_at: datetime
 
     class Config:

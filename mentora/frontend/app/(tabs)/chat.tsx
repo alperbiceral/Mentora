@@ -1273,7 +1273,7 @@ export default function ChatScreen() {
                           onPress={() => handleDeleteThread(thread.thread_id)}
                         >
                           <Ionicons
-                            name="trash"
+                            name="trash-outline"
                             size={16}
                             color={COLORS.danger}
                           />
