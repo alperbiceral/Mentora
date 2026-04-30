@@ -10,6 +10,8 @@ import React, {
 import {
   Alert,
   Animated,
+  InteractionManager,
+  Modal,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -88,11 +90,15 @@ export default function StudyScreen() {
     () => createStyles(COLORS, isOnBreak),
     [COLORS, isOnBreak],
   );
-  const [secondsLeft, setSecondsLeft] = useState(0);
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [studySeconds, setStudySeconds] = useState(0);
+  const secondsLeftRef = useRef(0);
+  const elapsedSecondsRef = useRef(0);
+  const [displaySeconds, setDisplaySeconds] = useState(0);
+  const studySecondsRef = useRef(0);
   const [currentCycle, setCurrentCycle] = useState(1);
   const [sessionStartedAt, setSessionStartedAt] = useState<string | null>(null);
+  const [courseModalVisible, setCourseModalVisible] = useState(false);
+  const [todaySessions, setTodaySessions] = useState<StudySession[]>([]);
+  const [loadingTodaySessions, setLoadingTodaySessions] = useState(false);
 
   const [currentUsername, setCurrentUsername] = useState<string | null>(null);
   const [sessions, setSessions] = useState<StudySession[]>([]);
@@ -112,7 +118,6 @@ export default function StudyScreen() {
   const [answerResult, setAnswerResult] = useState<AnswerResult | null>(null);
   const [streakCount, setStreakCount] = useState(0);
 
-  const studySecondsRef = useRef(0);
   const questionStartTimeRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -207,61 +212,56 @@ export default function StudyScreen() {
     const timer = setInterval(() => {
       if (activeTab === "normal") {
         if (normalMode === "countup") {
-          setElapsedSeconds((value) => value + 1);
-          bumpStudySeconds(studySecondsRef, setStudySeconds);
+          elapsedSecondsRef.current += 1;
+          bumpStudySeconds(studySecondsRef, () => {});
+          setDisplaySeconds(elapsedSecondsRef.current);
           return;
         }
 
-        bumpStudySeconds(studySecondsRef, setStudySeconds);
-        setSecondsLeft((value) => {
-          if (value <= 1) {
-            finalizeSession();
-            return 0;
-          }
-          return value - 1;
-        });
+        bumpStudySeconds(studySecondsRef, () => {});
+        secondsLeftRef.current -= 1;
+        
+        if (secondsLeftRef.current <= 0) {
+          finalizeSession();
+          return;
+        }
+        
+        setDisplaySeconds(secondsLeftRef.current);
         return;
       }
 
       if (activeTab === "pomodoro") {
-        setSecondsLeft((value) => {
-          if (value <= 1) {
-            if (isOnBreak) {
+        secondsLeftRef.current -= 1;
+        
+        if (secondsLeftRef.current <= 0) {
+          setIsOnBreak((onBreak) => {
+            if (onBreak) {
               // Break ended, start next focus cycle
-              setIsOnBreak(false);
               setCurrentCycle((cycle) => cycle + 1);
-              return focusMinutes * 60;
+              secondsLeftRef.current = focusMinutes * 60;
+              return false;
             }
             // Focus ended
-            if (currentCycle >= totalCycles) {
-              // Last cycle completed, finalize session
-              finalizeSession();
-              return 0;
-            }
-            // Start break between cycles
-            setIsOnBreak(true);
-            return breakMinutes * 60;
-          }
-          return value - 1;
-        });
-
-        if (!isOnBreak) {
-          bumpStudySeconds(studySecondsRef, setStudySeconds);
+            setCurrentCycle((cycle) => {
+              if (cycle >= totalCycles) {
+                // Last cycle completed, finalize session
+                finalizeSession();
+              }
+              return cycle;
+            });
+            secondsLeftRef.current = breakMinutes * 60;
+            return true;
+          });
+        } else if (!isOnBreak) {
+          bumpStudySeconds(studySecondsRef, () => {});
         }
+        
+        setDisplaySeconds(secondsLeftRef.current);
       }
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [
-    activeTab,
-    breakMinutes,
-    currentCycle,
-    focusMinutes,
-    isOnBreak,
-    isRunning,
-    normalMode,
-    totalCycles,
-  ]);
+  }, [activeTab, isRunning, normalMode, focusMinutes, breakMinutes, totalCycles, isOnBreak]);
 
   // Timer for streak question
   useEffect(() => {
@@ -280,11 +280,6 @@ export default function StudyScreen() {
       return () => clearInterval(timer);
     }
   }, [showQuestionUI, questionTimer, answerResult]);
-
-  const displaySeconds =
-    activeTab === "normal" && normalMode === "countup"
-      ? elapsedSeconds
-      : secondsLeft;
 
   const timerLabel = useMemo(() => {
     if (activeTab === "normal") {
@@ -309,6 +304,17 @@ export default function StudyScreen() {
     return "TO DO";
   }, [activeTab, currentCycle, normalMode, totalCycles]);
 
+  const finishedSessions = useMemo(
+    () =>
+      sessions
+        .filter((s) => s.mode === "normal" || s.mode === "pomodoro")
+        .sort(
+          (a, b) =>
+            new Date(b.started_at).getTime() - new Date(a.started_at).getTime(),
+        ),
+    [sessions],
+  );
+
   const handleStart = () => {
     if (activeTab === "streak") {
       return;
@@ -324,8 +330,9 @@ export default function StudyScreen() {
           Alert.alert("Pick a duration", "Add a valid time first.");
           return;
         }
-        if (secondsLeft === 0) {
-          setSecondsLeft(normalTargetSeconds);
+        if (secondsLeftRef.current === 0) {
+          secondsLeftRef.current = normalTargetSeconds;
+          setDisplaySeconds(normalTargetSeconds);
         }
       }
       setIsRunning(true);
@@ -337,10 +344,11 @@ export default function StudyScreen() {
         Alert.alert("Check your settings", "Use positive values.");
         return;
       }
-      if (secondsLeft === 0) {
+      if (secondsLeftRef.current === 0) {
         setCurrentCycle(1);
         setIsOnBreak(false);
-        setSecondsLeft(focusMinutes * 60);
+        secondsLeftRef.current = focusMinutes * 60;
+        setDisplaySeconds(focusMinutes * 60);
       }
       setIsRunning(true);
     }
@@ -353,12 +361,12 @@ export default function StudyScreen() {
   const handleReset = () => {
     setIsRunning(false);
     setIsOnBreak(false);
-    setSecondsLeft(0);
-    setElapsedSeconds(0);
+    secondsLeftRef.current = 0;
+    elapsedSecondsRef.current = 0;
+    setDisplaySeconds(0);
     setCurrentCycle(1);
     setSessionStartedAt(null);
     studySecondsRef.current = 0;
-    setStudySeconds(0);
   };
 
   const applySelectedSessionToTimer = (session: StudySession) => {
@@ -376,6 +384,12 @@ export default function StudyScreen() {
       if ((session.cycles ?? 0) > 0) {
         setPomodoroCyclesInput(String(session.cycles));
       }
+
+      // Apply directly to live timer so selection is reflected immediately.
+      setIsOnBreak(false);
+      setCurrentCycle(1);
+      secondsLeftRef.current = selectedMinutes * 60;
+      setDisplaySeconds(selectedMinutes * 60);
       return;
     }
 
@@ -385,6 +399,17 @@ export default function StudyScreen() {
     const minutes = selectedMinutes % 60;
     setNormalHoursInput(String(hours));
     setNormalMinutesInput(String(minutes));
+
+    // Apply directly to live timer so selection is reflected immediately.
+    secondsLeftRef.current = selectedMinutes * 60;
+    setDisplaySeconds(selectedMinutes * 60);
+  };
+
+  const startFromSelectedSession = () => {
+    if (!sessionStartedAt) {
+      setSessionStartedAt(new Date().toISOString());
+    }
+    setIsRunning(true);
   };
 
   const finalizeSession = () => {
@@ -450,11 +475,11 @@ export default function StudyScreen() {
 
   const primaryActionLabel = isRunning
     ? "Pause"
-    : displaySeconds > 0 || elapsedSeconds > 0
+    : displaySeconds > 0
       ? "Resume"
       : "Start";
 
-  const hasSessionActivity = studySeconds > 0 || elapsedSeconds > 0;
+  const hasSessionActivity = studySecondsRef.current > 0 || elapsedSecondsRef.current > 0;
   const secondaryActionLabel = "Finish";
 
   // Streak Question Functions
@@ -681,6 +706,86 @@ export default function StudyScreen() {
               </Text>
             </Pressable>
           </View>
+
+          {/* Course selection modal shown when starting a fresh session */}
+          <Modal
+            visible={courseModalVisible}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setCourseModalVisible(false)}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>Select a course</Text>
+
+                <ScrollView style={{ maxHeight: 320 }}>
+                  <Pressable
+                    style={styles.optionItem}
+                    onPress={() => {
+                      setCourseModalVisible(false);
+                      setSelectedSession(null); // free session
+                      InteractionManager.runAfterInteractions(() => {
+                        handleStart();
+                      });
+                    }}
+                  >
+                    <Text style={styles.optionText}>Free session</Text>
+                    <Text style={styles.optionMeta}>No course • Free</Text>
+                  </Pressable>
+
+                  {loadingTodaySessions ? (
+                    <Text style={[styles.emptyText, { padding: 12 }]}>Loading...</Text>
+                  ) : todaySessions.length === 0 ? (
+                    <Text style={[styles.emptyText, { padding: 12 }]}>No sessions today</Text>
+                  ) : (
+                    todaySessions
+                      .sort((a, b) =>
+                        new Date(b.started_at).getTime() -
+                        new Date(a.started_at).getTime(),
+                      )
+                      .map((session) => (
+                        <Pressable
+                          key={session.session_id}
+                          style={styles.optionItem}
+                          onPress={() => {
+                            setCourseModalVisible(false);
+                            setSelectedSession(session);
+                            applySelectedSessionToTimer(session);
+                            InteractionManager.runAfterInteractions(() => {
+                              // Avoid stale-state countdown validation after switching from count up.
+                              startFromSelectedSession();
+                            });
+                          }}
+                        >
+                          <Text style={styles.optionText}>
+                            {(session.timer_type ?? session.course_name ?? "")
+                              ? (session.timer_type ?? session.course_name ?? "")
+                                  .charAt(0)
+                                  .toUpperCase() +
+                                (session.timer_type ?? session.course_name ?? "").slice(1)
+                              : session.mode === "pomodoro"
+                              ? "Pomodoro"
+                              : "Focus"}
+                          </Text>
+                          <Text style={styles.optionMeta}>
+                            {session.focus_minutes
+                              ? `${session.focus_minutes} min focus`
+                              : `${Math.round(session.duration_minutes)} min`}
+                          </Text>
+                        </Pressable>
+                      ))
+                  )}
+                </ScrollView>
+
+                <Pressable
+                  style={styles.modalCloseButton}
+                  onPress={() => setCourseModalVisible(false)}
+                >
+                  <Text style={styles.modalCloseButtonText}>Cancel</Text>
+                </Pressable>
+              </View>
+            </View>
+          </Modal>
 
           <View style={styles.timerCard}>
             {activeTab !== "streak" && (
@@ -1001,7 +1106,38 @@ export default function StudyScreen() {
               <View style={styles.timerButtonsRow}>
                 <Pressable
                   style={styles.primaryButton}
-                  onPress={isRunning ? handlePause : handleStart}
+                  onPress={async () => {
+                    if (isRunning) {
+                      handlePause();
+                      return;
+                    }
+
+                    // If we already have time on the clock, treat as resume
+                    if (displaySeconds > 0) {
+                      handleStart();
+                      return;
+                    }
+
+                    // Starting a fresh session -> fetch today's sessions from DB and show modal
+                    if (!currentUsername) {
+                      Alert.alert("Missing user", "Please login again.");
+                      return;
+                    }
+                    setLoadingTodaySessions(true);
+                    setCourseModalVisible(true);
+                    try {
+                      const resp = await fetch(
+                        `${API_BASE_URL}/study-sessions/${encodeURIComponent(currentUsername)}/scheduled-today`,
+                      );
+                      if (!resp.ok) throw new Error("Failed to load sessions");
+                      const data = (await resp.json()) as StudySession[];
+                      setTodaySessions(data);
+                    } catch (e) {
+                      setTodaySessions([]);
+                    } finally {
+                      setLoadingTodaySessions(false);
+                    }
+                  }}
                 >
                   <Text style={styles.primaryButtonText}>
                     {primaryActionLabel}
@@ -1036,10 +1172,8 @@ export default function StudyScreen() {
               <Text style={styles.statsTitle}>Recent sessions</Text>
               {loadingSessions ? (
                 <Text style={styles.emptyText}>Loading...</Text>
-              ) : sessions
-                  .filter((s) => isSessionToday(s))
-                  .length === 0 ? (
-                <Text style={styles.emptyText}>No sessions today yet</Text>
+              ) : finishedSessions.length === 0 ? (
+                <Text style={styles.emptyText}>No finished sessions yet</Text>
               ) : (
                 <View style={styles.sessionListContainer}>
                   <Animated.ScrollView
@@ -1078,14 +1212,7 @@ export default function StudyScreen() {
                         );
                       }}
                     >
-                      {sessions
-                        .filter((s) => isSessionToday(s))
-                        .sort(
-                          (a, b) =>
-                            new Date(b.started_at).getTime() -
-                            new Date(a.started_at).getTime(),
-                        )
-                        .map((session) => (
+                      {finishedSessions.map((session) => (
                           <Pressable
                             key={session.session_id}
                             onPress={() => {
@@ -1930,5 +2057,61 @@ const createStyles = (COLORS: ThemeColors, isOnBreak: boolean) =>
       fontSize: 15,
       fontWeight: "800",
       color: "#FFFFFF",
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.45)",
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 20,
+    },
+    modalContent: {
+      width: "100%",
+      maxWidth: 480,
+      backgroundColor: COLORS.card,
+      borderRadius: 16,
+      padding: SPACING.md,
+      borderWidth: 1,
+      borderColor: COLORS.borderSubtle,
+    },
+    modalTitle: {
+      fontSize: 16,
+      fontWeight: "800",
+      color: COLORS.textPrimary,
+      marginBottom: SPACING.sm,
+    },
+    optionItem: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingVertical: SPACING.sm,
+      paddingHorizontal: SPACING.md,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: COLORS.borderSoft,
+      backgroundColor: COLORS.card,
+      marginBottom: SPACING.sm,
+    },
+    optionText: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: COLORS.textPrimary,
+    },
+    optionMeta: {
+      fontSize: 12,
+      color: COLORS.textSecondary,
+    },
+    modalCloseButton: {
+      marginTop: SPACING.sm,
+      height: 44,
+      borderRadius: 10,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: COLORS.subtleCard,
+    },
+    modalCloseButtonText: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: COLORS.textPrimary,
     },
   });

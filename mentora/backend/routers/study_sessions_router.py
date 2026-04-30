@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from datetime import date as date_cls, datetime
 
 from deps import get_db
@@ -21,6 +22,28 @@ async def list_sessions(username: str, limit: int = 100, db: Session = Depends(g
         .filter(StudySession.username == username)
         .order_by(StudySession.ended_at.desc())
         .limit(limit)
+        .all()
+    )
+    return sessions
+
+
+@router.get("/{username}/scheduled-today", response_model=list[StudySessionResponse])
+async def list_scheduled_sessions_today(username: str, db: Session = Depends(get_db)):
+    """Return today's scheduled study sessions from study_sessions table.
+
+    Includes sessions regardless of whether their time has passed.
+    Matches by today's weekday (e.g. all Tuesdays), independent of week.
+    Excludes ad-hoc timer sessions by filtering to scheduler-created mode='study'.
+    """
+    today = date_cls.today()
+    # PostgreSQL EXTRACT(dow): Sunday=0, Monday=1, ..., Saturday=6.
+    today_dow = (today.weekday() + 1) % 7
+    sessions = (
+        db.query(StudySession)
+        .filter(StudySession.username == username)
+        .filter(StudySession.mode == "study")
+        .filter(func.extract("dow", StudySession.started_at) == today_dow)
+        .order_by(StudySession.started_at.asc())
         .all()
     )
     return sessions
