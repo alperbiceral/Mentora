@@ -10,8 +10,6 @@ import React, {
 import {
   Alert,
   Animated,
-  InteractionManager,
-  Modal,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -21,7 +19,7 @@ import {
   View,
 } from "react-native";
 import { useTheme } from "../../theme/ThemeProvider";
-import type { ThemeColors } from "../../theme/theme";
+import type { ThemeColors, ThemeMode } from "../../theme/theme";
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -33,7 +31,7 @@ const SPACING = {
 };
 
 export default function StudyScreen() {
-  const { colors: COLORS } = useTheme();
+  const { colors: COLORS, mode: themeMode } = useTheme();
 
   const [activeTab, setActiveTab] = useState<"normal" | "pomodoro" | "streak">(
     "normal",
@@ -87,8 +85,8 @@ export default function StudyScreen() {
   const [sessionListContentHeight, setSessionListContentHeight] = useState(0);
   const [sessionListVisibleHeight, setSessionListVisibleHeight] = useState(0);
   const styles = useMemo(
-    () => createStyles(COLORS, isOnBreak),
-    [COLORS, isOnBreak],
+    () => createStyles(COLORS, isOnBreak, themeMode),
+    [COLORS, isOnBreak, themeMode],
   );
   const secondsLeftRef = useRef(0);
   const elapsedSecondsRef = useRef(0);
@@ -96,9 +94,23 @@ export default function StudyScreen() {
   const studySecondsRef = useRef(0);
   const [currentCycle, setCurrentCycle] = useState(1);
   const [sessionStartedAt, setSessionStartedAt] = useState<string | null>(null);
-  const [courseModalVisible, setCourseModalVisible] = useState(false);
   const [todaySessions, setTodaySessions] = useState<StudySession[]>([]);
   const [loadingTodaySessions, setLoadingTodaySessions] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+  const [isSelectorOpen, setIsSelectorOpen] = useState(false);
+  const [triggerScreenY, setTriggerScreenY] = useState<number | null>(null);
+  const triggerRef = useRef<View>(null);
+
+  const handleSelectorToggle = () => {
+    if (isSelectorOpen) {
+      setIsSelectorOpen(false);
+      return;
+    }
+    triggerRef.current?.measureInWindow((_x, y) => {
+      setTriggerScreenY(y);
+      setIsSelectorOpen(true);
+    });
+  };
 
   const [currentUsername, setCurrentUsername] = useState<string | null>(null);
   const [sessions, setSessions] = useState<StudySession[]>([]);
@@ -147,6 +159,27 @@ export default function StudyScreen() {
     }
   }, [currentUsername]);
 
+  const loadTodaySessions = useCallback(async () => {
+    if (!currentUsername) {
+      return;
+    }
+    setLoadingTodaySessions(true);
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/study-sessions/${encodeURIComponent(currentUsername)}/scheduled-today`,
+      );
+      if (!response.ok) {
+        throw new Error("Failed to load today's sessions");
+      }
+      const data = (await response.json()) as StudySession[];
+      setTodaySessions(data);
+    } catch {
+      setTodaySessions([]);
+    } finally {
+      setLoadingTodaySessions(false);
+    }
+  }, [currentUsername]);
+
   useEffect(() => {
     loadSessions();
   }, [loadSessions]);
@@ -157,8 +190,15 @@ export default function StudyScreen() {
       loadStreak();
     } else if ((activeTab === "normal" || activeTab === "pomodoro") && currentUsername) {
       loadSessions();
+      loadTodaySessions();
     }
-  }, [activeTab, currentUsername, loadSessions]);
+  }, [activeTab, currentUsername, loadSessions, loadTodaySessions]);
+
+  // Refresh `now` every 30 seconds so the proximity-based colors stay accurate.
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(interval);
+  }, []);
 
   const focusMinutes = useMemo(
     () => parsePositiveInt(pomodoroFocusInput, 25),
@@ -358,6 +398,55 @@ export default function StudyScreen() {
     setIsRunning(false);
   };
 
+  // Once a session has been started, the user can't move into a structured
+  // timer mode (Pomodoro or Countdown) until they finish it. Countup is
+  // always available so they can escape to a free-form timer.
+  const isSessionInProgress = sessionStartedAt !== null;
+
+  const switchToTab = (target: "normal" | "pomodoro" | "streak") => {
+    if (target === activeTab) {
+      return;
+    }
+    if (isSessionInProgress && target === "pomodoro") {
+      return;
+    }
+    if (isRunning) {
+      setIsRunning(false);
+    }
+    // Before the timer starts, switching into pomodoro or countup means the
+    // selected scheduled session no longer matches the active timer settings,
+    // so drop back to a free session and clear the timer state that
+    // `applySelectedSessionToTimer` had populated for that selection.
+    const goingToPomodoro = target === "pomodoro";
+    const goingToCountup = target === "normal" && normalMode === "countup";
+    if (
+      !isSessionInProgress &&
+      selectedSession &&
+      (goingToPomodoro || goingToCountup)
+    ) {
+      setSelectedSession(null);
+      handleReset();
+    }
+    setActiveTab(target);
+  };
+
+  const switchNormalMode = (mode: "countup" | "countdown") => {
+    if (mode === normalMode) {
+      return;
+    }
+    if (isSessionInProgress && mode === "countup") {
+      return;
+    }
+    if (isRunning) {
+      setIsRunning(false);
+    }
+    if (!isSessionInProgress && selectedSession && mode === "countup") {
+      setSelectedSession(null);
+      handleReset();
+    }
+    setNormalMode(mode);
+  };
+
   const handleReset = () => {
     setIsRunning(false);
     setIsOnBreak(false);
@@ -403,13 +492,6 @@ export default function StudyScreen() {
     // Apply directly to live timer so selection is reflected immediately.
     secondsLeftRef.current = selectedMinutes * 60;
     setDisplaySeconds(selectedMinutes * 60);
-  };
-
-  const startFromSelectedSession = () => {
-    if (!sessionStartedAt) {
-      setSessionStartedAt(new Date().toISOString());
-    }
-    setIsRunning(true);
   };
 
   const finalizeSession = () => {
@@ -475,7 +557,7 @@ export default function StudyScreen() {
 
   const primaryActionLabel = isRunning
     ? "Pause"
-    : displaySeconds > 0
+    : sessionStartedAt
       ? "Resume"
       : "Start";
 
@@ -651,12 +733,8 @@ export default function StudyScreen() {
               style={[
                 styles.segmentButton,
                 activeTab === "normal" && styles.segmentButtonActive,
-                isRunning &&
-                  activeTab !== "normal" &&
-                  styles.segmentButtonDisabled,
               ]}
-              onPress={() => setActiveTab("normal")}
-              disabled={isRunning && activeTab !== "normal"}
+              onPress={() => switchToTab("normal")}
             >
               <Text
                 style={[
@@ -671,12 +749,12 @@ export default function StudyScreen() {
               style={[
                 styles.segmentButton,
                 activeTab === "pomodoro" && styles.segmentButtonActive,
-                isRunning &&
+                isSessionInProgress &&
                   activeTab !== "pomodoro" &&
                   styles.segmentButtonDisabled,
               ]}
-              onPress={() => setActiveTab("pomodoro")}
-              disabled={isRunning && activeTab !== "pomodoro"}
+              onPress={() => switchToTab("pomodoro")}
+              disabled={isSessionInProgress && activeTab !== "pomodoro"}
             >
               <Text
                 style={[
@@ -693,7 +771,7 @@ export default function StudyScreen() {
                 activeTab === "streak" && styles.segmentButtonActive,
                 isRunning && styles.segmentButtonDisabled,
               ]}
-              onPress={() => setActiveTab("streak")}
+              onPress={() => switchToTab("streak")}
               disabled={isRunning}
             >
               <Text
@@ -706,86 +784,6 @@ export default function StudyScreen() {
               </Text>
             </Pressable>
           </View>
-
-          {/* Course selection modal shown when starting a fresh session */}
-          <Modal
-            visible={courseModalVisible}
-            transparent
-            animationType="fade"
-            onRequestClose={() => setCourseModalVisible(false)}
-          >
-            <View style={styles.modalOverlay}>
-              <View style={styles.modalContent}>
-                <Text style={styles.modalTitle}>Select a course</Text>
-
-                <ScrollView style={{ maxHeight: 320 }}>
-                  <Pressable
-                    style={styles.optionItem}
-                    onPress={() => {
-                      setCourseModalVisible(false);
-                      setSelectedSession(null); // free session
-                      InteractionManager.runAfterInteractions(() => {
-                        handleStart();
-                      });
-                    }}
-                  >
-                    <Text style={styles.optionText}>Free session</Text>
-                    <Text style={styles.optionMeta}>No course • Free</Text>
-                  </Pressable>
-
-                  {loadingTodaySessions ? (
-                    <Text style={[styles.emptyText, { padding: 12 }]}>Loading...</Text>
-                  ) : todaySessions.length === 0 ? (
-                    <Text style={[styles.emptyText, { padding: 12 }]}>No sessions today</Text>
-                  ) : (
-                    todaySessions
-                      .sort((a, b) =>
-                        new Date(b.started_at).getTime() -
-                        new Date(a.started_at).getTime(),
-                      )
-                      .map((session) => (
-                        <Pressable
-                          key={session.session_id}
-                          style={styles.optionItem}
-                          onPress={() => {
-                            setCourseModalVisible(false);
-                            setSelectedSession(session);
-                            applySelectedSessionToTimer(session);
-                            InteractionManager.runAfterInteractions(() => {
-                              // Avoid stale-state countdown validation after switching from count up.
-                              startFromSelectedSession();
-                            });
-                          }}
-                        >
-                          <Text style={styles.optionText}>
-                            {(session.timer_type ?? session.course_name ?? "")
-                              ? (session.timer_type ?? session.course_name ?? "")
-                                  .charAt(0)
-                                  .toUpperCase() +
-                                (session.timer_type ?? session.course_name ?? "").slice(1)
-                              : session.mode === "pomodoro"
-                              ? "Pomodoro"
-                              : "Focus"}
-                          </Text>
-                          <Text style={styles.optionMeta}>
-                            {session.focus_minutes
-                              ? `${session.focus_minutes} min focus`
-                              : `${Math.round(session.duration_minutes)} min`}
-                          </Text>
-                        </Pressable>
-                      ))
-                  )}
-                </ScrollView>
-
-                <Pressable
-                  style={styles.modalCloseButton}
-                  onPress={() => setCourseModalVisible(false)}
-                >
-                  <Text style={styles.modalCloseButtonText}>Cancel</Text>
-                </Pressable>
-              </View>
-            </View>
-          </Modal>
 
           <View style={styles.timerCard}>
             {activeTab !== "streak" && (
@@ -982,12 +980,12 @@ export default function StudyScreen() {
                     style={[
                       styles.toggleButton,
                       normalMode === "countup" && styles.toggleButtonActive,
-                      isRunning &&
-                        activeTab === "normal" &&
+                      isSessionInProgress &&
+                        normalMode !== "countup" &&
                         styles.toggleButtonDisabled,
                     ]}
-                    onPress={() => setNormalMode("countup")}
-                    disabled={isRunning && activeTab === "normal"}
+                    onPress={() => switchNormalMode("countup")}
+                    disabled={isSessionInProgress && normalMode !== "countup"}
                   >
                     <Text
                       style={[
@@ -1002,12 +1000,8 @@ export default function StudyScreen() {
                     style={[
                       styles.toggleButton,
                       normalMode === "countdown" && styles.toggleButtonActive,
-                      isRunning &&
-                        activeTab === "normal" &&
-                        styles.toggleButtonDisabled,
                     ]}
-                    onPress={() => setNormalMode("countdown")}
-                    disabled={isRunning && activeTab === "normal"}
+                    onPress={() => switchNormalMode("countdown")}
                   >
                     <Text
                       style={[
@@ -1106,37 +1100,16 @@ export default function StudyScreen() {
               <View style={styles.timerButtonsRow}>
                 <Pressable
                   style={styles.primaryButton}
-                  onPress={async () => {
+                  onPress={() => {
                     if (isRunning) {
                       handlePause();
                       return;
                     }
-
-                    // If we already have time on the clock, treat as resume
-                    if (displaySeconds > 0) {
-                      handleStart();
-                      return;
-                    }
-
-                    // Starting a fresh session -> fetch today's sessions from DB and show modal
                     if (!currentUsername) {
                       Alert.alert("Missing user", "Please login again.");
                       return;
                     }
-                    setLoadingTodaySessions(true);
-                    setCourseModalVisible(true);
-                    try {
-                      const resp = await fetch(
-                        `${API_BASE_URL}/study-sessions/${encodeURIComponent(currentUsername)}/scheduled-today`,
-                      );
-                      if (!resp.ok) throw new Error("Failed to load sessions");
-                      const data = (await resp.json()) as StudySession[];
-                      setTodaySessions(data);
-                    } catch (e) {
-                      setTodaySessions([]);
-                    } finally {
-                      setLoadingTodaySessions(false);
-                    }
+                    handleStart();
                   }}
                 >
                   <Text style={styles.primaryButtonText}>
@@ -1166,6 +1139,286 @@ export default function StudyScreen() {
               </View>
             )}
           </View>
+
+          {activeTab !== "streak" && (() => {
+            const getToneStyles = (tone: SessionProximityTone) => {
+              switch (tone) {
+                case "now":
+                  return {
+                    item: styles.sessionSelectorItemNow,
+                    tag: styles.sessionSelectorTagNow,
+                    tagText: styles.sessionSelectorTagTextNow,
+                  };
+                case "soon":
+                  return {
+                    item: styles.sessionSelectorItemSoon,
+                    tag: styles.sessionSelectorTagSoon,
+                    tagText: styles.sessionSelectorTagTextSoon,
+                  };
+                case "near":
+                  return {
+                    item: styles.sessionSelectorItemNear,
+                    tag: styles.sessionSelectorTagNear,
+                    tagText: styles.sessionSelectorTagTextNear,
+                  };
+                case "past":
+                  return {
+                    item: styles.sessionSelectorItemPast,
+                    tag: styles.sessionSelectorTagPast,
+                    tagText: styles.sessionSelectorTagTextPast,
+                  };
+                default:
+                  return {
+                    item: styles.sessionSelectorItemFar,
+                    tag: styles.sessionSelectorTagFar,
+                    tagText: styles.sessionSelectorTagTextFar,
+                  };
+              }
+            };
+
+            const formatSessionDisplay = (session: StudySession) => {
+              const startedDate = parseDateTime(session.started_at);
+              const startTimeText = !Number.isNaN(startedDate.getTime())
+                ? startedDate.toLocaleTimeString(undefined, {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    hour12: false,
+                  })
+                : "";
+              const focusText = session.focus_minutes
+                ? `${session.focus_minutes} min focus`
+                : formatDuration(session.duration_minutes);
+              const rawCourseName =
+                session.course_name ??
+                session.timer_type ??
+                (session.mode === "pomodoro" ? "Pomodoro" : "Focus");
+              const displayName =
+                rawCourseName.charAt(0).toUpperCase() + rawCourseName.slice(1);
+              return {
+                displayName,
+                meta: `${startTimeText ? `${startTimeText} • ` : ""}${focusText}`,
+              };
+            };
+
+            const triggerTone = selectedSession
+              ? getSessionProximityTone(selectedSession, now)
+              : null;
+            const triggerToneStyles = triggerTone
+              ? getToneStyles(triggerTone)
+              : null;
+            const triggerInfo = selectedSession
+              ? formatSessionDisplay(selectedSession)
+              : {
+                  displayName: "Free session",
+                  meta: "No course • Use current timer settings",
+                };
+
+            const sortedTodaySessions = todaySessions
+              .slice()
+              .sort(
+                (a, b) =>
+                  new Date(b.started_at).getTime() -
+                  new Date(a.started_at).getTime(),
+              );
+
+            // Don't allow the dropdown to overflow the top of the screen.
+            const SAFE_TOP_MARGIN = 60;
+            const FREE_ROW_ESTIMATE = 76;
+            const dropdownMaxHeight =
+              triggerScreenY != null
+                ? Math.max(140, triggerScreenY - SAFE_TOP_MARGIN)
+                : 380;
+            const scrollMaxHeight = Math.max(
+              60,
+              dropdownMaxHeight - FREE_ROW_ESTIMATE - SPACING.sm * 2,
+            );
+
+            return (
+              <View style={styles.sessionSelectorWrapper}>
+                <Text style={styles.sessionSelectorTitle}>
+                  Select a session
+                </Text>
+                <Pressable
+                  ref={triggerRef}
+                  onPress={handleSelectorToggle}
+                  style={[
+                    styles.sessionSelectorItem,
+                    triggerToneStyles
+                      ? triggerToneStyles.item
+                      : styles.sessionSelectorItemFree,
+                  ]}
+                >
+                  <View style={styles.sessionSelectorItemBody}>
+                    <Text style={styles.sessionSelectorItemName}>
+                      {triggerInfo.displayName}
+                    </Text>
+                    <Text style={styles.sessionSelectorItemMeta}>
+                      {triggerInfo.meta}
+                    </Text>
+                  </View>
+                  {triggerToneStyles && triggerTone && (
+                    <View
+                      style={[
+                        styles.sessionSelectorTag,
+                        triggerToneStyles.tag,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.sessionSelectorTagText,
+                          triggerToneStyles.tagText,
+                        ]}
+                      >
+                        {proximityToneLabel(triggerTone)}
+                      </Text>
+                    </View>
+                  )}
+                  <Ionicons
+                    name={isSelectorOpen ? "chevron-down" : "chevron-up"}
+                    size={20}
+                    color={COLORS.textSecondary}
+                    style={styles.sessionSelectorCheck}
+                  />
+                </Pressable>
+
+                {isSelectorOpen && (
+                  <Pressable
+                    style={styles.sessionSelectorBackdrop}
+                    onPress={() => setIsSelectorOpen(false)}
+                  />
+                )}
+
+                {isSelectorOpen && (
+                  <View
+                    style={[
+                      styles.sessionSelectorDropdown,
+                      { maxHeight: dropdownMaxHeight },
+                    ]}
+                  >
+                    <Pressable
+                      onPress={() => {
+                        setSelectedSession(null);
+                        setIsSelectorOpen(false);
+                      }}
+                      style={[
+                        styles.sessionSelectorItem,
+                        styles.sessionSelectorItemFree,
+                        selectedSession === null &&
+                          styles.sessionSelectorItemSelected,
+                      ]}
+                    >
+                      <View style={styles.sessionSelectorItemBody}>
+                        <Text style={styles.sessionSelectorItemName}>
+                          Free session
+                        </Text>
+                        <Text style={styles.sessionSelectorItemMeta}>
+                          No course • Use current timer settings
+                        </Text>
+                      </View>
+                      {selectedSession === null && (
+                        <Ionicons
+                          name="checkmark-circle"
+                          size={20}
+                          color={COLORS.accent}
+                        />
+                      )}
+                    </Pressable>
+
+                    <ScrollView
+                      style={[
+                        styles.sessionSelectorScroll,
+                        { maxHeight: scrollMaxHeight },
+                      ]}
+                      contentContainerStyle={styles.sessionSelectorContent}
+                      showsVerticalScrollIndicator={false}
+                      nestedScrollEnabled
+                    >
+                      {loadingTodaySessions ? (
+                        <Text
+                          style={[
+                            styles.emptyText,
+                            { padding: 12, textAlign: "center" },
+                          ]}
+                        >
+                          Loading today&apos;s sessions...
+                        </Text>
+                      ) : sortedTodaySessions.length === 0 ? (
+                        <Text
+                          style={[
+                            styles.emptyText,
+                            { padding: 12, textAlign: "center" },
+                          ]}
+                        >
+                          No sessions scheduled today
+                        </Text>
+                      ) : (
+                        sortedTodaySessions.map((session) => {
+                          const tone = getSessionProximityTone(session, now);
+                          const isSelected =
+                            selectedSession?.session_id === session.session_id;
+                          const toneStyles = getToneStyles(tone);
+                          const { displayName, meta } =
+                            formatSessionDisplay(session);
+                          return (
+                            <Pressable
+                              key={session.session_id}
+                              onPress={() => {
+                                if (isSelected) {
+                                  setSelectedSession(null);
+                                } else {
+                                  setSelectedSession(session);
+                                  applySelectedSessionToTimer(session);
+                                }
+                                setIsSelectorOpen(false);
+                              }}
+                              style={[
+                                styles.sessionSelectorItem,
+                                toneStyles.item,
+                                isSelected &&
+                                  styles.sessionSelectorItemSelected,
+                              ]}
+                            >
+                              <View style={styles.sessionSelectorItemBody}>
+                                <Text style={styles.sessionSelectorItemName}>
+                                  {displayName}
+                                </Text>
+                                <Text style={styles.sessionSelectorItemMeta}>
+                                  {meta}
+                                </Text>
+                              </View>
+                              <View
+                                style={[
+                                  styles.sessionSelectorTag,
+                                  toneStyles.tag,
+                                ]}
+                              >
+                                <Text
+                                  style={[
+                                    styles.sessionSelectorTagText,
+                                    toneStyles.tagText,
+                                  ]}
+                                >
+                                  {proximityToneLabel(tone)}
+                                </Text>
+                              </View>
+                              {isSelected && (
+                                <Ionicons
+                                  name="checkmark-circle"
+                                  size={20}
+                                  color={COLORS.accent}
+                                  style={styles.sessionSelectorCheck}
+                                />
+                              )}
+                            </Pressable>
+                          );
+                        })
+                      )}
+                    </ScrollView>
+                  </View>
+                )}
+              </View>
+            );
+          })()}
 
           {activeTab !== "streak" && (
             <View style={styles.statsSection}>
@@ -1385,6 +1638,84 @@ const formatDateTime = (value: string) => {
   return `${datePart} ${timePart}`;
 };
 
+type SessionProximityTone = "now" | "soon" | "near" | "far" | "past";
+
+const getSessionProximityTone = (
+  session: StudySession,
+  nowMs: number,
+): SessionProximityTone => {
+  const startRaw = parseDateTime(session.started_at);
+  const endRaw = parseDateTime(session.ended_at);
+  if (Number.isNaN(startRaw.getTime())) {
+    return "far";
+  }
+
+  // The scheduler stores sessions for next week, but the user thinks of them
+  // as today's plan. Re-anchor the time-of-day to today's date so proximity
+  // reflects the wall-clock time the user sees ("08:00", "14:30", ...).
+  const today = new Date(nowMs);
+  const startToday = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate(),
+    startRaw.getHours(),
+    startRaw.getMinutes(),
+    startRaw.getSeconds(),
+  ).getTime();
+
+  let endToday: number = NaN;
+  if (!Number.isNaN(endRaw.getTime())) {
+    let endCandidate = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate(),
+      endRaw.getHours(),
+      endRaw.getMinutes(),
+      endRaw.getSeconds(),
+    ).getTime();
+    // Sessions that cross midnight (end time-of-day < start time-of-day):
+    // bump end by 24 hours so it stays after start.
+    if (endCandidate < startToday) {
+      endCandidate += 24 * 60 * 60 * 1000;
+    }
+    endToday = endCandidate;
+  }
+
+  if (Number.isFinite(endToday) && nowMs >= startToday && nowMs <= endToday) {
+    return "now";
+  }
+  if (Number.isFinite(endToday) && nowMs > endToday) {
+    return "past";
+  }
+  const minutesUntilStart = (startToday - nowMs) / 60_000;
+  if (minutesUntilStart < 0) {
+    // Started already today and we have no usable end — treat as past.
+    return "past";
+  }
+  if (minutesUntilStart <= 30) {
+    return "soon";
+  }
+  if (minutesUntilStart <= 120) {
+    return "near";
+  }
+  return "far";
+};
+
+const proximityToneLabel = (tone: SessionProximityTone): string => {
+  switch (tone) {
+    case "now":
+      return "Now";
+    case "soon":
+      return "Soon";
+    case "near":
+      return "Upcoming";
+    case "past":
+      return "Past";
+    default:
+      return "Later";
+  }
+};
+
 const parseDateTime = (value: string) => {
   if (!value) {
     return new Date("invalid");
@@ -1495,7 +1826,11 @@ const createStudyHistory = async (payload: {
   }
 };
 
-const createStyles = (COLORS: ThemeColors, isOnBreak: boolean) =>
+const createStyles = (
+  COLORS: ThemeColors,
+  isOnBreak: boolean,
+  themeMode: ThemeMode,
+) =>
   StyleSheet.create({
     safeArea: {
       flex: 1,
@@ -1745,7 +2080,6 @@ const createStyles = (COLORS: ThemeColors, isOnBreak: boolean) =>
       color: COLORS.textPrimary,
     },
     statsSection: {
-      marginTop: SPACING.lg,
     },
     statsTitle: {
       fontSize: 15,
@@ -1826,6 +2160,158 @@ const createStyles = (COLORS: ThemeColors, isOnBreak: boolean) =>
       fontSize: 11,
       fontWeight: "700",
       color: COLORS.accent,
+    },
+    sessionSelectorWrapper: {
+      position: "relative",
+      zIndex: 50,
+    },
+    sessionSelectorTitle: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: COLORS.textPrimary,
+      marginBottom: SPACING.sm,
+      marginLeft: 4,
+    },
+    // Tap-outside catcher. Negative offsets extend it well beyond the wrapper
+    // so it covers the visible screen area while the dropdown is open.
+    sessionSelectorBackdrop: {
+      position: "absolute",
+      top: -3000,
+      left: -3000,
+      right: -3000,
+      bottom: -3000,
+      zIndex: 90,
+    },
+    sessionSelectorDropdown: {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      bottom: 80,
+      // Fully opaque so the dropdown reads cleanly over the timer card. The
+      // shared `COLORS.card` is rgba(...,0.85) on dark; use the same hue at
+      // 100% opacity here.
+      backgroundColor: themeMode === "dark" ? "#0F172AF8" : "#FFFFFFF8",
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: COLORS.borderSubtle,
+      padding: SPACING.sm,
+      gap: SPACING.sm,
+      shadowColor: COLORS.shadow,
+      shadowOffset: { width: 0, height: 12 },
+      shadowOpacity: 0.32,
+      shadowRadius: 24,
+      elevation: 24,
+      zIndex: 100,
+    },
+    sessionSelectorScroll: {
+      flexGrow: 0,
+    },
+    sessionSelectorContent: {
+      gap: SPACING.sm,
+      paddingBottom: 4,
+    },
+    sessionSelectorItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: SPACING.sm,
+      paddingVertical: SPACING.md,
+      paddingHorizontal: SPACING.md,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: COLORS.borderSoft,
+      backgroundColor: COLORS.subtleCard,
+    },
+    sessionSelectorItemBody: {
+      flex: 1,
+    },
+    sessionSelectorItemName: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: COLORS.textPrimary,
+    },
+    sessionSelectorItemMeta: {
+      fontSize: 12,
+      color: COLORS.textSecondary,
+      marginTop: 2,
+    },
+    sessionSelectorItemSelected: {
+      borderColor: COLORS.accent,
+      borderWidth: 2,
+    },
+    sessionSelectorItemFree: {
+      backgroundColor: "rgba(109,94,247,0.06)",
+      borderColor: COLORS.borderSubtle,
+      borderStyle: "dashed",
+    },
+    sessionSelectorItemNow: {
+      backgroundColor: "rgba(16,185,129,0.18)",
+      borderColor: COLORS.success,
+    },
+    sessionSelectorItemSoon: {
+      backgroundColor: "rgba(245,158,11,0.18)",
+      borderColor: COLORS.warning,
+    },
+    sessionSelectorItemNear: {
+      backgroundColor: "rgba(109,94,247,0.16)",
+      borderColor: COLORS.accent,
+    },
+    sessionSelectorItemFar: {
+      backgroundColor: COLORS.subtleCard,
+      borderColor: COLORS.borderSoft,
+    },
+    sessionSelectorItemPast: {
+      backgroundColor: "rgba(107,114,128,0.12)",
+      borderColor: COLORS.borderSoft,
+      opacity: 0.7,
+    },
+    sessionSelectorTag: {
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 999,
+      borderWidth: 1,
+    },
+    sessionSelectorTagText: {
+      fontSize: 11,
+      fontWeight: "800",
+      letterSpacing: 0.4,
+    },
+    sessionSelectorTagNow: {
+      backgroundColor: "rgba(16,185,129,0.2)",
+      borderColor: COLORS.success,
+    },
+    sessionSelectorTagTextNow: {
+      color: COLORS.success,
+    },
+    sessionSelectorTagSoon: {
+      backgroundColor: "rgba(245,158,11,0.2)",
+      borderColor: COLORS.warning,
+    },
+    sessionSelectorTagTextSoon: {
+      color: COLORS.warning,
+    },
+    sessionSelectorTagNear: {
+      backgroundColor: "rgba(109,94,247,0.2)",
+      borderColor: COLORS.accent,
+    },
+    sessionSelectorTagTextNear: {
+      color: COLORS.accent,
+    },
+    sessionSelectorTagFar: {
+      backgroundColor: COLORS.subtleCard,
+      borderColor: COLORS.borderSubtle,
+    },
+    sessionSelectorTagTextFar: {
+      color: COLORS.textSecondary,
+    },
+    sessionSelectorTagPast: {
+      backgroundColor: "rgba(107,114,128,0.18)",
+      borderColor: COLORS.borderSubtle,
+    },
+    sessionSelectorTagTextPast: {
+      color: COLORS.textMuted,
+    },
+    sessionSelectorCheck: {
+      marginLeft: 4,
     },
     inputRow: {
       flexDirection: "row",
