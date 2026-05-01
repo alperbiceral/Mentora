@@ -9,7 +9,7 @@ import json
 from config import GEMINI_API_KEY, GEMINI_MODEL
 from deps import get_db
 from datetime import date, datetime, timedelta
-from models import Course, CourseBlock, Profile, StudySession
+from models import Course, CourseBlock, Profile, StudySession, StudyHistory
 from schemas import (
     CourseCreate,
     CourseImportanceBulkUpdate,
@@ -588,8 +588,17 @@ async def clear_courses(username: str, db: Session = Depends(get_db)):
         .filter(StudySession.started_at < next_sunday_end)
         .all()
     )
-    for session in sessions:
-        db.delete(session)
+    if sessions:
+        session_ids = [s.session_id for s in sessions]
+        # Detach study_history rows so the FK doesn't block deletion
+        db.query(StudyHistory).filter(
+            StudyHistory.study_session_id.in_(session_ids)
+        ).update(
+            {StudyHistory.study_session_id: None},
+            synchronize_session=False,
+        )
+        for session in sessions:
+            db.delete(session)
 
     db.commit()
     return {"deleted": len(existing), "sessions_deleted": len(sessions)}
