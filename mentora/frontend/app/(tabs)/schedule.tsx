@@ -27,6 +27,7 @@ import {
 import Slider from "@react-native-community/slider";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
+import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "../../theme/ThemeProvider";
 import type { ThemeColors } from "../../theme/theme";
 
@@ -151,6 +152,46 @@ const WEEKLY_BLOCK_CARD_EXTRAS = Platform.select<ViewStyle>({
   },
   default: { elevation: 2 },
 });
+
+const clampChannel = (n: number) => Math.max(0, Math.min(255, Math.round(n)));
+
+function parseHexColor(hex: string): { r: number; g: number; b: number } {
+  let value = hex.trim().replace("#", "");
+  if (value.length === 3) {
+    value = value
+      .split("")
+      .map((c) => c + c)
+      .join("");
+  }
+  const num = parseInt(value, 16);
+  if (Number.isNaN(num)) {
+    return { r: 0, g: 0, b: 0 };
+  }
+  return {
+    r: (num >> 16) & 0xff,
+    g: (num >> 8) & 0xff,
+    b: num & 0xff,
+  };
+}
+
+function rgbToHex(r: number, g: number, b: number): string {
+  const toHex = (n: number) => clampChannel(n).toString(16).padStart(2, "0");
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+/** Mix `hex` toward white by `amt` (0..1). */
+function lighten(hex: string, amt: number): string {
+  const { r, g, b } = parseHexColor(hex);
+  const t = Math.max(0, Math.min(1, amt));
+  return rgbToHex(r + (255 - r) * t, g + (255 - g) * t, b + (255 - b) * t);
+}
+
+/** Mix `hex` toward black by `amt` (0..1). */
+function darken(hex: string, amt: number): string {
+  const { r, g, b } = parseHexColor(hex);
+  const t = Math.max(0, Math.min(1, amt));
+  return rgbToHex(r * (1 - t), g * (1 - t), b * (1 - t));
+}
 
 const INITIAL_COURSES: Course[] = [];
 const INITIAL_BLOCKS: CourseBlock[] = [];
@@ -2031,22 +2072,32 @@ const CourseDayColumn: React.FC<CourseDayColumnProps> = ({
         const blockHeight = (endIndex - startIndex) * SLOT_HEIGHT;
 
         return (
-          <View
+          <LinearGradient
             key={block.id}
+            colors={[
+              lighten(course.color, 0.12),
+              course.color,
+              darken(course.color, 0.14),
+            ]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
             style={[
               styles.courseBlock,
               {
                 top: startIndex * SLOT_HEIGHT,
                 height: blockHeight,
-                backgroundColor: course.color,
+                borderLeftColor: darken(course.color, 0.25),
               },
             ]}
           >
-            <Text style={styles.courseBlockCode} numberOfLines={1}>
-              {getCourseCodeLabel(course)}
-            </Text>
+            <View style={styles.weeklyBlockHeader}>
+              <Ionicons name="school" size={11} color="#0B1220" />
+              <Text style={styles.courseBlockCode} numberOfLines={1}>
+                {getCourseCodeLabel(course)}
+              </Text>
+            </View>
             <Text style={styles.weeklyBlockKind}>Course</Text>
-          </View>
+          </LinearGradient>
         );
       })}
 
@@ -2067,20 +2118,27 @@ const CourseDayColumn: React.FC<CourseDayColumnProps> = ({
 
         if (!hasCols) {
           return (
-            <View
+            <LinearGradient
               key={`study-${block.id}`}
+              colors={[
+                lighten(block.color, 0.32),
+                lighten(block.color, 0.08),
+              ]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
               style={[
                 styles.planBlock,
+                styles.planBlockStudy,
                 compact && styles.planBlockCompact,
                 {
                   top: startIndex * SLOT_HEIGHT,
                   height: blockHeight,
-                  backgroundColor: block.color,
+                  borderLeftColor: block.color,
                 },
               ]}
             >
               <WeeklyStudyLabels block={block} slotSpan={slotSpan} />
-            </View>
+            </LinearGradient>
           );
         }
 
@@ -2097,22 +2155,26 @@ const CourseDayColumn: React.FC<CourseDayColumnProps> = ({
         const leftPx = sidePad + col * (colWidth + gap);
 
         return (
-          <View
+          <LinearGradient
             key={`study-${block.id}`}
+            colors={[lighten(block.color, 0.32), lighten(block.color, 0.08)]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
             style={[
               styles.planBlock,
+              styles.planBlockStudy,
               compact && styles.planBlockCompact,
               {
                 top: startIndex * SLOT_HEIGHT,
                 height: blockHeight,
                 left: leftPx,
                 width: colWidth,
-                backgroundColor: block.color,
+                borderLeftColor: block.color,
               },
             ]}
           >
             <WeeklyStudyLabels block={block} slotSpan={slotSpan} />
-          </View>
+          </LinearGradient>
         );
       })}
     </View>
@@ -3447,7 +3509,9 @@ const createStyles = (COLORS: ThemeColors) =>
       alignItems: "center",
       justifyContent: "center",
       borderWidth: 1,
-      borderColor: "rgba(11,18,32,0.14)",
+      borderColor: "rgba(11,18,32,0.18)",
+      borderLeftWidth: 3,
+      overflow: "hidden",
       ...WEEKLY_BLOCK_CARD_EXTRAS,
     },
     courseBlockCode: {
@@ -3464,6 +3528,12 @@ const createStyles = (COLORS: ThemeColors) =>
     courseBlockMeta: {
       fontSize: 9,
       color: "rgba(11,18,32,0.7)",
+    },
+    weeklyBlockHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 4,
     },
     weeklyBlockKind: {
       fontSize: 9,
@@ -3483,8 +3553,16 @@ const createStyles = (COLORS: ThemeColors) =>
       alignItems: "center",
       justifyContent: "center",
       borderWidth: 1,
-      borderColor: "rgba(11,18,32,0.14)",
+      borderColor: "rgba(11,18,32,0.12)",
+      overflow: "hidden",
       ...WEEKLY_BLOCK_CARD_EXTRAS,
+    },
+    planBlockStudy: {
+      borderLeftWidth: 3,
+      borderStyle: Platform.select({
+        ios: "solid",
+        default: "dashed",
+      }) as ViewStyle["borderStyle"],
     },
     planBlockCompact: {
       paddingVertical: 3,
