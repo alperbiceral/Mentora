@@ -3384,6 +3384,7 @@ const createStyles = (COLORS: ThemeColors) =>
       color: COLORS.textSecondary,
     },
     gridWrapper: {
+      height: 670,
       borderRadius: 16,
       overflow: "hidden",
       borderWidth: 1,
