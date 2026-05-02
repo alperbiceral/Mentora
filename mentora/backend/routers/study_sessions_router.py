@@ -6,6 +6,7 @@ from datetime import date as date_cls, datetime
 from deps import get_db
 from models import Profile, StudySession, StudyHistory, User, Personality, Emotion
 from schemas import StudySessionCreate, StudySessionResponse, StudyHistoryCreate, StudyHistoryResponse
+from scheduling_conflicts import find_schedule_conflict
 
 router = APIRouter(prefix="/study-sessions", tags=["study-sessions"])
 
@@ -56,12 +57,29 @@ async def create_session(payload: StudySessionCreate, db: Session = Depends(get_
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Duration must be positive",
         )
+    if payload.started_at >= payload.ended_at:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Session start time must be earlier than end time",
+        )
 
     profile = db.query(Profile).filter(Profile.username == payload.username).first()
     if not profile:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Profile not found",
+        )
+
+    conflict_message = find_schedule_conflict(
+        db,
+        payload.username,
+        payload.started_at,
+        payload.ended_at,
+    )
+    if conflict_message:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Study session conflicts with existing schedule: {conflict_message}",
         )
 
     session = StudySession(**payload.model_dump())

@@ -10,6 +10,7 @@ from config import GEMINI_API_KEY, GEMINI_MODEL
 from deps import get_db
 from datetime import date, datetime, timedelta
 from models import Course, CourseBlock, Profile, StudySession, StudyHistory
+from scheduling_conflicts import blocks_overlap, find_study_conflict_for_course_blocks
 from schemas import (
     CourseCreate,
     CourseImportanceBulkUpdate,
@@ -196,6 +197,57 @@ def _extract_course_fields(text: str) -> tuple[str | None, str | None, str]:
 def _time_to_minutes(value: str) -> int:
     hour, minute = [int(part) for part in value.split(":")]
     return hour * 60 + minute
+
+
+def _find_course_conflict(
+    db: Session,
+    username: str,
+    blocks: list[tuple[str, str, str]],
+    exclude_course_id: int | None = None,
+) -> str | None:
+    existing_blocks = (
+        db.query(CourseBlock, Course.name)
+        .join(Course)
+        .filter(Course.username == username)
+    )
+    if exclude_course_id is not None:
+        existing_blocks = existing_blocks.filter(Course.course_id != exclude_course_id)
+
+    existing = existing_blocks.all()
+    for day, start, end in blocks:
+        for existing_block, existing_name in existing:
+            if blocks_overlap(day, start, end, existing_block.day, existing_block.start, existing_block.end):
+                return (
+                    f"Course block {day} {start}-{end} conflicts with existing course "
+                    f"'{existing_name}' ({existing_block.day} {existing_block.start}-{existing_block.end})."
+                )
+    return None
+
+
+def _validate_course_blocks_against_schedule(
+    db: Session,
+    username: str,
+    blocks: list[tuple[str, str, str]],
+    exclude_course_id: int | None = None,
+) -> None:
+    course_conflict = _find_course_conflict(
+        db,
+        username,
+        blocks,
+        exclude_course_id=exclude_course_id,
+    )
+    if course_conflict:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=course_conflict,
+        )
+
+    study_conflict = find_study_conflict_for_course_blocks(db, username, blocks)
+    if study_conflict:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=study_conflict,
+        )
 
 
 def _extract_json_payload(text: str) -> list[dict[str, Any]]:
@@ -615,6 +667,8 @@ async def create_course(payload: CourseCreate, db: Session = Depends(get_db)):
 
     derived_importance = _extract_ects_value(payload.description)
     default_importance = (derived_importance / 2) if derived_importance else None
+    blocks_to_validate = [(block.day, block.start, block.end) for block in payload.blocks]
+    _validate_course_blocks_against_schedule(db, payload.username, blocks_to_validate)
     course = Course(
         username=payload.username,
         name=payload.name,
@@ -654,6 +708,13 @@ async def update_course(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not allowed to edit this course",
         )
+    blocks_to_validate = [(block.day, block.start, block.end) for block in payload.blocks]
+    _validate_course_blocks_against_schedule(
+        db,
+        payload.username,
+        blocks_to_validate,
+        exclude_course_id=course.course_id,
+    )
 
     course.name = payload.name
     course.section = (payload.section or "").strip() or None
@@ -822,6 +883,7 @@ async def import_schedule(
 
     # Create Course objects from merged data
     created_courses = []
+    pending_blocks: list[tuple[str, str, str]] = []
     for index, (_merge_key, course_data) in enumerate(merged_courses.items()):
         ects_value = _extract_ects_value(course_data["description"])
         course = Course(
@@ -843,6 +905,19 @@ async def import_schedule(
             if key not in seen:
                 seen.add(key)
                 unique_blocks.append(block)
+        block_tuples = [(b["day"], b["start"], b["end"]) for b in unique_blocks]
+        _validate_course_blocks_against_schedule(db, username, block_tuples)
+        for day, start, end in block_tuples:
+            for pending_day, pending_start, pending_end in pending_blocks:
+                if blocks_overlap(day, start, end, pending_day, pending_start, pending_end):
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail=(
+                            f"Imported course block {day} {start}-{end} conflicts with another imported block "
+                            f"({pending_day} {pending_start}-{pending_end})."
+                        ),
+                    )
+        pending_blocks.extend(block_tuples)
         
         if OCR_DEBUG:
             logger.info(f"Course '{course.name}' - Total blocks: {len(course_data['blocks'])}, Unique blocks: {len(unique_blocks)}")

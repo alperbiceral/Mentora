@@ -28,8 +28,8 @@ type Message = {
 };
 
 const EXAMPLE_PROMPTS = [
-  "Move my Monday classes to other days",
-  "Clear my Friday schedule",
+  "Move my Monday study sessions to other days",
+  "Reschedule my Friday study sessions",
   "@emotion I'm feeling stressed about my exams",
 ];
 
@@ -245,7 +245,7 @@ export default function AIAgentScreen() {
                 </View>
 
                 <Text style={styles.welcome}>
-                  How can I help with your schedule?
+                  How can I help with your study sessions?
                 </Text>
 
                 <View style={styles.examples}>

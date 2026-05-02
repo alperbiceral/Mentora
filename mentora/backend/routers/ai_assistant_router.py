@@ -6,21 +6,23 @@ import json
 import logging
 import re
 
-from datetime import date
+from datetime import date, datetime, time, timedelta
 
 from config import GEMINI_API_KEY, GEMINI_MODEL
 from deps import get_db
-from models import AIAssistantMessage, Base, Course, CourseBlock, Emotion, User
+from models import AIAssistantMessage, Base, Course, Emotion, StudySession, User
 from google import genai
 from routers.emotion_router import classifier as emotion_classifier
+from scheduling_conflicts import find_schedule_conflict
 
 router = APIRouter(prefix="/ai-assistant", tags=["ai-assistant"])
 logger = logging.getLogger("mentora.ai_assistant")
 
-SYSTEM_PROMPT = """You are Mentora's schedule assistant. You help students manage their weekly course schedule.
+SYSTEM_PROMPT = """You are Mentora's schedule assistant. You help students manage their weekly study sessions.
 
 STRICT RULES:
-- You can ONLY help with course schedule management (moving, swapping, clearing course blocks).
+- You can ONLY help with moving study sessions.
+- NEVER modify, swap, or delete course blocks.
 - If the user asks about anything unrelated to schedule management, politely decline and say you can only help with schedule changes.
 - You MUST respond with ONLY a JSON object (no markdown fences, no extra text).
 
@@ -32,26 +34,23 @@ RESPONSE FORMAT (always return this exact JSON structure):
 
 AVAILABLE ACTIONS:
 
-1. move_block — Move a course block to a new day/time:
-   {"action": "move_block", "course_name": "CS461", "from_day": "Mon", "from_start": "09:00", "to_day": "Wed", "to_start": "17:30"}
-   Notes: The duration stays the same. "from_start" identifies which block to move. Times must be in HH:MM 24-hour format. Days must be Mon/Tue/Wed/Thu/Fri/Sat/Sun.
+1. move_study_session — Move one study session to a new day/time:
+   {"action": "move_study_session", "session_id": 42, "to_day": "Wed", "to_start": "17:30"}
+   Notes: Keep the same duration. Times must be HH:MM 24-hour format. Days must be Mon/Tue/Wed/Thu/Fri/Sat/Sun.
 
-2. clear_day — Remove all course blocks from a day and redistribute them to other days:
-   {"action": "clear_day", "day": "Mon", "redistributions": [
-     {"course_name": "CS461", "from_start": "09:00", "to_day": "Wed", "to_start": "14:00"},
-     {"course_name": "MATH201", "from_start": "11:00", "to_day": "Thu", "to_start": "10:00"}
+2. reschedule_study_day — Move multiple study sessions from one day to other slots:
+   {"action": "reschedule_study_day", "from_day": "Mon", "moves": [
+     {"session_id": 42, "to_day": "Wed", "to_start": "14:00"},
+     {"session_id": 48, "to_day": "Thu", "to_start": "10:00"}
    ]}
-   Notes: You must look at the current schedule and find free slots on other days. Do NOT place blocks where other blocks already exist. Each redistribution moves one block.
-
-3. swap_blocks — Swap times of two course blocks:
-   {"action": "swap_blocks", "block_a": {"course_name": "CS461", "day": "Mon", "start": "09:00"}, "block_b": {"course_name": "MATH201", "day": "Wed", "start": "14:00"}}
+   Notes: Only move sessions that currently belong to from_day.
 
 IMPORTANT CONSTRAINTS:
 - Times MUST be rounded to 30-minute boundaries (minutes only 00 or 30).
-- Do NOT create overlapping blocks on the same day.
+- Do NOT create overlaps with ANY course block or ANY study session.
 - Check the current schedule carefully before proposing actions.
 - If you cannot fulfill the request (e.g., the time slot is occupied), explain why in "reply" and return "actions": [].
-- If the user mentions a course that doesn't exist in their schedule, tell them and return "actions": [].
+- If no matching study sessions exist, explain and return "actions": [].
 
 The user's current schedule is provided below as USER_SCHEDULE.
 """
@@ -79,133 +78,127 @@ class HistoryMessage(BaseModel):
         from_attributes = True
 
 
-def _time_to_minutes(t: str) -> int:
-    h, m = t.split(":")
-    return int(h) * 60 + int(m)
+WEEKDAY_INDEX = {"Mon": 0, "Tue": 1, "Wed": 2, "Thu": 3, "Fri": 4, "Sat": 5, "Sun": 6}
 
 
-def _minutes_to_time(mins: int) -> str:
-    return f"{mins // 60:02d}:{mins % 60:02d}"
-
-
-def _blocks_overlap(day1: str, s1: str, e1: str, day2: str, s2: str, e2: str) -> bool:
-    if day1 != day2:
+def _is_half_hour_boundary(time_text: str) -> bool:
+    try:
+        _, minute = time_text.split(":")
+    except ValueError:
         return False
-    return _time_to_minutes(s1) < _time_to_minutes(e2) and _time_to_minutes(s2) < _time_to_minutes(e1)
+    return minute in {"00", "30"}
 
 
-def _find_block(db: Session, username: str, course_name: str, day: str, start: str):
-    """Find a CourseBlock by matching course name, day, and start time."""
-    return (
-        db.query(CourseBlock)
-        .join(Course)
-        .filter(
-            Course.username == username,
-            Course.name.ilike(f"%{course_name}%"),
-            CourseBlock.day == day,
-            CourseBlock.start == start,
-        )
-        .first()
-    )
+def _build_target_datetime(reference: datetime, to_day: str, to_start: str) -> datetime | None:
+    target_weekday = WEEKDAY_INDEX.get(to_day)
+    if target_weekday is None:
+        return None
+    try:
+        hour, minute = [int(part) for part in to_start.split(":")]
+    except ValueError:
+        return None
+    if hour < 0 or hour > 23 or minute < 0 or minute > 59:
+        return None
+    days_delta = target_weekday - reference.weekday()
+    target_date = reference.date() + timedelta(days=days_delta)
+    return datetime.combine(target_date, time(hour=hour, minute=minute))
 
 
-def _check_conflict(db: Session, username: str, day: str, start: str, end: str, exclude_block_id: int | None = None) -> bool:
-    """Return True if placing a block at day/start/end would conflict with existing blocks."""
-    all_blocks = (
-        db.query(CourseBlock)
-        .join(Course)
-        .filter(Course.username == username, CourseBlock.day == day)
-        .all()
-    )
-    for b in all_blocks:
-        if exclude_block_id and b.block_id == exclude_block_id:
-            continue
-        if _blocks_overlap(day, start, end, day, b.start, b.end):
-            return True
-    return False
-
-
-def _execute_move_block(db: Session, username: str, action: dict) -> str:
-    course_name = action.get("course_name", "")
-    from_day = action.get("from_day", "")
-    from_start = action.get("from_start", "")
+def _execute_move_study_session(db: Session, username: str, action: dict) -> str:
+    raw_session_id = action.get("session_id")
+    try:
+        session_id = int(raw_session_id)
+    except (TypeError, ValueError):
+        session_id = None
     to_day = action.get("to_day", "")
     to_start = action.get("to_start", "")
+    if session_id is None:
+        return "Cannot move study session: session_id is missing or invalid."
+    if not _is_half_hour_boundary(to_start):
+        return f"Cannot move study session #{session_id}: start time must be on a 30-minute boundary."
 
-    block = _find_block(db, username, course_name, from_day, from_start)
-    if not block:
-        return f"Could not find a block for '{course_name}' on {from_day} at {from_start}."
+    session = (
+        db.query(StudySession)
+        .filter(StudySession.session_id == session_id, StudySession.username == username)
+        .first()
+    )
+    if not session:
+        return f"Could not find study session #{session_id}."
 
-    duration = _time_to_minutes(block.end) - _time_to_minutes(block.start)
-    to_end = _minutes_to_time(_time_to_minutes(to_start) + duration)
+    new_start = _build_target_datetime(session.started_at, to_day, to_start)
+    if not new_start:
+        return f"Cannot move study session #{session_id}: invalid target day/time."
+    duration = session.ended_at - session.started_at
+    new_end = new_start + duration
 
-    if _check_conflict(db, username, to_day, to_start, to_end, exclude_block_id=block.block_id):
-        return f"Cannot move '{course_name}' to {to_day} {to_start}–{to_end}: time slot is occupied."
+    conflict_message = find_schedule_conflict(
+        db,
+        username,
+        new_start,
+        new_end,
+        exclude_session_id=session.session_id,
+    )
+    if conflict_message:
+        return f"Cannot move study session #{session_id} to {to_day} {to_start}: {conflict_message}"
 
-    block.day = to_day
-    block.start = to_start
-    block.end = to_end
+    old_day = session.started_at.strftime("%a")
+    old_start = session.started_at.strftime("%H:%M")
+    new_end_text = new_end.strftime("%H:%M")
+    session.started_at = new_start
+    session.ended_at = new_end
+    session.duration_minutes = max(0.0, (new_end - new_start).total_seconds() / 60.0)
     db.commit()
-    return f"Moved '{course_name}' from {from_day} {from_start} to {to_day} {to_start}–{to_end}."
+    return (
+        f"Moved study session #{session_id} from {old_day} {old_start} "
+        f"to {to_day} {to_start}-{new_end_text}."
+    )
 
 
-def _execute_clear_day(db: Session, username: str, action: dict) -> str:
-    day = action.get("day", "")
-    redistributions = action.get("redistributions", [])
+def _execute_reschedule_study_day(db: Session, username: str, action: dict) -> str:
+    from_day = action.get("from_day", "")
+    moves = action.get("moves", [])
+    if from_day not in WEEKDAY_INDEX:
+        return "Cannot reschedule day: invalid from_day."
+    if not isinstance(moves, list) or not moves:
+        return "Cannot reschedule day: moves list is missing."
+
     results = []
-
-    for r in redistributions:
-        move_action = {
-            "course_name": r.get("course_name", ""),
-            "from_day": day,
-            "from_start": r.get("from_start", ""),
-            "to_day": r.get("to_day", ""),
-            "to_start": r.get("to_start", ""),
-        }
-        result = _execute_move_block(db, username, move_action)
+    for move in moves:
+        raw_session_id = move.get("session_id")
+        try:
+            session_id = int(raw_session_id)
+        except (TypeError, ValueError):
+            session_id = None
+        if session_id is None:
+            results.append("Skipped one move: invalid session_id.")
+            continue
+        session = (
+            db.query(StudySession)
+            .filter(StudySession.session_id == session_id, StudySession.username == username)
+            .first()
+        )
+        if not session:
+            results.append(f"Skipped study session #{session_id}: not found.")
+            continue
+        if session.started_at.strftime("%a") != from_day:
+            results.append(f"Skipped study session #{session_id}: not on {from_day}.")
+            continue
+        result = _execute_move_study_session(
+            db,
+            username,
+            {
+                "session_id": session_id,
+                "to_day": move.get("to_day", ""),
+                "to_start": move.get("to_start", ""),
+            },
+        )
         results.append(result)
-
     return " | ".join(results)
 
 
-def _execute_swap_blocks(db: Session, username: str, action: dict) -> str:
-    a = action.get("block_a", {})
-    b = action.get("block_b", {})
-
-    block_a = _find_block(db, username, a.get("course_name", ""), a.get("day", ""), a.get("start", ""))
-    block_b = _find_block(db, username, b.get("course_name", ""), b.get("day", ""), b.get("start", ""))
-
-    if not block_a:
-        return f"Could not find block for '{a.get('course_name')}' on {a.get('day')} at {a.get('start')}."
-    if not block_b:
-        return f"Could not find block for '{b.get('course_name')}' on {b.get('day')} at {b.get('start')}."
-
-    a_day, a_start, a_end = block_a.day, block_a.start, block_a.end
-    b_day, b_start, b_end = block_b.day, block_b.start, block_b.end
-
-    block_a.day = b_day
-    block_a.start = b_start
-    block_a.end = _minutes_to_time(
-        _time_to_minutes(b_start) + (_time_to_minutes(a_end) - _time_to_minutes(a_start))
-    )
-
-    block_b.day = a_day
-    block_b.start = a_start
-    block_b.end = _minutes_to_time(
-        _time_to_minutes(a_start) + (_time_to_minutes(b_end) - _time_to_minutes(b_start))
-    )
-
-    db.commit()
-    return (
-        f"Swapped '{a.get('course_name')}' ({a_day} {a_start}) with "
-        f"'{b.get('course_name')}' ({b_day} {b_start})."
-    )
-
-
 ACTION_HANDLERS = {
-    "move_block": _execute_move_block,
-    "clear_day": _execute_clear_day,
-    "swap_blocks": _execute_swap_blocks,
+    "move_study_session": _execute_move_study_session,
+    "reschedule_study_day": _execute_reschedule_study_day,
 }
 
 
@@ -222,7 +215,23 @@ def _build_schedule_context(db: Session, username: str) -> str:
             "course_id": c.course_id,
             "blocks": blocks,
         })
-    return json.dumps(schedule, indent=2)
+    sessions = (
+        db.query(StudySession)
+        .filter(StudySession.username == username, StudySession.mode == "study")
+        .order_by(StudySession.started_at.asc())
+        .all()
+    )
+    study_sessions = [
+        {
+            "session_id": s.session_id,
+            "course_name": s.course_name,
+            "day": s.started_at.strftime("%a"),
+            "start": s.started_at.strftime("%H:%M"),
+            "end": s.ended_at.strftime("%H:%M"),
+        }
+        for s in sessions
+    ]
+    return json.dumps({"courses": schedule, "study_sessions": study_sessions}, indent=2)
 
 
 def _parse_ai_response(text: str) -> dict | None:
