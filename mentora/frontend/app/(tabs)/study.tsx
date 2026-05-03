@@ -18,6 +18,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import { useTheme } from "../../theme/ThemeProvider";
 import type { ThemeColors, ThemeMode } from "../../theme/theme";
 
@@ -193,6 +194,17 @@ export default function StudyScreen() {
       loadTodaySessions();
     }
   }, [activeTab, currentUsername, loadSessions, loadTodaySessions]);
+
+  // Refetch today's sessions every time the user navigates to this tab,
+  // so newly scheduled blocks from the schedule screen show up immediately.
+  useFocusEffect(
+    useCallback(() => {
+      if (!currentUsername) {
+        return;
+      }
+      loadTodaySessions();
+    }, [currentUsername, loadTodaySessions]),
+  );
 
   // Refresh `now` every 30 seconds so the proximity-based colors stay accurate.
   useEffect(() => {
@@ -1422,7 +1434,7 @@ export default function StudyScreen() {
 
           {activeTab !== "streak" && (
             <View style={styles.statsSection}>
-              <Text style={styles.statsTitle}>Recent sessions</Text>
+              <Text style={styles.statsTitle}>Recent free sessions</Text>
               {loadingSessions ? (
                 <Text style={styles.emptyText}>Loading...</Text>
               ) : finishedSessions.length === 0 ? (

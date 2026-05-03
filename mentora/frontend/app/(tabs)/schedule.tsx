@@ -715,6 +715,8 @@ export default function ScheduleScreen() {
       }
 
       setIsImporting(true);
+      setImportMessage("Clearing existing schedule...");
+      await handleClearSchedule();
       setImportMessage("Uploading schedule image...");
 
       const asset = result.assets[0];
@@ -772,8 +774,8 @@ export default function ScheduleScreen() {
         })),
       );
 
-      setCourses((prev) => [...prev, ...mappedCourses]);
-      setBlocks((prev) => [...prev, ...mappedBlocks]);
+      setCourses(mappedCourses);
+      setBlocks(mappedBlocks);
       setImportMessage("Schedule imported.");
       setIsImportModalOpen(false);
     } catch (error) {
@@ -1166,7 +1168,7 @@ export default function ScheduleScreen() {
                     onPress={openGenerateScheduleModal}
                     hitSlop={6}
                   >
-                    <Text style={styles.generateButtonText}>Update Schedule</Text>
+                    <Text style={styles.generateButtonText}>Reschedule</Text>
                   </Pressable>
                   <Pressable
                     style={styles.importButton}
@@ -2247,7 +2249,7 @@ const DraftScheduleGrid: React.FC<DraftScheduleGridProps> = ({
   );
 
   return (
-    <View style={styles.gridWrapper}>
+    <View style={styles.gridWrapperSmall}>
       <View style={styles.gridHeaderRow}>
         <View style={styles.timeHeaderSpacer} />
         <ScrollView
@@ -3384,7 +3386,14 @@ const createStyles = (COLORS: ThemeColors) =>
       color: COLORS.textSecondary,
     },
     gridWrapper: {
-      height: 670,
+      maxHeight: 670,
+      borderRadius: 16,
+      overflow: "hidden",
+      borderWidth: 1,
+      borderColor: COLORS.borderSoft,
+    },
+    gridWrapperSmall: {
+      maxHeight: 370,
       borderRadius: 16,
       overflow: "hidden",
       borderWidth: 1,
