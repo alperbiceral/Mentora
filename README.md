@@ -18,6 +18,8 @@ The static site in [`docs/`](docs/) is intended for [GitHub Pages](https://pages
 - [CS 491 — Project Specifications Report](https://drive.google.com/file/d/1C3tL5vSksBOuIG8FxWSRjYdfMWWT3y90/view?usp=sharing)
 - [CS 491 — Analysis and Requirements Report](https://drive.google.com/file/d/1R7tw0fnixNfc3snIHHrTv3HE2GsynM45/view?usp=sharing)
 - [CS 492 — Detailed Design Report](https://drive.google.com/file/d/1stt_R8ZwhIrV5A_orYUuhJuyNCDsft4a/view?usp=sharing)
+- [CS 492 — Final Report](https://drive.google.com/file/d/1S1DgpA2GZPkAaZzwn3Gom0REQxJNP0-S/view?usp=sharing)
+- [CS 492 — Final Presentation](https://drive.google.com/file/d/1nCA6NLZgDAA2cHCViD8q_cXD_MTESQiZ/view?usp=sharing)
 
 ---
 
