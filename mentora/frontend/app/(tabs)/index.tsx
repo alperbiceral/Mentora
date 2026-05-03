@@ -589,50 +589,110 @@ export default function HomeScreen() {
   };
 
   const [upcomingBlocks, setUpcomingBlocks] = useState<
-    { courseName: string; color: string; start: string; end: string; day: string }[]
+    {
+      courseName: string;
+      color: string;
+      start: string;
+      end: string;
+      day: string;
+      type: "class" | "study";
+    }[]
   >([]);
 
-  useFocusEffect(
-    useCallback(() => {
-      (async () => {
-        try {
-          const username = await AsyncStorage.getItem("mentora.username");
-          if (!username) return;
-          const res = await fetch(`${API_BASE_URL}/courses/${encodeURIComponent(username)}`);
-          if (!res.ok) return;
-          const courses = await res.json();
-          const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-          const now = new Date();
-          const todayDay = dayNames[now.getDay()];
-          const nowMins = now.getHours() * 60 + now.getMinutes();
-          const upcoming: typeof upcomingBlocks = [];
-          for (const c of courses) {
-            for (const b of c.blocks || []) {
-              if (b.day !== todayDay) continue;
-              const [sh, sm] = b.start.split(":").map(Number);
-              const [eh, em] = b.end.split(":").map(Number);
-              const startMins = sh * 60 + sm;
-              const endMins = eh * 60 + em;
-              if (endMins > nowMins && startMins < nowMins + 180) {
-                upcoming.push({
-                  courseName: (c.name as string).split(" - ")[0]?.trim() || c.name,
-                  color: c.color || "#6D5EF7",
-                  start: b.start,
-                  end: b.end,
-                  day: b.day,
-                });
-              }
+  const loadUpcoming = useCallback(async () => {
+    try {
+      const username = await AsyncStorage.getItem("mentora.username");
+      if (!username) {
+        setUpcomingBlocks([]);
+        return;
+      }
+
+      const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+      const now = new Date();
+      const todayDay = dayNames[now.getDay()];
+      const nowMins = now.getHours() * 60 + now.getMinutes();
+      const horizonMins = nowMins + 180;
+      const isInWindow = (startMins: number, endMins: number) =>
+        endMins > nowMins && startMins < horizonMins;
+
+      const upcoming: typeof upcomingBlocks = [];
+
+      const [coursesRes, sessionsRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/courses/${encodeURIComponent(username)}`),
+        fetch(
+          `${API_BASE_URL}/study-sessions/${encodeURIComponent(username)}/scheduled-today`,
+        ),
+      ]);
+
+      if (coursesRes.ok) {
+        const courses = await coursesRes.json();
+        for (const c of courses) {
+          for (const b of c.blocks || []) {
+            if (b.day !== todayDay) continue;
+            const [sh, sm] = b.start.split(":").map(Number);
+            const [eh, em] = b.end.split(":").map(Number);
+            const startMins = sh * 60 + sm;
+            const endMins = eh * 60 + em;
+            if (isInWindow(startMins, endMins)) {
+              upcoming.push({
+                courseName: (c.name as string).split(" - ")[0]?.trim() || c.name,
+                color: c.color || "#6D5EF7",
+                start: b.start,
+                end: b.end,
+                day: b.day,
+                type: "class",
+              });
             }
           }
-          upcoming.sort((a, b2) => {
-            const [ah, am] = a.start.split(":").map(Number);
-            const [bh, bm] = b2.start.split(":").map(Number);
-            return ah * 60 + am - (bh * 60 + bm);
+        }
+      }
+
+      if (sessionsRes.ok) {
+        const sessions = await sessionsRes.json();
+        const seen = new Set<string>();
+        for (const s of sessions) {
+          if (!s.started_at || !s.ended_at) continue;
+          const startDate = new Date(s.started_at);
+          const endDate = new Date(s.ended_at);
+          const startMins =
+            startDate.getHours() * 60 + startDate.getMinutes();
+          const endMins = endDate.getHours() * 60 + endDate.getMinutes();
+          if (!isInWindow(startMins, endMins)) continue;
+          const start = `${String(startDate.getHours()).padStart(2, "0")}:${String(startDate.getMinutes()).padStart(2, "0")}`;
+          const end = `${String(endDate.getHours()).padStart(2, "0")}:${String(endDate.getMinutes()).padStart(2, "0")}`;
+          const courseName = s.course_name || s.timer_type || "Study session";
+          const dedupeKey = `${courseName}|${start}|${end}`;
+          if (seen.has(dedupeKey)) continue;
+          seen.add(dedupeKey);
+          upcoming.push({
+            courseName,
+            color: COLORS.accent,
+            start,
+            end,
+            day: todayDay,
+            type: "study",
           });
-          setUpcomingBlocks(upcoming);
-        } catch { /* ignore */ }
-      })();
-    }, []),
+        }
+      }
+
+      upcoming.sort((a, b2) => {
+        const [ah, am] = a.start.split(":").map(Number);
+        const [bh, bm] = b2.start.split(":").map(Number);
+        return ah * 60 + am - (bh * 60 + bm);
+      });
+      setUpcomingBlocks(upcoming);
+    } catch {
+      /* ignore */
+    }
+  }, [COLORS.accent]);
+
+  // Refetch today's classes and study sessions whenever the home tab is
+  // focused (this includes the initial mount), so the Coming Up section
+  // is always fresh when the user lands on this page.
+  useFocusEffect(
+    useCallback(() => {
+      loadUpcoming();
+    }, [loadUpcoming]),
   );
 
   return (
@@ -1193,7 +1253,14 @@ const UpcomingSection = ({
   styles,
   colors,
 }: {
-  blocks: { courseName: string; color: string; start: string; end: string; day: string }[];
+  blocks: {
+    courseName: string;
+    color: string;
+    start: string;
+    end: string;
+    day: string;
+    type: "class" | "study";
+  }[];
   styles: any;
   colors: ThemeColors;
 }) => {
@@ -1220,24 +1287,50 @@ const UpcomingSection = ({
       {blocks.length === 0 ? (
         <View style={styles.upcomingEmpty}>
           <Ionicons name="checkmark-circle-outline" size={28} color={colors.success} />
-          <Text style={styles.upcomingEmptyText}>No classes in the next 3 hours</Text>
-          <Text style={styles.upcomingEmptyHint}>Enjoy your free time or start studying!</Text>
+          <Text style={styles.upcomingEmptyText}>Nothing in the next 3 hours</Text>
+          <Text style={styles.upcomingEmptyHint}>No classes or study sessions scheduled</Text>
         </View>
       ) : (
         <View style={styles.upcomingList}>
-          {blocks.slice(0, 3).map((block, idx) => {
+          {blocks.slice(0, 4).map((block, idx) => {
             const now = new Date();
             const nowMins = now.getHours() * 60 + now.getMinutes();
             const [sH, sM] = block.start.split(":").map(Number);
             const isNow = nowMins >= sH * 60 + sM;
+            const isStudy = block.type === "study";
 
             return (
-              <View key={`${block.courseName}-${idx}`} style={styles.upcomingItem}>
+              <View key={`${block.type}-${block.courseName}-${idx}`} style={styles.upcomingItem}>
                 <View style={[styles.upcomingDot, { backgroundColor: block.color }]} />
                 <View style={styles.upcomingItemContent}>
-                  <Text style={styles.upcomingCourseName} numberOfLines={1}>
-                    {block.courseName}
-                  </Text>
+                  <View style={styles.upcomingCourseRow}>
+                    <Text style={styles.upcomingCourseName} numberOfLines={1}>
+                      {block.courseName}
+                    </Text>
+                    <View
+                      style={[
+                        styles.upcomingTypeBadge,
+                        {
+                          backgroundColor:
+                            (isStudy ? colors.accent : colors.success) + "1F",
+                        },
+                      ]}
+                    >
+                      <Ionicons
+                        name={isStudy ? "book-outline" : "school-outline"}
+                        size={10}
+                        color={isStudy ? colors.accent : colors.success}
+                      />
+                      <Text
+                        style={[
+                          styles.upcomingTypeBadgeText,
+                          { color: isStudy ? colors.accent : colors.success },
+                        ]}
+                      >
+                        {isStudy ? "Study" : "Class"}
+                      </Text>
+                    </View>
+                  </View>
                   <Text style={styles.upcomingTime}>
                     {formatTime(block.start)} - {formatTime(block.end)}
                   </Text>
@@ -1911,10 +2004,29 @@ const createStyles = (COLORS: ThemeColors) =>
     upcomingItemContent: {
       flex: 1,
     },
+    upcomingCourseRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
     upcomingCourseName: {
+      flexShrink: 1,
       fontSize: 14,
       fontWeight: "700",
       color: COLORS.textPrimary,
+    },
+    upcomingTypeBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 3,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 6,
+    },
+    upcomingTypeBadgeText: {
+      fontSize: 10,
+      fontWeight: "700",
+      letterSpacing: 0.3,
     },
     upcomingTime: {
       fontSize: 12,

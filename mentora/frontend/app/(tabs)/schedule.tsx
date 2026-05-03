@@ -1168,7 +1168,7 @@ export default function ScheduleScreen() {
                     onPress={openGenerateScheduleModal}
                     hitSlop={6}
                   >
-                    <Text style={styles.generateButtonText}>Reschedule</Text>
+                    <Text style={styles.generateButtonText}>Create schedule</Text>
                   </Pressable>
                   <Pressable
                     style={styles.importButton}
@@ -3319,6 +3319,7 @@ const createStyles = (COLORS: ThemeColors) =>
       backgroundColor: COLORS.accent,
       borderRadius: 12,
       paddingVertical: 10,
+      paddingHorizontal: 12,
       alignItems: "center",
     },
     primaryButtonText: {
