@@ -1,4 +1,24 @@
-const navLinks = document.querySelectorAll('.site-nav a');
+/** Paste your YouTube channel or video URL here; the nav icon and “Learn More” both use it. */
+const MENTORA_YOUTUBE_URL = 'https://www.youtube.com/channel/UCAYSmmaSb434fSXAYz6oikQ';
+
+function initMentoraYoutubeLinks() {
+  const url = typeof MENTORA_YOUTUBE_URL === 'string' ? MENTORA_YOUTUBE_URL.trim() : '';
+  const ready = url !== '' && url !== '#';
+
+  document.querySelectorAll('[data-mentora-youtube]').forEach((el) => {
+    if (!ready) {
+      el.setAttribute('href', '#');
+      el.addEventListener('click', (e) => e.preventDefault());
+      return;
+    }
+
+    el.setAttribute('href', url);
+    el.setAttribute('target', '_blank');
+    el.setAttribute('rel', 'noopener noreferrer');
+  });
+}
+
+const navLinks = document.querySelectorAll('.site-nav-inpage');
 const sections = document.querySelectorAll('main section[id]');
 const introHero = document.querySelector('#introduction');
 const reduceMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -56,6 +76,8 @@ window.addEventListener('load', onLoad);
 
 // If the promo video can't be loaded, hide the broken player and show a clean placeholder.
 window.addEventListener('DOMContentLoaded', () => {
+  initMentoraYoutubeLinks();
+
   const video = document.querySelector('.promo-video');
   const placeholder = document.querySelector('.video-placeholder');
   const videoFrame = document.querySelector('.video-frame');
