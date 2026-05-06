@@ -123,6 +123,8 @@ body {
   margin: 0.12rem 0 0;
   color: var(--muted);
   max-width: 50ch;
+  font-size: 0.95rem;
+  line-height: 1.3;
 }
 
 .site-nav {
@@ -1019,15 +1021,65 @@ main {
 
   .site-header {
     position: static;
+    padding: 0.7rem 0;
   }
 
-  .site-header .container {
-    display: block;
+  .nav-container {
+    width: 94%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.7rem;
+  }
+
+  .nav-left {
+    flex-wrap: wrap;
+    justify-content: center;
+    text-align: center;
+    gap: 0.5rem;
+  }
+
+  .nav-logo {
+    width: 56px;
+    height: 56px;
+  }
+
+  .project-title {
+    width: auto;
+    margin: 0;
+  }
+
+  .project-subtitle {
+    width: auto;
+    max-width: 100%;
+    text-align: center;
+    margin-top: 0.08rem;
+    font-size: 0.88rem;
+    line-height: 1.25;
+  }
+
+  .nav-right {
+    align-items: center;
+    justify-content: center;
+    width: 100%;
   }
 
   .site-nav {
-    margin-top: 0.75rem;
+    width: 100%;
+    justify-content: center;
+    align-items: center;
+    gap: 0.5rem;
     flex-wrap: wrap;
+    margin-top: 0;
+  }
+
+  .site-nav a {
+    padding: 0.35rem 0.72rem;
+    font-size: 0.86rem;
+  }
+
+  .site-nav a.site-nav-github,
+  .site-nav a.site-nav-youtube {
+    padding: 0.34rem 0.6rem;
   }
 
   .item-list li {
@@ -1084,6 +1136,11 @@ main {
     font-size: 1rem;
   }
 
+  .intro-video-panel {
+    width: 100%;
+    padding: 0.65rem;
+  }
+
   .video-section-card {
     width: 92%;
     padding: 1.25rem 1.1rem;
@@ -1096,6 +1153,14 @@ main {
   .solutions-title {
     font-size: 1.35rem;
     margin-bottom: 1rem;
+  }
+
+  .report-link {
+    padding-right: 0.85rem;
+  }
+
+  .report-link::after {
+    display: none;
   }
 }
 
